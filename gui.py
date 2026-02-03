@@ -478,12 +478,6 @@ class GitAdvancedTool:
                 ("⏭️ Skip", lambda: self.execute_simple_git("rebase --skip", path), 12),
             ], 2),
 
-            ("🍒 Cherry-pick", [
-                ("Cherry-pick Hash", 'cherry_pick', 24),
-                ("▶️ Continue", lambda: self.execute_simple_git("cherry-pick --continue", path), 12),
-                ("🛑 Abort", lambda: self.execute_simple_git("cherry-pick --abort", path), 12),
-            ], 2),
-
             ("⏪ Reset & 回退", [
                 ("🔙 Undo Commit", lambda: self.execute_simple_git("reset --soft HEAD~1", path), 12),
                 ("🧨 Soft (保留變更)", 'reset_soft', 12),
@@ -495,6 +489,12 @@ class GitAdvancedTool:
                 ("Amend 上則", 'commit_amend', 12),
                 ("➕ Add All (.)", lambda: self.execute_simple_git("add .", path), 12),
             ], 3),
+
+            ("🍒 Cherry-pick", [
+                ("Cherry-pick Hash", 'cherry_pick', 24),
+                ("▶️ Continue", lambda: self.execute_simple_git("cherry-pick --continue", path), 12),
+                ("🛑 Abort", lambda: self.execute_simple_git("cherry-pick --abort", path), 12),
+            ], 2),
 
             ("📦 Stash 緩衝區", [
                 ("📥 Stash Save", lambda: self.execute_simple_git("stash", path), 12),
@@ -570,7 +570,6 @@ class GitAdvancedTool:
 
     def execute_configured_git(self, config, params, repo_path):
         """根據參數配置執行 Git 指令"""
-        # 檢查是否有自訂處理器
         if config.get('base_cmd') == 'custom' and 'custom_handler' in config:
             handler_name = config['custom_handler']
             handler = getattr(self, handler_name, None)
@@ -578,40 +577,37 @@ class GitAdvancedTool:
                 handler(params, repo_path)
                 return
 
+        # --- 修正組裝邏輯 ---
         cmd_parts = ['git', config['base_cmd']]
 
-        # 組裝指令
+        # 提取特殊的 flag (例如 -b, -i, --soft 等)
+        flags = []
+        args = []
+
         for param_def in config['params']:
             name = param_def['name']
             value = params.get(name)
 
             if param_def['type'] == 'toggle' and value:
-                # Toggle 參數
                 flag_map = {
-                    'interactive': '-i',
-                    'soft': '--soft',
-                    'hard': '--hard',
-                    'amend': '--amend',
-                    'no_edit': '--no-edit',
-                    'no_commit': '-n',
-                    'force': '-f',
-                    'force_with_lease': '--force-with-lease',
-                    'force_delete': '-D',
-                    'delete': '--delete',
-                    'create': '-b',
+                    'interactive': '-i', 'soft': '--soft', 'hard': '--hard',
+                    'amend': '--amend', 'no_edit': '--no-edit', 'no_commit': '-n',
+                    'force': '-f', 'force_with_lease': '--force-with-lease',
+                    'force_delete': '-D', 'delete': '--delete',
+                    'create': '-b',  # 建立分支的 flag
                     'dry_run': '--dry-run'
                 }
                 if name in flag_map:
-                    cmd_parts.append(flag_map[name])
+                    flags.append(flag_map[name])
 
             elif param_def['type'] == 'text' and value:
-                # 文字參數
                 if name == 'message':
-                    cmd_parts.extend(['-m', f'"{value}"'])
-                elif name in ['branch', 'commit', 'tag', 'file', 'source', 'remote']:
-                    cmd_parts.append(value)
+                    args.extend(['-m', f'"{value}"'])
+                else:
+                    args.append(value)
 
-        full_cmd = ' '.join(cmd_parts)
+        # 關鍵順序： git + command + flags + args
+        full_cmd = ' '.join(cmd_parts + flags + args)
         self.execute_git_command(full_cmd, repo_path)
 
     # === Custom Handlers ===
