@@ -43,14 +43,12 @@ class GitCommandDialog:
 
         canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
-
-        def on_configure(e):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        canvas.bind("<Configure>", on_configure)
+        canvas.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
 
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+
+        first_entry = None  # 用於紀錄第一個 Entry
 
         # 動態生成參數欄位
         for i, param in enumerate(self.params_config):
@@ -58,13 +56,8 @@ class GitCommandDialog:
             frame.pack(fill="x", pady=8, padx=5)
 
             if param['type'] == 'text':
-                # 文字輸入框
-                label_text = param['label']
-                if param['required']:
-                    label_text += " *"
-
-                label = ttk.Label(frame, text=label_text, foreground="red" if param['required'] else "black")
-                label.pack(anchor="w")
+                label_text = param['label'] + (" *" if param['required'] else "")
+                ttk.Label(frame, text=label_text, foreground="red" if param['required'] else "black").pack(anchor="w")
 
                 entry_frame = ttk.Frame(frame)
                 entry_frame.pack(fill="x", pady=(3, 0))
@@ -73,37 +66,35 @@ class GitCommandDialog:
                 entry = ttk.Entry(entry_frame, textvariable=var, font=("Consolas", 10))
                 entry.pack(fill="x")
 
-                # 自動完成功能
-                autocomplete_type = param.get('autocomplete')
-                if autocomplete_type and self.repo_path:
-                    self._setup_autocomplete(entry, var, autocomplete_type, entry_frame)
+                # --- 綁定 Enter 執行 ---
+                entry.bind("<Return>", lambda e: self._on_submit())
+
+                # 紀錄第一個輸入框
+                if first_entry is None:
+                    first_entry = entry
+
+                if param.get('autocomplete') and self.repo_path:
+                    self._setup_autocomplete(entry, var, param.get('autocomplete'), entry_frame)
 
                 self.param_widgets[param['name']] = {
-                    'type': 'text',
-                    'var': var,
-                    'required': param['required'],
-                    'widget': entry,
-                    'frame': entry_frame
+                    'type': 'text', 'var': var, 'required': param['required'],
+                    'widget': entry, 'frame': entry_frame
                 }
 
             elif param['type'] == 'toggle':
-                # 開關選項
                 var = tk.BooleanVar(value=param.get('default', False))
-                cb = ttk.Checkbutton(frame, text=param['label'], variable=var)
-                cb.pack(anchor="w")
-
-                self.param_widgets[param['name']] = {
-                    'type': 'toggle',
-                    'var': var,
-                    'required': False
-                }
+                ttk.Checkbutton(frame, text=param['label'], variable=var).pack(anchor="w")
+                self.param_widgets[param['name']] = {'type': 'toggle', 'var': var, 'required': False}
 
         # 底部按鈕
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill="x", pady=(15, 0))
-
         ttk.Button(btn_frame, text="✓ 執行", command=self._on_submit, width=15).pack(side="right", padx=5)
         ttk.Button(btn_frame, text="✗ 取消", command=self._on_cancel, width=15).pack(side="right")
+
+        # --- 自動聚焦 ---
+        if first_entry:
+            first_entry.focus_set()
 
     def _validate_and_highlight(self):
         """驗證並標記必填欄位"""
