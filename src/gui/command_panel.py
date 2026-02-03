@@ -72,97 +72,105 @@ class CommandPanel(ttk.Frame):
         # 這裡定義按鈕配置
         layout_configs = [
             ("🛠️ 快速互動 Rebase", [
-                ("HEAD~2", lambda: self.executor.run_simple("rebase -i HEAD~2"), 8, False),
+                [("HEAD~2", lambda: self.executor.run_simple("rebase -i HEAD~2"), 8, False),
                 ("HEAD~4", lambda: self.executor.run_simple("rebase -i HEAD~4"), 8, False),
-                ("HEAD~10", lambda: self.executor.run_simple("rebase -i HEAD~10"), 8, False),
-            ], 3),
+                ("HEAD~10", lambda: self.executor.run_simple("rebase -i HEAD~10"), 8, False)],
+            ]),
             ("🔄 Rebase 流程控制", [
-                ("指定位置", 'rebase_branch', 12, False),
-                ("互動模式", 'rebase_interactive', 12, False),
-                ("▶️ Continue", lambda: self.executor.run_simple("rebase --continue"), 12, False),
+                [("指定位置", 'rebase_branch', 12, False),
+                ("互動模式", 'rebase_interactive', 12, False)],
+                [("▶️ Continue", lambda: self.executor.run_simple("rebase --continue"), 12, False),
                 ("🛑 Abort", lambda: self.executor.run_simple("rebase --abort"), 12, False),
-                ("⏭️ Skip", lambda: self.executor.run_simple("rebase --skip"), 12, False),
-            ], 2),
+                ("⏭️ Skip", lambda: self.executor.run_simple("rebase --skip"), 12, False)],
+            ]),
             ("🍒 Cherry-pick", [
-                ("Cherry-pick Hash", 'cherry_pick', 24, False),
-                ("▶️ Continue", lambda: self.executor.run_simple("cherry-pick --continue"), 12, False),
-                ("🛑 Abort", lambda: self.executor.run_simple("cherry-pick --abort"), 12, False),
-            ], 2),
+                [("Cherry-pick Hash", 'cherry_pick', 24, False)],
+                [("▶️ Continue", lambda: self.executor.run_simple("cherry-pick --continue"), 12, False),
+                ("🛑 Abort", lambda: self.executor.run_simple("cherry-pick --abort"), 12, False)],
+            ]),
             ("⏪ Reset 回退", [
-                ("🔙 Undo Commit", lambda: self.executor.run_simple("reset --soft HEAD~1"), 12, False),
-                ("🧨 Soft (保留變更)", 'reset_soft', 12, False),
-                ("⚠️ Hard (捨棄變更)", 'reset_hard', 12, True),
-            ], 2),
+                [("Soft HEAD~1", lambda: self.executor.run_simple("reset --soft HEAD~1"), 12, False),
+                ("Soft HEAD~2", lambda: self.executor.run_simple("reset --soft HEAD~2"), 12, False)],
+                [("🧨 Soft (保留變更)", 'reset_soft', 12, False),
+                ("⚠️ Hard (捨棄變更)", 'reset_hard', 12, True)],
+            ]),
             ("📝 提交與暫存", [
-                ("🔧 Fixup (f)", lambda: self.executor.quick_commit("f", "fixup"), 12, False),
-                ("📦 Squash (s)", lambda: self.executor.quick_commit("s", "squash"), 12, False),
-                ("💬 Commit -m", 'commit_message', 12, False),
-                ("✏️ Amend", 'commit_amend', 12, False),
-                ("➕ Add 選擇檔案", lambda: self.app.open_file_selector(self.executor), 12, False),
-            ], 2),
+                [("🔧 Fixup (f)", lambda: self.executor.quick_commit("f", "fixup"), 12, False),
+                ("📦 Squash (s)", lambda: self.executor.quick_commit("s", "squash"), 12, False)],
+                [(("➕ Add 選擇檔案", lambda: self.app.open_file_selector(self.executor), 12, False))],
+                [("💬 Commit -m", 'commit_message', 12, False),
+                ("✏️ Amend", 'commit_amend', 12, False)],
+            ]),
+            ("✈️ 遠端推送", [
+                [("⬆️ Push", lambda: self.executor.run_simple("push"), 12, False),
+                ("⚡ Force Push", 'force_push', 12, True)],
+                [("🛰️ Push Tags", lambda: self.executor.run_simple("push --tags"), 14, False)],
+            ]),
             ("📦 Stash 緩衝區", [
-                ("📥 Stash Save", lambda: self.executor.run_simple("stash"), 12, False),
-                ("📤 Stash Pop", lambda: self.executor.run_simple("stash pop"), 12, False),
-                ("📜 Stash List", lambda: self.executor.run_simple("stash list"), 12, False),
+                [("📥 Stash Save", lambda: self.executor.run_simple("stash"), 12, False),
+                ("📤 Stash Pop", lambda: self.executor.run_simple("stash pop"), 12, False)],
+                [("📜 Stash List", lambda: self.executor.run_simple("stash list"), 12, False),
                 ("🧹 Stash Clear",
                  lambda: self.confirm_mgr.confirm("清空 stash", lambda: self.executor.run_simple("stash clear")), 12,
                  True),
                 ("🗑️ Stash Drop",
                  lambda: self.confirm_mgr.confirm("刪除 stash", lambda: self.executor.run_simple("stash drop")), 12,
-                 True),
-            ], 2),
+                 True)],
+            ]),
             ("🌿 Branch 分支管理", [
-                ("📋 List", lambda: self.executor.run_simple("branch -a"), 12, False),
-                ("📌 Create", 'checkout_branch', 12, False),
-                ("✂️ Del Local", 'delete_branch', 12, True),
-                ("🌐 Del Remote", 'delete_remote_branch', 12, True),
-                ("🧹 Prune", 'prune_branches', 12, False),
-            ], 2),
+                [("📋 List", lambda: self.executor.run_simple("branch -a"), 12, False),
+                ("📌 Create", 'checkout_branch', 12, False)],
+                [("✂️ Del Local", 'delete_branch', 12, True),
+                ("🌐 Del Remote", 'delete_remote_branch', 12, True)],
+                [("🧹 Prune", 'prune_branches', 12, False)],
+            ]),
             ("🏷️ Tag 標籤管理", [
-                ("📜 List Tags", lambda: self.executor.run_simple("tag -l"), 12, False),
-                ("📌 Create Tag", 'create_tag', 12, False),
-                ("🔥 Delete Local", 'delete_tag', 12, True),
-                ("☁️ Delete Remote", 'delete_remote_tag', 12, True),
-            ], 2),
-            ("✈️ 遠端推送", [
-                ("⬆️ Push", lambda: self.executor.run_simple("push"), 12, False),
-                ("🛰️ Push Tags", lambda: self.executor.run_simple("push --tags"), 14, False),
-                ("⚡ Force Push", 'force_push', 12, True),
-            ], 3),
+                [("📜 List Tags", lambda: self.executor.run_simple("tag -l"), 12, False),
+                ("📌 Create Tag", 'create_tag', 12, False)],
+                [("🔥 Delete Local", 'delete_tag', 12, True),
+                ("☁️ Delete Remote", 'delete_remote_tag', 12, True)],
+            ]),
             ("🔍 狀態與工具", [
                 ("📢 Status", lambda: self.executor.run_simple("status"), 12, False),
-                ("📟 Diff", lambda: self.executor.run_simple("diff"), 12, False),
                 ("🧽 Clean -fd",
                  lambda: self.confirm_mgr.confirm("清理未追蹤檔案", lambda: self.executor.run_simple("clean -fd")), 12,
                  True),
+                ("📟 Diff", lambda: self.executor.run_simple("diff"), 12, False),
                 ("🎯 Checkout File", 'checkout_file', 12, False),
-            ], 2)
+            ])
         ]
 
         # 生成按鈕
-        for g_title, btns, col_count in layout_configs:
+        for g_title, rows in layout_configs:
             group_box = ttk.LabelFrame(self.scrollable_frame, text=f" {g_title} ")
             group_box.pack(fill="x", padx=5, pady=5)
 
-            for i, item in enumerate(btns):
-                if len(item) == 4:
-                    label, action, width, is_danger = item
-                else:
-                    label, action, width = item
-                    is_danger = False
+            for r_idx, row_content in enumerate(rows):
+                # 統一轉成列表處理：單個按鈕轉成長度 1 的列表
+                items = row_content if isinstance(row_content, list) else [row_content]
 
-                r, c = divmod(i, col_count)
+                # 為這一列建立一個專用的容器 Frame，達成獨立排版
+                row_frame = ttk.Frame(group_box)
+                row_frame.pack(fill="x", expand=True)
 
-                # 判斷是否為字串 (需要彈出 Dialog 的指令)
-                if isinstance(action, str):
-                    cmd_key = action
-                    btn_cmd = lambda k=cmd_key: self.app.open_command_dialog(k, self.executor.repo_path, self.executor)
-                else:
-                    btn_cmd = action
+                for c_idx, item in enumerate(items):
+                    # 解析參數
+                    label = item[0]
+                    action = item[1]
+                    width = item[2]
+                    is_danger = item[3] if len(item) > 3 else False
 
-                btn = ttk.Button(group_box, text=label, command=btn_cmd, width=width,
-                                 style="Danger.TButton" if is_danger else "TButton")
-                btn.grid(row=r, column=c, padx=3, pady=3, sticky="ew")
+                    # 指令綁定邏輯
+                    if isinstance(action, str):
+                        cmd_key = action
+                        btn_cmd = lambda k=cmd_key: self.app.open_command_dialog(k, self.executor.repo_path,
+                                                                                 self.executor)
+                    else:
+                        btn_cmd = action
 
-            for col in range(col_count):
-                group_box.columnconfigure(col, weight=1)
+                    btn = ttk.Button(row_frame, text=label, command=btn_cmd, width=width,
+                                     style="Danger.TButton" if is_danger else "TButton")
+                    btn.grid(row=0, column=c_idx, padx=3, pady=3, sticky="ew")
+
+                    # 關鍵：根據這一列的按鈕數量動態分配權重
+                    row_frame.columnconfigure(c_idx, weight=1)
