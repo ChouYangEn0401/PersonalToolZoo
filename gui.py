@@ -789,7 +789,7 @@ class GitAdvancedTool:
         return False
 
     def open_file_selector(self, repo_path):
-        """開啟檔案選擇器，用於 git add"""
+        """開啟檔案選擇器，支援 Add/Stash/Commit 整合流程"""
         try:
             # 獲取所有未追蹤和已修改的檔案
             res = subprocess.run("git status --short", cwd=repo_path, shell=True,
@@ -805,13 +805,13 @@ class GitAdvancedTool:
                         files.append((status, filepath))
 
             if not files:
-                messagebox.showinfo("提示", "沒有檔案需要 add")
+                messagebox.showinfo("提示", "沒有檔案需要處理")
                 return
 
             # 創建選擇對話框
             dialog = tk.Toplevel(self.root)
-            dialog.title("選擇要 Add 的檔案")
-            dialog.geometry("600x500")
+            dialog.title("檔案管理 - Add / Stash / Commit")
+            dialog.geometry("700x600")
             dialog.transient(self.root)
             dialog.grab_set()
 
@@ -824,44 +824,86 @@ class GitAdvancedTool:
             main_frame = ttk.Frame(dialog, padding=15)
             main_frame.pack(fill="both", expand=True)
 
-            ttk.Label(main_frame, text="選擇要加入暫存區的檔案:", font=("Arial", 11, "bold")).pack(pady=(0, 10))
+            # 標題區
+            title_frame = ttk.Frame(main_frame)
+            title_frame.pack(fill="x", pady=(0, 10))
+
+            ttk.Label(title_frame, text="選擇要處理的檔案:", font=("Arial", 11, "bold")).pack(side="left")
+            ttk.Label(title_frame, text=f"共 {len(files)} 個檔案", font=("Arial", 9),
+                      foreground="gray").pack(side="left", padx=10)
 
             # 捲動區域
-            canvas = tk.Canvas(main_frame, bg="#f0f0f0", highlightthickness=0)
-            scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+            list_frame = ttk.LabelFrame(main_frame, text=" 檔案列表 ", padding=10)
+            list_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+            canvas = tk.Canvas(list_frame, bg="#f0f0f0", highlightthickness=0)
+            scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=canvas.yview)
             scroll_frame = ttk.Frame(canvas)
 
-            canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+            canvas_window = canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
             canvas.configure(yscrollcommand=scrollbar.set)
+
+            def on_frame_configure(e):
+                canvas.configure(scrollregion=canvas.bbox("all"))
+
+            def on_canvas_configure(e):
+                canvas.itemconfig(canvas_window, width=e.width)
+
+            scroll_frame.bind("<Configure>", on_frame_configure)
+            canvas.bind("<Configure>", on_canvas_configure)
 
             canvas.pack(side="left", fill="both", expand=True)
             scrollbar.pack(side="right", fill="y")
 
-            def on_configure(e):
-                canvas.configure(scrollregion=canvas.bbox("all"))
-
-            canvas.bind("<Configure>", on_configure)
-
             # 檔案列表（使用 Checkbutton）
             file_vars = {}
             for status, filepath in files:
-                status_text = {
-                    '??': '[新增]',
-                    'M': '[修改]',
-                    ' M': '[修改]',
-                    'A': '[已加入]',
-                    'D': '[刪除]',
-                    'R': '[重新命名]'
-                }.get(status, f'[{status}]')
+                status_map = {
+                    '??': ('🆕', '新增', '#4CAF50'),
+                    'M': ('✏️', '修改', '#2196F3'),
+                    ' M': ('✏️', '修改', '#2196F3'),
+                    'A': ('✅', '已加入', '#9C27B0'),
+                    'D': ('🗑️', '刪除', '#F44336'),
+                    'R': ('🔄', '重新命名', '#FF9800'),
+                    'MM': ('⚠️', '部分暫存', '#FFC107')
+                }
+
+                icon, status_text, color = status_map.get(status, ('❓', status, 'black'))
+
+                file_frame = ttk.Frame(scroll_frame)
+                file_frame.pack(fill="x", pady=2, padx=5)
 
                 var = tk.BooleanVar(value=True)
-                cb = ttk.Checkbutton(scroll_frame, text=f"{status_text} {filepath}", variable=var)
-                cb.pack(anchor="w", pady=2, padx=5)
+                cb = ttk.Checkbutton(file_frame, variable=var)
+                cb.pack(side="left")
+
+                status_label = tk.Label(file_frame, text=f"{icon} [{status_text}]",
+                                        font=("Arial", 9), fg=color, width=12, anchor="w")
+                status_label.pack(side="left", padx=5)
+
+                file_label = tk.Label(file_frame, text=filepath, font=("Consolas", 9), anchor="w")
+                file_label.pack(side="left", fill="x", expand=True)
+
                 file_vars[filepath] = var
+
+            # Commit 訊息輸入區
+            commit_frame = ttk.LabelFrame(main_frame, text=" Commit 訊息 (選填) ", padding=10)
+            commit_frame.pack(fill="x", pady=(0, 10))
+
+            commit_var = tk.StringVar()
+            commit_entry = ttk.Entry(commit_frame, textvariable=commit_var, font=("Consolas", 10))
+            commit_entry.pack(fill="x")
+
+            ttk.Label(commit_frame, text="提示：留空則不會 commit，只執行 add/stash",
+                      font=("Arial", 8), foreground="gray").pack(anchor="w", pady=(3, 0))
 
             # 按鈕區域
             btn_frame = ttk.Frame(main_frame)
-            btn_frame.pack(fill="x", pady=(10, 0))
+            btn_frame.pack(fill="x")
+
+            # 左側選擇按鈕
+            left_btns = ttk.Frame(btn_frame)
+            left_btns.pack(side="left")
 
             def select_all():
                 for var in file_vars.values():
@@ -871,7 +913,27 @@ class GitAdvancedTool:
                 for var in file_vars.values():
                     var.set(False)
 
+            def select_modified():
+                """只選擇已修改的檔案"""
+                for (status, filepath), var in zip(files, file_vars.values()):
+                    var.set(status in ['M', ' M', 'MM'])
+
+            def select_new():
+                """只選擇新增的檔案"""
+                for (status, filepath), var in zip(files, file_vars.values()):
+                    var.set(status == '??')
+
+            ttk.Button(left_btns, text="全選", command=select_all, width=8).pack(side="left", padx=2)
+            ttk.Button(left_btns, text="全不選", command=deselect_all, width=8).pack(side="left", padx=2)
+            ttk.Button(left_btns, text="只選修改", command=select_modified, width=10).pack(side="left", padx=2)
+            ttk.Button(left_btns, text="只選新增", command=select_new, width=10).pack(side="left", padx=2)
+
+            # 右側動作按鈕
+            right_btns = ttk.Frame(btn_frame)
+            right_btns.pack(side="right")
+
             def on_add():
+                """Add 選中的檔案"""
                 selected = [f for f, v in file_vars.items() if v.get()]
                 if not selected:
                     messagebox.showwarning("警告", "請至少選擇一個檔案")
@@ -882,12 +944,74 @@ class GitAdvancedTool:
                     self.execute_git_command(f'git add "{filepath}"', repo_path)
 
                 dialog.destroy()
-                messagebox.showinfo("完成", f"已加入 {len(selected)} 個檔案到暫存區")
+                messagebox.showinfo("完成", f"已將 {len(selected)} 個檔案加入暫存區")
 
-            ttk.Button(btn_frame, text="全選", command=select_all, width=10).pack(side="left", padx=2)
-            ttk.Button(btn_frame, text="全不選", command=deselect_all, width=10).pack(side="left", padx=2)
-            ttk.Button(btn_frame, text="✓ 加入暫存區", command=on_add, width=15).pack(side="right", padx=2)
-            ttk.Button(btn_frame, text="✗ 取消", command=dialog.destroy, width=10).pack(side="right", padx=2)
+            def on_add_commit():
+                """Add 並 Commit"""
+                selected = [f for f, v in file_vars.items() if v.get()]
+                if not selected:
+                    messagebox.showwarning("警告", "請至少選擇一個檔案")
+                    return
+
+                commit_msg = commit_var.get().strip()
+                if not commit_msg:
+                    messagebox.showwarning("警告", "請輸入 Commit 訊息")
+                    return
+
+                # 執行 git add
+                for filepath in selected:
+                    self.execute_git_command(f'git add "{filepath}"', repo_path)
+
+                # 執行 git commit
+                self.execute_git_command(f'git commit -m "{commit_msg}"', repo_path)
+
+                dialog.destroy()
+                messagebox.showinfo("完成", f"已提交 {len(selected)} 個檔案\n訊息: {commit_msg}")
+
+            def on_stash():
+                """Stash 選中的檔案"""
+                selected = [f for f, v in file_vars.items() if v.get()]
+                if not selected:
+                    messagebox.showwarning("警告", "請至少選擇一個檔案")
+                    return
+
+                # 先 add 選中的檔案
+                for filepath in selected:
+                    self.execute_git_command(f'git add "{filepath}"', repo_path)
+
+                # Stash 已暫存的變更
+                stash_msg = commit_var.get().strip() or "Stashed changes"
+                self.execute_git_command(f'git stash push -m "{stash_msg}"', repo_path)
+
+                dialog.destroy()
+                messagebox.showinfo("完成", f"已將 {len(selected)} 個檔案 stash\n訊息: {stash_msg}")
+
+            def on_stash_rest():
+                """Stash 未選中的檔案（保留選中的）"""
+                selected = [f for f, v in file_vars.items() if v.get()]
+                unselected = [f for f, v in file_vars.items() if not v.get()]
+
+                if not unselected:
+                    messagebox.showinfo("提示", "沒有未選中的檔案需要 stash")
+                    return
+
+                # Add 選中的檔案（保留工作區）
+                for filepath in selected:
+                    self.execute_git_command(f'git add "{filepath}"', repo_path)
+
+                # Stash 包括已暫存的（會保留選中的在工作區）
+                stash_msg = "Stashed unselected files"
+                self.execute_git_command(f'git stash push --keep-index -m "{stash_msg}"', repo_path)
+
+                dialog.destroy()
+                messagebox.showinfo("完成",
+                                    f"已將 {len(unselected)} 個未選中的檔案 stash\n保留了 {len(selected)} 個選中的檔案")
+
+            ttk.Button(right_btns, text="✓ Add", command=on_add, width=10).pack(side="left", padx=2)
+            ttk.Button(right_btns, text="✓ Add + Commit", command=on_add_commit, width=13).pack(side="left", padx=2)
+            ttk.Button(right_btns, text="📦 Stash 選中", command=on_stash, width=12).pack(side="left", padx=2)
+            ttk.Button(right_btns, text="📦 Stash 其他", command=on_stash_rest, width=12).pack(side="left", padx=2)
+            ttk.Button(right_btns, text="✗ 取消", command=dialog.destroy, width=8).pack(side="left", padx=2)
 
         except Exception as e:
             messagebox.showerror("錯誤", f"無法獲取檔案列表: {str(e)}")
