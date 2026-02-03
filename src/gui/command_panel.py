@@ -1,0 +1,168 @@
+import tkinter as tk
+from tkinter import ttk
+
+# ==========================================
+# CommandPanel (按鈕佈局與生成模組)
+# ==========================================
+class CommandPanel(ttk.Frame):
+    def __init__(self, parent, executor, confirm_mgr, app_callback_handler):
+        super().__init__(parent, width=320)
+        self.executor = executor
+        self.confirm_mgr = confirm_mgr
+        self.app = app_callback_handler  # 為了呼叫複雜對話框 (open_dialog, file_selector)
+
+        self.grid(row=0, column=0, sticky="ns", padx=(5, 2))
+        self.grid_propagate(False)
+
+        self._init_scroll_area()
+        self._build_quick_entry()
+        self._build_buttons()
+        self._bind_mouse_wheel()
+
+    def _init_scroll_area(self):
+        self.canvas = tk.Canvas(self, bg="#f0f0f0", highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = ttk.Frame(self.canvas)
+
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        self.scrollable_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig(self.canvas_window, width=e.width))
+
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+
+    def _bind_mouse_wheel(self):
+        def _on_mousewheel(event):
+            if event.num == 4 or event.delta > 0:
+                self.canvas.yview_scroll(-1, "units")
+            elif event.num == 5 or event.delta < 0:
+                self.canvas.yview_scroll(1, "units")
+
+        def bind_recursive(widget):
+            widget.bind("<MouseWheel>", _on_mousewheel)
+            widget.bind("<Button-4>", _on_mousewheel)
+            widget.bind("<Button-5>", _on_mousewheel)
+            for child in widget.winfo_children():
+                bind_recursive(child)
+
+        # 延遲綁定以確保所有元件已生成
+        self.after(100, lambda: bind_recursive(self.canvas))
+
+    def _build_quick_entry(self):
+        quick_frame = ttk.LabelFrame(self.scrollable_frame, text=" ⚡ 快速執行 ")
+        quick_frame.pack(fill="x", padx=5, pady=5)
+
+        entry_var = tk.StringVar()
+        entry = ttk.Entry(quick_frame, textvariable=entry_var, font=("Consolas", 10))
+        entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
+
+        def run_q():
+            cmd = entry_var.get().strip()
+            if cmd:
+                full = f"git {cmd}" if not cmd.startswith("git ") else cmd
+                self.executor.run(full)
+                entry_var.set("")
+
+        ttk.Button(quick_frame, text="執行", width=8, command=run_q).pack(side="right", padx=5)
+        entry.bind("<Return>", lambda e: run_q())
+
+    def _build_buttons(self):
+        # 這裡定義按鈕配置
+        layout_configs = [
+            ("🛠️ 快速互動 Rebase", [
+                ("HEAD~2", lambda: self.executor.run_simple("rebase -i HEAD~2"), 8, False),
+                ("HEAD~4", lambda: self.executor.run_simple("rebase -i HEAD~4"), 8, False),
+                ("HEAD~10", lambda: self.executor.run_simple("rebase -i HEAD~10"), 8, False),
+            ], 3),
+            ("🔄 Rebase 流程控制", [
+                ("指定位置", 'rebase_branch', 12, False),
+                ("互動模式", 'rebase_interactive', 12, False),
+                ("▶️ Continue", lambda: self.executor.run_simple("rebase --continue"), 12, False),
+                ("🛑 Abort", lambda: self.executor.run_simple("rebase --abort"), 12, False),
+                ("⏭️ Skip", lambda: self.executor.run_simple("rebase --skip"), 12, False),
+            ], 2),
+            ("🍒 Cherry-pick", [
+                ("Cherry-pick Hash", 'cherry_pick', 24, False),
+                ("▶️ Continue", lambda: self.executor.run_simple("cherry-pick --continue"), 12, False),
+                ("🛑 Abort", lambda: self.executor.run_simple("cherry-pick --abort"), 12, False),
+            ], 2),
+            ("⏪ Reset 回退", [
+                ("🔙 Undo Commit", lambda: self.executor.run_simple("reset --soft HEAD~1"), 12, False),
+                ("🧨 Soft (保留變更)", 'reset_soft', 12, False),
+                ("⚠️ Hard (捨棄變更)", 'reset_hard', 12, True),
+            ], 2),
+            ("📝 提交與暫存", [
+                ("🔧 Fixup (f)", lambda: self.executor.quick_commit("f", "fixup"), 12, False),
+                ("📦 Squash (s)", lambda: self.executor.quick_commit("s", "squash"), 12, False),
+                ("💬 Commit -m", 'commit_message', 12, False),
+                ("✏️ Amend", 'commit_amend', 12, False),
+                ("➕ Add 選擇檔案", lambda: self.app.open_file_selector(self.executor), 12, False),
+            ], 2),
+            ("📦 Stash 緩衝區", [
+                ("📥 Stash Save", lambda: self.executor.run_simple("stash"), 12, False),
+                ("📤 Stash Pop", lambda: self.executor.run_simple("stash pop"), 12, False),
+                ("📜 Stash List", lambda: self.executor.run_simple("stash list"), 12, False),
+                ("🧹 Stash Clear",
+                 lambda: self.confirm_mgr.confirm("清空 stash", lambda: self.executor.run_simple("stash clear")), 12,
+                 True),
+                ("🗑️ Stash Drop",
+                 lambda: self.confirm_mgr.confirm("刪除 stash", lambda: self.executor.run_simple("stash drop")), 12,
+                 True),
+            ], 2),
+            ("🌿 Branch 分支管理", [
+                ("📋 List", lambda: self.executor.run_simple("branch -a"), 12, False),
+                ("📌 Create", 'checkout_branch', 12, False),
+                ("✂️ Del Local", 'delete_branch', 12, True),
+                ("🌐 Del Remote", 'delete_remote_branch', 12, True),
+                ("🧹 Prune", 'prune_branches', 12, False),
+            ], 2),
+            ("🏷️ Tag 標籤管理", [
+                ("📜 List Tags", lambda: self.executor.run_simple("tag -l"), 12, False),
+                ("📌 Create Tag", 'create_tag', 12, False),
+                ("🔥 Delete Local", 'delete_tag', 12, True),
+                ("☁️ Delete Remote", 'delete_remote_tag', 12, True),
+            ], 2),
+            ("✈️ 遠端推送", [
+                ("⬆️ Push", lambda: self.executor.run_simple("push"), 12, False),
+                ("🛰️ Push Tags", lambda: self.executor.run_simple("push --tags"), 14, False),
+                ("⚡ Force Push", 'force_push', 12, True),
+            ], 3),
+            ("🔍 狀態與工具", [
+                ("📢 Status", lambda: self.executor.run_simple("status"), 12, False),
+                ("📟 Diff", lambda: self.executor.run_simple("diff"), 12, False),
+                ("🧽 Clean -fd",
+                 lambda: self.confirm_mgr.confirm("清理未追蹤檔案", lambda: self.executor.run_simple("clean -fd")), 12,
+                 True),
+                ("🎯 Checkout File", 'checkout_file', 12, False),
+            ], 2)
+        ]
+
+        # 生成按鈕
+        for g_title, btns, col_count in layout_configs:
+            group_box = ttk.LabelFrame(self.scrollable_frame, text=f" {g_title} ")
+            group_box.pack(fill="x", padx=5, pady=5)
+
+            for i, item in enumerate(btns):
+                if len(item) == 4:
+                    label, action, width, is_danger = item
+                else:
+                    label, action, width = item
+                    is_danger = False
+
+                r, c = divmod(i, col_count)
+
+                # 判斷是否為字串 (需要彈出 Dialog 的指令)
+                if isinstance(action, str):
+                    cmd_key = action
+                    btn_cmd = lambda k=cmd_key: self.app.open_command_dialog(k, self.executor.repo_path, self.executor)
+                else:
+                    btn_cmd = action
+
+                btn = ttk.Button(group_box, text=label, command=btn_cmd, width=width,
+                                 style="Danger.TButton" if is_danger else "TButton")
+                btn.grid(row=r, column=c, padx=3, pady=3, sticky="ew")
+
+            for col in range(col_count):
+                group_box.columnconfigure(col, weight=1)

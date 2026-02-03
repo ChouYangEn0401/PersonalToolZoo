@@ -1,272 +1,27 @@
+import subprocess
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-import subprocess
 import os
-import time
+
+from src.core.git_handler.commands import get_commands_configs
+from src.core.git_handler.executor import GitExecutor
+from src.gui.command_panel import CommandPanel
+from src.gui.danger_operation_blocker import ConfirmationManager
+from src.gui.dialogs import GitCommandDialog
 
 
-class GitCommandDialog:
-    """彈出式指令參數設定視窗"""
-
-    def __init__(self, parent, command_name, params_config, repo_path=None):
-        self.result = None
-        self.repo_path = repo_path
-        self.dialog = tk.Toplevel(parent)
-        self.dialog.title(f"設定參數 - {command_name}")
-        self.dialog.geometry("500x400")
-        self.dialog.transient(parent)
-        self.dialog.grab_set()
-
-        # 參數配置：[{name, label, required, type(text/toggle), default}]
-        self.params_config = params_config
-        self.param_widgets = {}
-
-        self._build_ui()
-        self._center_window()
-
-    def _center_window(self):
-        self.dialog.update_idletasks()
-        x = (self.dialog.winfo_screenwidth() // 2) - (self.dialog.winfo_width() // 2)
-        y = (self.dialog.winfo_screenheight() // 2) - (self.dialog.winfo_height() // 2)
-        self.dialog.geometry(f"+{x}+{y}")
-
-    def _build_ui(self):
-        main_frame = ttk.Frame(self.dialog, padding=15)
-        main_frame.pack(fill="both", expand=True)
-
-        # 標題
-        title = ttk.Label(main_frame, text="請填寫指令參數", font=("Arial", 12, "bold"))
-        title.pack(pady=(0, 15))
-
-        # 捲動區域
-        canvas = tk.Canvas(main_frame, bg="#f0f0f0", highlightthickness=0)
-        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
-        scroll_frame = ttk.Frame(canvas)
-
-        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        def on_configure(e):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        canvas.bind("<Configure>", on_configure)
-
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        # 動態生成參數欄位
-        for i, param in enumerate(self.params_config):
-            frame = ttk.Frame(scroll_frame)
-            frame.pack(fill="x", pady=8, padx=5)
-
-            if param['type'] == 'text':
-                # 文字輸入框
-                label_text = param['label']
-                if param['required']:
-                    label_text += " *"
-
-                label = ttk.Label(frame, text=label_text, foreground="red" if param['required'] else "black")
-                label.pack(anchor="w")
-
-                entry_frame = ttk.Frame(frame)
-                entry_frame.pack(fill="x", pady=(3, 0))
-
-                var = tk.StringVar(value=param.get('default', ''))
-                entry = ttk.Entry(entry_frame, textvariable=var, font=("Consolas", 10))
-                entry.pack(fill="x")
-
-                # 自動完成功能
-                autocomplete_type = param.get('autocomplete')
-                if autocomplete_type and self.repo_path:
-                    self._setup_autocomplete(entry, var, autocomplete_type, entry_frame)
-
-                self.param_widgets[param['name']] = {
-                    'type': 'text',
-                    'var': var,
-                    'required': param['required'],
-                    'widget': entry,
-                    'frame': entry_frame
-                }
-
-            elif param['type'] == 'toggle':
-                # 開關選項
-                var = tk.BooleanVar(value=param.get('default', False))
-                cb = ttk.Checkbutton(frame, text=param['label'], variable=var)
-                cb.pack(anchor="w")
-
-                self.param_widgets[param['name']] = {
-                    'type': 'toggle',
-                    'var': var,
-                    'required': False
-                }
-
-        # 底部按鈕
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(fill="x", pady=(15, 0))
-
-        ttk.Button(btn_frame, text="✓ 執行", command=self._on_submit, width=15).pack(side="right", padx=5)
-        ttk.Button(btn_frame, text="✗ 取消", command=self._on_cancel, width=15).pack(side="right")
-
-    def _validate_and_highlight(self):
-        """驗證並標記必填欄位"""
-        all_valid = True
-
-        for name, widget_info in self.param_widgets.items():
-            if widget_info['type'] == 'text' and widget_info['required']:
-                value = widget_info['var'].get().strip()
-                if not value:
-                    # 紅框標記
-                    widget_info['widget'].configure(style='Error.TEntry')
-                    all_valid = False
-                else:
-                    widget_info['widget'].configure(style='TEntry')
-
-        return all_valid
-
-    def _on_submit(self):
-        # 創建錯誤樣式
-        style = ttk.Style()
-        style.configure('Error.TEntry', fieldbackground='#ffe6e6', bordercolor='red', borderwidth=2)
-
-        if not self._validate_and_highlight():
-            messagebox.showwarning("參數不完整", "請填寫所有標記 * 的必填欄位！")
-            return
-
-        # 收集結果
-        self.result = {}
-        for name, widget_info in self.param_widgets.items():
-            if widget_info['type'] == 'text':
-                self.result[name] = widget_info['var'].get().strip()
-            elif widget_info['type'] == 'toggle':
-                self.result[name] = widget_info['var'].get()
-
-        self.dialog.destroy()
-
-    def _on_cancel(self):
-        self.result = None
-        self.dialog.destroy()
-
-    def show(self):
-        self.dialog.wait_window()
-        return self.result
-
-    def _setup_autocomplete(self, entry, var, autocomplete_type, parent_frame):
-        """設置自動完成功能"""
-        listbox = None
-        listbox_frame = None
-
-        def get_suggestions(text):
-            """根據類型獲取建議列表"""
-            if not text or not self.repo_path:
-                return []
-
-            try:
-                if autocomplete_type == 'branch':
-                    # 獲取所有分支
-                    res = subprocess.run("git branch -a", cwd=self.repo_path, shell=True,
-                                         capture_output=True, text=True, encoding='utf-8', errors='replace')
-                    branches = [b.strip().replace('* ', '').replace('remotes/origin/', '')
-                                for b in res.stdout.split('\n') if b.strip()]
-                    # 去重並過濾
-                    branches = list(set(b for b in branches if text.lower() in b.lower()))
-                    return sorted(branches)[:10]
-
-                elif autocomplete_type == 'tag':
-                    # 獲取所有標籤
-                    res = subprocess.run("git tag -l", cwd=self.repo_path, shell=True,
-                                         capture_output=True, text=True, encoding='utf-8', errors='replace')
-                    tags = [t.strip() for t in res.stdout.split('\n') if t.strip() and text.lower() in t.lower()]
-                    return sorted(tags)[:10]
-
-                elif autocomplete_type == 'commit':
-                    # 獲取最近的 commit
-                    res = subprocess.run("git log --oneline -n 50", cwd=self.repo_path, shell=True,
-                                         capture_output=True, text=True, encoding='utf-8', errors='replace')
-                    commits = []
-                    for line in res.stdout.split('\n'):
-                        if line.strip():
-                            parts = line.split(' ', 1)
-                            if len(parts) == 2 and text.lower() in line.lower():
-                                commits.append(f"{parts[0]} - {parts[1][:50]}")
-                    return commits[:10]
-            except:
-                pass
-            return []
-
-        def show_suggestions(event=None):
-            """顯示建議列表"""
-            nonlocal listbox, listbox_frame
-
-            text = var.get()
-            if len(text) < 1:
-                hide_suggestions()
-                return
-
-            suggestions = get_suggestions(text)
-            if not suggestions:
-                hide_suggestions()
-                return
-
-            # 創建或更新 Listbox
-            if not listbox_frame:
-                listbox_frame = tk.Frame(parent_frame)
-                listbox_frame.pack(fill="x", pady=(2, 0))
-
-                listbox = tk.Listbox(listbox_frame, height=min(len(suggestions), 6),
-                                     font=("Consolas", 9), bg="#fffacd")
-                listbox.pack(fill="x")
-
-                def on_select(event):
-                    if listbox.curselection():
-                        value = listbox.get(listbox.curselection()[0])
-                        # 提取實際值（去除 commit 的描述部分）
-                        if autocomplete_type == 'commit':
-                            value = value.split(' - ')[0]
-                        var.set(value)
-                        hide_suggestions()
-
-                listbox.bind('<<ListboxSelect>>', on_select)
-                listbox.bind('<Double-Button-1>', on_select)
-
-            # 更新建議
-            listbox.delete(0, tk.END)
-            for s in suggestions:
-                listbox.insert(tk.END, s)
-            listbox.config(height=min(len(suggestions), 6))
-
-        def hide_suggestions(event=None):
-            """隱藏建議列表"""
-            nonlocal listbox, listbox_frame
-            if listbox_frame:
-                listbox_frame.destroy()
-                listbox_frame = None
-                listbox = None
-
-        # 綁定事件
-        var.trace('w', lambda *args: show_suggestions())
-        entry.bind('<FocusOut>', lambda e: self.dialog.after(200, hide_suggestions))
-        entry.bind('<Escape>', hide_suggestions)
-
-
+# ==========================================
+# GitAdvancedTool (主程式整合模組)
+# ==========================================
 class GitAdvancedTool:
     def __init__(self, root):
         self.root = root
         self.root.title("Git Pro Organizer - 智能參數管理")
         self.root.geometry("1300x850")
 
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-        self.style.configure("TFrame", background="#f0f0f0")
-        self.style.configure("TLabelframe", background="#f0f0f0")
-
-        # 危險按鈕樣式
-        self.style.configure("Danger.TButton", foreground="red", font=("Arial", 9, "bold"))
-
-        # 危險指令確認機制（1分鐘內不再詢問）
-        self.danger_confirm_timestamp = 0
-
-        # 指令參數定義
-        self._init_command_configs()
+        self._init_styles()
+        self.command_configs = get_commands_configs()
+        self.confirm_mgr = ConfirmationManager(root)  # 初始化確認管理器
 
         # 頂部工具列
         self.toolbar = ttk.Frame(self.root, padding=5)
@@ -280,202 +35,12 @@ class GitAdvancedTool:
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
 
-    def _init_command_configs(self):
-        """定義所有 Git 指令的參數配置"""
-        self.command_configs = {
-            # === Branch 相關 ===
-            'checkout_branch': {
-                'name': '建立並切換分支',
-                'base_cmd': 'checkout',
-                'params': [
-                    {'name': 'branch', 'label': '新分支名稱', 'required': True, 'type': 'text',
-                     'autocomplete': 'branch'},
-                    {'name': 'create', 'label': '建立新分支 (-b)', 'required': True, 'type': 'toggle', 'default': True}
-                ]
-            },
-
-            # === Rebase 系列 ===
-            'rebase_branch': {
-                'name': 'Rebase 到分支',
-                'base_cmd': 'rebase',
-                'params': [
-                    {'name': 'branch', 'label': '目標分支', 'required': True, 'type': 'text', 'default': 'main',
-                     'autocomplete': 'branch'}
-                ]
-            },
-            'rebase_interactive': {
-                'name': 'Rebase Interactive',
-                'base_cmd': 'rebase',
-                'params': [
-                    {'name': 'commit', 'label': '起始 Commit (HEAD~N 或 Hash)', 'required': True, 'type': 'text',
-                     'default': 'HEAD~5', 'autocomplete': 'commit'},
-                    {'name': 'interactive', 'label': '互動模式 (-i)', 'required': True, 'type': 'toggle',
-                     'default': True}
-                ]
-            },
-
-            # === Cherry-pick 系列 ===
-            'cherry_pick': {
-                'name': 'Cherry-pick',
-                'base_cmd': 'cherry-pick',
-                'params': [
-                    {'name': 'commit', 'label': 'Commit Hash (可多個，空格分隔)', 'required': True, 'type': 'text',
-                     'autocomplete': 'commit'},
-                    {'name': 'no_commit', 'label': '不自動提交 (-n)', 'required': False, 'type': 'toggle'}
-                ]
-            },
-
-            # === Reset 系列 ===
-            'reset_soft': {
-                'name': 'Soft Reset',
-                'base_cmd': 'reset',
-                'params': [
-                    {'name': 'commit', 'label': '目標 Commit (HEAD~N 或 Hash)', 'required': True, 'type': 'text',
-                     'default': 'HEAD~1', 'autocomplete': 'commit'},
-                    {'name': 'soft', 'label': 'Soft 模式 (保留修改)', 'required': True, 'type': 'toggle',
-                     'default': True}
-                ]
-            },
-            'reset_hard': {
-                'name': 'Hard Reset',
-                'base_cmd': 'reset',
-                'danger': True,
-                'params': [
-                    {'name': 'commit', 'label': '目標 Commit (HEAD~N 或 Hash)', 'required': True, 'type': 'text',
-                     'default': 'HEAD~1', 'autocomplete': 'commit'},
-                    {'name': 'hard', 'label': 'Hard 模式 (捨棄所有修改 ⚠️)', 'required': True, 'type': 'toggle',
-                     'default': True}
-                ]
-            },
-
-            # === Stash 系列 ===
-            'stash_commit': {
-                'name': 'Stash → Commit Squash',
-                'base_cmd': 'custom',
-                'custom_handler': 'handle_stash_commit',
-                'params': [
-                    {'name': 'message', 'label': 'Commit 訊息 (預設: WIP)', 'required': False, 'type': 'text',
-                     'default': 'WIP'}
-                ]
-            },
-
-            # === Commit 系列 ===
-            'commit_message': {
-                'name': 'Commit 訊息',
-                'base_cmd': 'commit',
-                'params': [
-                    {'name': 'message', 'label': 'Commit 訊息', 'required': True, 'type': 'text'}
-                ]
-            },
-            'commit_amend': {
-                'name': 'Commit Amend',
-                'base_cmd': 'commit',
-                'params': [
-                    {'name': 'message', 'label': 'Commit 訊息 (留空則不改)', 'required': False, 'type': 'text'},
-                    {'name': 'amend', 'label': '修改上次提交 (--amend)', 'required': True, 'type': 'toggle',
-                     'default': True},
-                    {'name': 'no_edit', 'label': '不修改訊息 (--no-edit)', 'required': False, 'type': 'toggle'}
-                ]
-            },
-            'commit_squash': {
-                'name': 'Squash Commit',
-                'base_cmd': 'commit',
-                'params': [
-                    {'name': 'message', 'label': 'Squash 訊息', 'required': True, 'type': 'text', 'default': 's'}
-                ]
-            },
-
-            # === Push 系列 ===
-            'force_push': {
-                'name': 'Force Push',
-                'base_cmd': 'push',
-                'danger': True,
-                'params': [
-                    {'name': 'remote', 'label': '遠端名稱', 'required': False, 'type': 'text', 'default': 'origin'},
-                    {'name': 'branch', 'label': '分支名稱 (留空=當前)', 'required': False, 'type': 'text',
-                     'autocomplete': 'branch'},
-                    {'name': 'force', 'label': '強制推送 (-f)', 'required': True, 'type': 'toggle', 'default': True},
-                    {'name': 'force_with_lease', 'label': '安全強推 (--force-with-lease)', 'required': False,
-                     'type': 'toggle'}
-                ]
-            },
-
-            # === Branch 系列 ===
-            'delete_branch': {
-                'name': 'Delete Branch',
-                'base_cmd': 'branch',
-                'danger': True,
-                'params': [
-                    {'name': 'branch', 'label': '分支名稱 (可多個，空格分隔)', 'required': True, 'type': 'text',
-                     'autocomplete': 'branch'},
-                    {'name': 'force_delete', 'label': '強制刪除 (-D)', 'required': True, 'type': 'toggle',
-                     'default': True}
-                ]
-            },
-            'delete_remote_branch': {
-                'name': 'Delete Remote Branch',
-                'base_cmd': 'push',
-                'danger': True,
-                'params': [
-                    {'name': 'remote', 'label': '遠端名稱', 'required': False, 'type': 'text', 'default': 'origin'},
-                    {'name': 'branch', 'label': '分支名稱', 'required': True, 'type': 'text', 'autocomplete': 'branch'},
-                    {'name': 'delete', 'label': '刪除遠端分支 (--delete)', 'required': True, 'type': 'toggle',
-                     'default': True}
-                ]
-            },
-            'prune_branches': {
-                'name': 'Prune Branches',
-                'base_cmd': 'custom',
-                'custom_handler': 'handle_prune_branches',
-                'params': [
-                    {'name': 'remote', 'label': '遠端名稱', 'required': False, 'type': 'text', 'default': 'origin'},
-                    {'name': 'dry_run', 'label': '僅預覽 (--dry-run)', 'required': False, 'type': 'toggle'}
-                ]
-            },
-
-            # === Tag 系列 ===
-            'create_tag': {
-                'name': 'Create Tag',
-                'base_cmd': 'tag',
-                'params': [
-                    {'name': 'tag', 'label': 'Tag 名稱', 'required': True, 'type': 'text', 'autocomplete': 'tag'},
-                    {'name': 'message', 'label': 'Tag 訊息 (-m)', 'required': False, 'type': 'text'},
-                    {'name': 'commit', 'label': '指定 Commit (留空=HEAD)', 'required': False, 'type': 'text',
-                     'autocomplete': 'commit'}
-                ]
-            },
-            'delete_tag': {
-                'name': 'Delete Tag',
-                'base_cmd': 'tag',
-                'danger': True,
-                'params': [
-                    {'name': 'tag', 'label': 'Tag 名稱 (可多個，空格分隔)', 'required': True, 'type': 'text',
-                     'autocomplete': 'tag'},
-                    {'name': 'delete', 'label': '刪除標籤 (-d)', 'required': True, 'type': 'toggle', 'default': True}
-                ]
-            },
-            'delete_remote_tag': {
-                'name': '刪除遠端標籤',
-                'base_cmd': 'push',
-                'danger': True,
-                'params': [
-                    {'name': 'remote', 'label': '遠端名稱', 'required': False, 'type': 'text', 'default': 'origin'},
-                    {'name': 'tag', 'label': 'Tag 名稱', 'required': True, 'type': 'text', 'autocomplete': 'tag'},
-                    {'name': 'delete', 'label': '刪除 (--delete)', 'required': True, 'type': 'toggle', 'default': True}
-                ]
-            },
-
-            # === 其他 ===
-            'checkout_file': {
-                'name': 'Checkout File',
-                'base_cmd': 'checkout',
-                'params': [
-                    {'name': 'source', 'label': '來源 (Commit/Branch，留空=HEAD)', 'required': False, 'type': 'text',
-                     'autocomplete': 'commit'},
-                    {'name': 'file', 'label': '檔案路徑', 'required': True, 'type': 'text'}
-                ]
-            }
-        }
+    def _init_styles(self):
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        self.style.configure("TFrame", background="#f0f0f0")
+        self.style.configure("TLabelframe", background="#f0f0f0")
+        self.style.configure("Danger.TButton", foreground="red", font=("Arial", 9, "bold"))
 
     def open_directory(self):
         path = filedialog.askdirectory()
@@ -492,306 +57,115 @@ class GitAdvancedTool:
         main_frame.columnconfigure(1, weight=1)
         main_frame.rowconfigure(0, weight=1)
 
-        # === 左側：指令區 (含完善的 Scrollbar 與滾輪支援) ===
-        side_container = ttk.Frame(main_frame, width=320)
-        side_container.grid(row=0, column=0, sticky="ns", padx=(5, 2))
-        side_container.grid_propagate(False)
-
-        canvas = tk.Canvas(side_container, bg="#f0f0f0", highlightthickness=0)
-        scrollbar = ttk.Scrollbar(side_container, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-
-        # 滾動窗口配置
-        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        # --- 自動調整 Canvas 寬度與捲動區域 ---
-        def _on_frame_configure(e):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        def _on_canvas_configure(e):
-            canvas.itemconfig(canvas_window, width=e.width)
-
-        scrollable_frame.bind("<Configure>", _on_frame_configure)
-        canvas.bind("<Configure>", _on_canvas_configure)
-
-        # --- 綁定滑鼠滾輪事件 (關鍵修正) ---
-        def _on_mousewheel(event):
-            # Windows 用 delta, Linux 用 num (4/5)
-            if event.num == 4 or event.delta > 0:
-                canvas.yview_scroll(-1, "units")
-            elif event.num == 5 or event.delta < 0:
-                canvas.yview_scroll(1, "units")
-
-        # 遞迴綁定所有子元件，確保滑鼠指在哪都能捲動
-        def bind_mouse_wheel(widget):
-            widget.bind("<MouseWheel>", _on_mousewheel)
-            widget.bind("<Button-4>", _on_mousewheel)
-            widget.bind("<Button-5>", _on_mousewheel)
-            for child in widget.winfo_children():
-                bind_mouse_wheel(child)
-
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        # 建立 UI 後執行綁定
-        self.build_command_ui(scrollable_frame, path)
-        bind_mouse_wheel(canvas)
-
-        # === 右側：顯示面板 ===
+        # === 建立右側面板 (先建立以便傳遞給 Executor) ===
         display_panel = ttk.Frame(main_frame)
         display_panel.grid(row=0, column=1, sticky="nsew", padx=5)
         display_panel.columnconfigure(0, weight=1)
-        display_panel.rowconfigure(1, weight=3)  # Adog 區域
-        display_panel.rowconfigure(4, weight=2)  # Terminal 區域
+        display_panel.rowconfigure(1, weight=3)
+        display_panel.rowconfigure(4, weight=2)
 
-        # Adog 視覺化
+        # Adog 區域
         ttk.Label(display_panel, text="Git Adog 圖表:", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky="w",
                                                                                         pady=(5, 0))
         adog_text = tk.Text(display_panel, bg="#ffffff", height=15, font=("Consolas", 10), wrap="none")
         adog_text.grid(row=1, column=0, sticky="nsew")
-
         adog_h_scroll = ttk.Scrollbar(display_panel, orient="horizontal", command=adog_text.xview)
         adog_h_scroll.grid(row=2, column=0, sticky="ew")
         adog_text.configure(xscrollcommand=adog_h_scroll.set)
 
-        # Terminal 輸出
+        # Terminal 區域
         ttk.Label(display_panel, text="執行輸出:", font=("Arial", 9, "bold")).grid(row=3, column=0, sticky="w",
                                                                                    pady=(5, 0))
         terminal = tk.Text(display_panel, bg="#1e1e1e", fg="#ffffff", font=("Consolas", 10))
         terminal.grid(row=4, column=0, sticky="nsew")
 
+        # === 初始化 Executor (核心邏輯) ===
+        executor = GitExecutor(terminal, adog_text, path)
+
         # 底部工具欄
         ctrl_bar = ttk.Frame(display_panel)
         ctrl_bar.grid(row=5, column=0, sticky="ew", pady=5)
-        ttk.Button(ctrl_bar, text="🔄 刷新", width=10, command=lambda: self.refresh_adog(path, adog_text)).pack(
-            side="left", padx=2)
-        ttk.Button(ctrl_bar, text="🕒 Reflog", width=10, command=lambda: self.view_reflog(path, adog_text)).pack(
-            side="left", padx=2)
+        ttk.Button(ctrl_bar, text="🔄 刷新", width=10, command=executor.refresh_adog).pack(side="left", padx=2)
+        ttk.Button(ctrl_bar, text="🕒 Reflog", width=10, command=executor.view_reflog).pack(side="left", padx=2)
 
-        self.refresh_adog(path, adog_text)
+        executor.refresh_adog()
 
-    def build_command_ui(self, parent, path):
-        row_counter = 0
+        # === 建立左側 CommandPanel (注入依賴) ===
+        # 傳遞 self (app) 以便 panel 可以呼叫 open_command_dialog
+        CommandPanel(main_frame, executor, self.confirm_mgr, self)
 
-        # --- 快速指令輸入區 ---
-        quick_frame = ttk.LabelFrame(parent, text=" ⚡ 快速執行 ")
-        quick_frame.grid(row=row_counter, column=0, sticky="ew", padx=5, pady=5)
-        row_counter += 1
-
-        entry_var = tk.StringVar()
-        entry = ttk.Entry(quick_frame, textvariable=entry_var, font=("Consolas", 10))
-        entry.pack(side="left", fill="x", expand=True, padx=5, pady=5)
-
-        def run_q():
-            cmd = entry_var.get().strip()
-            if cmd:
-                self.execute_git_command(f"git {cmd}" if not cmd.startswith("git ") else cmd, path)
-                entry_var.set("")
-
-        ttk.Button(quick_frame, text="執行", width=8, command=run_q).pack(side="right", padx=5)
-        entry.bind("<Return>", lambda e: run_q())
-
-        # --- 按鈕群組配置 ---
-        # 格式: (標題, [ (按鈕文字, 指令/Key, 寬度, 危險標記) ], 每行幾個)
-        layout_configs = [
-            ("🛠️ 快速互動 Rebase", [
-                ("HEAD~2", lambda: self.execute_simple_git("rebase -i HEAD~2", path), 8, False),
-                ("HEAD~4", lambda: self.execute_simple_git("rebase -i HEAD~4", path), 8, False),
-                ("HEAD~10", lambda: self.execute_simple_git("rebase -i HEAD~10", path), 8, False),
-            ], 3),
-
-            ("🔄 Rebase 流程控制", [
-                ("指定位置", 'rebase_branch', 12, False),
-                ("互動模式", 'rebase_interactive', 12, False),
-                ("▶️ Continue", lambda: self.execute_simple_git("rebase --continue", path), 12, False),
-                ("🛑 Abort", lambda: self.execute_simple_git("rebase --abort", path), 12, False),
-                ("⏭️ Skip", lambda: self.execute_simple_git("rebase --skip", path), 12, False),
-            ], 2),
-
-            ("🍒 Cherry-pick", [
-                ("Cherry-pick Hash", 'cherry_pick', 24, False),
-                ("▶️ Continue", lambda: self.execute_simple_git("cherry-pick --continue", path), 12, False),
-                ("🛑 Abort", lambda: self.execute_simple_git("cherry-pick --abort", path), 12, False),
-            ], 2),
-
-            ("⏪ Reset 回退", [
-                ("🔙 Undo Commit", lambda: self.execute_simple_git("reset --soft HEAD~1", path), 12, False),
-                ("🧨 Soft (保留變更)", 'reset_soft', 12, False),
-                ("⚠️ Hard (捨棄變更)", 'reset_hard', 12, True),
-            ], 2),
-
-            ("📝 提交與暫存", [
-                ("🔧 Fixup (f)", lambda: self.quick_commit("f", path), 12, False),
-                ("📦 Squash (s)", lambda: self.quick_commit("s", path), 12, False),
-                ("💬 Commit -m", 'commit_message', 12, False),
-                ("✏️ Amend", 'commit_amend', 12, False),
-                ("➕ Add 選擇檔案", lambda: self.open_file_selector(path), 12, False),
-            ], 2),
-
-            ("📦 Stash 緩衝區", [
-                ("📥 Stash Save", lambda: self.execute_simple_git("stash", path), 12, False),
-                ("📤 Stash Pop", lambda: self.execute_simple_git("stash pop", path), 12, False),
-                ("📜 Stash List", lambda: self.execute_simple_git("stash list", path), 12, False),
-                ("🧹 Stash Clear", lambda: self.confirm_danger_action(
-                    "清空所有 stash",
-                    lambda: self.execute_simple_git("stash clear",path)
-                ), 12, True),
-                ("🗑️ Stash Drop", lambda: self.confirm_danger_action(
-                    "刪除最近的 stash",
-                    lambda: self.execute_simple_git("stash drop", path)
-                ), 12, True),
-            ], 2),
-
-            ("🌿 Branch 分支管理", [
-                ("📋 List Branches", lambda: self.execute_simple_git("branch -a", path), 12, False),
-                ("📌 Create Branch", 'checkout_branch', 12, False),
-                ("✂️ Delete Local", 'delete_branch', 12, True),
-                ("🌐 Delete Remote", 'delete_remote_branch', 12, True),
-                ("🧹 Prune (修剪)", 'prune_branches', 12, False),
-            ], 2),
-
-            ("🏷️ Tag 標籤管理", [
-                ("📜 List Tags", lambda: self.execute_simple_git("tag -l", path), 12, False),
-                ("📌 Create Tag", 'create_tag', 12, False),
-                ("🔥 Delete Local", 'delete_tag', 12, True),
-                ("☁️ Delete Remote", 'delete_remote_tag', 12, True),
-            ], 2),
-
-            ("✈️ 遠端推送", [
-                ("⬆️ Push", lambda: self.execute_simple_git("push", path), 12, False),
-                ("🛰️ Push Tags", lambda: self.execute_simple_git("push --tags", path), 14, False),
-                ("⚡ Force Push", 'force_push', 12, True),
-            ], 3),
-
-            ("🔍 狀態與工具", [
-                ("📢 Status", lambda: self.execute_simple_git("status", path), 12, False),
-                ("📟 Diff", lambda: self.execute_simple_git("diff", path), 12, False),
-                ("🧽 Clean -fd", lambda: self.confirm_danger_action(
-                    "清理未追蹤的檔案和目錄",
-                    lambda: self.execute_simple_git("clean -fd", path)
-                ),12, True),
-                ("🎯 Checkout File", 'checkout_file', 12, False),
-            ], 2)
-        ]
-
-        # 根據配置動態生成介面
-        for g_title, btns, col_count in layout_configs:
-            group_box = ttk.LabelFrame(parent, text=f" {g_title} ")
-            group_box.grid(row=row_counter, column=0, sticky="ew", padx=5, pady=5)
-            row_counter += 1
-
-            for i, item in enumerate(btns):
-                if len(item) == 4:
-                    label, action, width, is_danger = item
-                else:
-                    label, action, width = item
-                    is_danger = False
-
-                r, c = divmod(i, col_count)
-
-                # 區別指令類型
-                if callable(action):
-                    btn_cmd = action
-                else:
-                    btn_cmd = lambda k=action, p=path: self.open_command_dialog(k, p)
-
-                btn = ttk.Button(group_box, text=label, command=btn_cmd, width=width,
-                                 style="Danger.TButton" if is_danger else "TButton")
-                btn.grid(row=r, column=c, padx=3, pady=3, sticky="ew")
-
-            # 讓每一欄等寬
-            for col in range(col_count):
-                group_box.columnconfigure(col, weight=1)
-
-    def open_command_dialog(self, cmd_key, repo_path):
-        """開啟指令參數設定對話框"""
+    def open_command_dialog(self, cmd_key, repo_path, executor):
+        """處理帶參數的 Git 指令對話框"""
         if cmd_key not in self.command_configs:
             messagebox.showerror("錯誤", f"未定義的指令: {cmd_key}")
             return
 
         config = self.command_configs[cmd_key]
 
-        # 檢查是否為危險指令，需要確認
+        # 檢查危險權限
         if config.get('danger', False):
-            if not self.confirm_danger_action(config['name'], None):
+            if not self.confirm_mgr.confirm(config['name'], None):
                 return
 
         dialog = GitCommandDialog(self.root, config['name'], config['params'], repo_path)
         result = dialog.show()
 
         if result:
-            self.execute_configured_git(config, result, repo_path)
+            self._execute_configured_git(config, result, executor)
 
-    def confirm_danger_action(self, action_name, callback=None):
-        """危險操作確認對話框（支援 1 分鐘內不再詢問）"""
-        current_time = time.time()
+    def _execute_configured_git(self, config, params, executor):
+        """解析參數並交給 Executor 執行"""
+        # 自訂 Handler 邏輯
+        if config.get('base_cmd') == 'custom' and 'custom_handler' in config:
+            # 這裡簡化處理，若有需要可將 custom handlers 也移入 Executor
+            handler_name = config['custom_handler']
+            if handler_name == 'handle_prune_branches':
+                remote = params.get('remote', 'origin')
+                if params.get('dry_run'):
+                    executor.run(f"git fetch {remote} --prune --dry-run")
+                else:
+                    executor.run(f"git fetch {remote} --prune")
+                    executor.run(f"git remote prune {remote}")
+            return
 
-        # 檢查是否在 1 分鐘內
-        if current_time - self.danger_confirm_timestamp < 60:
-            if callback:
-                callback()
-            return True
+        cmd_parts = ['git', config['base_cmd']]
 
-        # 創建確認對話框
-        dialog = tk.Toplevel(self.root)
-        dialog.title("⚠️ 危險操作確認")
-        dialog.geometry("400x300")
-        dialog.transient(self.root)
-        dialog.grab_set()
+        # 特殊處理：checkout -b
+        if config['base_cmd'] == 'checkout' and params.get('create'):
+            cmd_parts.append('-b')
+            if params.get('branch'):
+                cmd_parts.append(params['branch'])
+            executor.run(' '.join(cmd_parts))
+            return
 
-        # 置中
-        dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
-        y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
-        dialog.geometry(f"+{x}+{y}")
+        # 一般參數組裝
+        for param_def in config['params']:
+            name = param_def['name']
+            value = params.get(name)
 
-        result = {'confirmed': False, 'no_ask': False}
+            if param_def['type'] == 'toggle' and value:
+                flag_map = {
+                    'interactive': '-i', 'soft': '--soft', 'hard': '--hard',
+                    'amend': '--amend', 'no_edit': '--no-edit', 'force': '-f',
+                    'force_delete': '-D', 'delete': '--delete'
+                }
+                if name in flag_map:
+                    cmd_parts.append(flag_map[name])
 
-        # 內容
-        main_frame = ttk.Frame(dialog, padding=20)
-        main_frame.pack(fill="both", expand=True)
+            elif param_def['type'] == 'text' and value:
+                if name == 'message':
+                    cmd_parts.extend(['-m', f'"{value}"'])
+                elif name in ['branch', 'commit', 'tag', 'file', 'source', 'remote']:
+                    cmd_parts.append(value)
 
-        warning_label = ttk.Label(main_frame, text="⚠️", font=("Arial", 32), foreground="red")
-        warning_label.pack(pady=10)
+        executor.run(' '.join(cmd_parts))
 
-        msg_label = ttk.Label(main_frame, text=f"確定要執行危險操作嗎？\n\n操作: {action_name}",
-                              font=("Arial", 11), justify="center")
-        msg_label.pack(pady=10)
-
-        no_ask_var = tk.BooleanVar()
-        no_ask_cb = ttk.Checkbutton(main_frame, text="1 分鐘內不再詢問", variable=no_ask_var)
-        no_ask_cb.pack(pady=5)
-
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(pady=10)
-
-        def on_confirm():
-            result['confirmed'] = True
-            result['no_ask'] = no_ask_var.get()
-            dialog.destroy()
-
-        def on_cancel():
-            result['confirmed'] = False
-            dialog.destroy()
-
-        ttk.Button(btn_frame, text="✓ 確定執行", command=on_confirm, width=12).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="✗ 取消", command=on_cancel, width=12).pack(side="left", padx=5)
-
-        dialog.wait_window()
-
-        if result['confirmed']:
-            if result['no_ask']:
-                self.danger_confirm_timestamp = current_time
-            if callback:
-                callback()
-            return True
-        return False
-
-    def open_file_selector(self, repo_path):
+    def open_file_selector(self, executor):
         """開啟檔案選擇器，支援 Add/Stash/Commit 整合流程"""
+        repo_path = executor.repo_path
+
         try:
-            # 獲取所有未追蹤和已修改的檔案
+            # 獲取所有未追蹤和已修改的檔案 (使用 subprocess 靜默執行，不刷屏 Terminal)
             res = subprocess.run("git status --short", cwd=repo_path, shell=True,
                                  capture_output=True, text=True, encoding='utf-8', errors='replace')
 
@@ -827,10 +201,9 @@ class GitAdvancedTool:
             # 標題區
             title_frame = ttk.Frame(main_frame)
             title_frame.pack(fill="x", pady=(0, 10))
-
             ttk.Label(title_frame, text="選擇要處理的檔案:", font=("Arial", 11, "bold")).pack(side="left")
-            ttk.Label(title_frame, text=f"共 {len(files)} 個檔案", font=("Arial", 9),
-                      foreground="gray").pack(side="left", padx=10)
+            ttk.Label(title_frame, text=f"共 {len(files)} 個檔案", font=("Arial", 9), foreground="gray").pack(
+                side="left", padx=10)
 
             # 捲動區域
             list_frame = ttk.LabelFrame(main_frame, text=" 檔案列表 ", padding=10)
@@ -843,19 +216,13 @@ class GitAdvancedTool:
             canvas_window = canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
             canvas.configure(yscrollcommand=scrollbar.set)
 
-            def on_frame_configure(e):
-                canvas.configure(scrollregion=canvas.bbox("all"))
-
-            def on_canvas_configure(e):
-                canvas.itemconfig(canvas_window, width=e.width)
-
-            scroll_frame.bind("<Configure>", on_frame_configure)
-            canvas.bind("<Configure>", on_canvas_configure)
+            scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+            canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_window, width=e.width))
 
             canvas.pack(side="left", fill="both", expand=True)
             scrollbar.pack(side="right", fill="y")
 
-            # 檔案列表（使用 Checkbutton）
+            # 檔案列表邏輯
             file_vars = {}
             for status, filepath in files:
                 status_map = {
@@ -864,10 +231,9 @@ class GitAdvancedTool:
                     ' M': ('✏️', '修改', '#2196F3'),
                     'A': ('✅', '已加入', '#9C27B0'),
                     'D': ('🗑️', '刪除', '#F44336'),
-                    'R': ('🔄', '重新命名', '#FF9800'),
+                    'R': ('🔄', '更名', '#FF9800'),
                     'MM': ('⚠️', '部分暫存', '#FFC107')
                 }
-
                 icon, status_text, color = status_map.get(status, ('❓', status, 'black'))
 
                 file_frame = ttk.Frame(scroll_frame)
@@ -877,12 +243,10 @@ class GitAdvancedTool:
                 cb = ttk.Checkbutton(file_frame, variable=var)
                 cb.pack(side="left")
 
-                status_label = tk.Label(file_frame, text=f"{icon} [{status_text}]",
-                                        font=("Arial", 9), fg=color, width=12, anchor="w")
-                status_label.pack(side="left", padx=5)
-
-                file_label = tk.Label(file_frame, text=filepath, font=("Consolas", 9), anchor="w")
-                file_label.pack(side="left", fill="x", expand=True)
+                tk.Label(file_frame, text=f"{icon} [{status_text}]", font=("Arial", 9), fg=color, width=12,
+                         anchor="w").pack(side="left", padx=5)
+                tk.Label(file_frame, text=filepath, font=("Consolas", 9), anchor="w").pack(side="left", fill="x",
+                                                                                           expand=True)
 
                 file_vars[filepath] = var
 
@@ -891,274 +255,69 @@ class GitAdvancedTool:
             commit_frame.pack(fill="x", pady=(0, 10))
 
             commit_var = tk.StringVar()
-            commit_entry = ttk.Entry(commit_frame, textvariable=commit_var, font=("Consolas", 10))
-            commit_entry.pack(fill="x")
+            ttk.Entry(commit_frame, textvariable=commit_var, font=("Consolas", 10)).pack(fill="x")
+            ttk.Label(commit_frame, text="提示：留空則不會 commit，只執行 add/stash", font=("Arial", 8),
+                      foreground="gray").pack(anchor="w", pady=(3, 0))
 
-            ttk.Label(commit_frame, text="提示：留空則不會 commit，只執行 add/stash",
-                      font=("Arial", 8), foreground="gray").pack(anchor="w", pady=(3, 0))
+            # 按鈕區域邏輯
+            def get_selected():
+                return [f for f, v in file_vars.items() if v.get()]
 
-            # 按鈕區域
+            def on_add():
+                selected = get_selected()
+                if not selected: return messagebox.showwarning("警告", "請至少選擇一個檔案")
+                for fp in selected: executor.run(f'git add "{fp}"')
+                dialog.destroy()
+
+            def on_add_commit():
+                selected = get_selected()
+                if not selected: return messagebox.showwarning("警告", "請至少選擇一個檔案")
+                msg = commit_var.get().strip()
+                if not msg: return messagebox.showwarning("警告", "請輸入 Commit 訊息")
+
+                for fp in selected: executor.run(f'git add "{fp}"')
+                executor.run(f'git commit -m "{msg}"')
+                dialog.destroy()
+
+            def on_stash():
+                selected = get_selected()
+                if not selected: return messagebox.showwarning("警告", "請至少選擇一個檔案")
+                for fp in selected: executor.run(f'git add "{fp}"')
+                msg = commit_var.get().strip() or "Stashed changes"
+                executor.run(f'git stash push -m "{msg}"')
+                dialog.destroy()
+
+            def on_stash_rest():
+                selected = get_selected()  # 這些是要保留在工作區的
+                # 先 Add 選中的 (保留工作區狀態)
+                for fp in selected: executor.run(f'git add "{fp}"')
+                msg = "Stashed unselected files"
+                executor.run(f'git stash push --keep-index -m "{msg}"')
+                dialog.destroy()
+
+            # 按鈕配置
             btn_frame = ttk.Frame(main_frame)
             btn_frame.pack(fill="x")
 
-            # 左側選擇按鈕
+            # 左側輔助選取
             left_btns = ttk.Frame(btn_frame)
             left_btns.pack(side="left")
+            ttk.Button(left_btns, text="全選", command=lambda: [v.set(True) for v in file_vars.values()], width=8).pack(
+                side="left", padx=2)
+            ttk.Button(left_btns, text="全不選", command=lambda: [v.set(False) for v in file_vars.values()],
+                       width=8).pack(side="left", padx=2)
 
-            def select_all():
-                for var in file_vars.values():
-                    var.set(True)
-
-            def deselect_all():
-                for var in file_vars.values():
-                    var.set(False)
-
-            def select_modified():
-                """只選擇已修改的檔案"""
-                for (status, filepath), var in zip(files, file_vars.values()):
-                    var.set(status in ['M', ' M', 'MM'])
-
-            def select_new():
-                """只選擇新增的檔案"""
-                for (status, filepath), var in zip(files, file_vars.values()):
-                    var.set(status == '??')
-
-            ttk.Button(left_btns, text="全選", command=select_all, width=8).pack(side="left", padx=2)
-            ttk.Button(left_btns, text="全不選", command=deselect_all, width=8).pack(side="left", padx=2)
-            ttk.Button(left_btns, text="只選修改", command=select_modified, width=10).pack(side="left", padx=2)
-            ttk.Button(left_btns, text="只選新增", command=select_new, width=10).pack(side="left", padx=2)
-
-            # 右側動作按鈕
+            # 右側執行動作
             right_btns = ttk.Frame(btn_frame)
             right_btns.pack(side="right")
-
-            def on_add():
-                """Add 選中的檔案"""
-                selected = [f for f, v in file_vars.items() if v.get()]
-                if not selected:
-                    messagebox.showwarning("警告", "請至少選擇一個檔案")
-                    return
-
-                # 執行 git add
-                for filepath in selected:
-                    self.execute_git_command(f'git add "{filepath}"', repo_path)
-
-                dialog.destroy()
-                messagebox.showinfo("完成", f"已將 {len(selected)} 個檔案加入暫存區")
-
-            def on_add_commit():
-                """Add 並 Commit"""
-                selected = [f for f, v in file_vars.items() if v.get()]
-                if not selected:
-                    messagebox.showwarning("警告", "請至少選擇一個檔案")
-                    return
-
-                commit_msg = commit_var.get().strip()
-                if not commit_msg:
-                    messagebox.showwarning("警告", "請輸入 Commit 訊息")
-                    return
-
-                # 執行 git add
-                for filepath in selected:
-                    self.execute_git_command(f'git add "{filepath}"', repo_path)
-
-                # 執行 git commit
-                self.execute_git_command(f'git commit -m "{commit_msg}"', repo_path)
-
-                dialog.destroy()
-                messagebox.showinfo("完成", f"已提交 {len(selected)} 個檔案\n訊息: {commit_msg}")
-
-            def on_stash():
-                """Stash 選中的檔案"""
-                selected = [f for f, v in file_vars.items() if v.get()]
-                if not selected:
-                    messagebox.showwarning("警告", "請至少選擇一個檔案")
-                    return
-
-                # 先 add 選中的檔案
-                for filepath in selected:
-                    self.execute_git_command(f'git add "{filepath}"', repo_path)
-
-                # Stash 已暫存的變更
-                stash_msg = commit_var.get().strip() or "Stashed changes"
-                self.execute_git_command(f'git stash push -m "{stash_msg}"', repo_path)
-
-                dialog.destroy()
-                messagebox.showinfo("完成", f"已將 {len(selected)} 個檔案 stash\n訊息: {stash_msg}")
-
-            def on_stash_rest():
-                """Stash 未選中的檔案（保留選中的）"""
-                selected = [f for f, v in file_vars.items() if v.get()]
-                unselected = [f for f, v in file_vars.items() if not v.get()]
-
-                if not unselected:
-                    messagebox.showinfo("提示", "沒有未選中的檔案需要 stash")
-                    return
-
-                # Add 選中的檔案（保留工作區）
-                for filepath in selected:
-                    self.execute_git_command(f'git add "{filepath}"', repo_path)
-
-                # Stash 包括已暫存的（會保留選中的在工作區）
-                stash_msg = "Stashed unselected files"
-                self.execute_git_command(f'git stash push --keep-index -m "{stash_msg}"', repo_path)
-
-                dialog.destroy()
-                messagebox.showinfo("完成",
-                                    f"已將 {len(unselected)} 個未選中的檔案 stash\n保留了 {len(selected)} 個選中的檔案")
-
             ttk.Button(right_btns, text="✓ Add", command=on_add, width=10).pack(side="left", padx=2)
-            ttk.Button(right_btns, text="✓ Add + Commit", command=on_add_commit, width=13).pack(side="left", padx=2)
+            ttk.Button(right_btns, text="✓ Add+Commit", command=on_add_commit, width=13).pack(side="left", padx=2)
             ttk.Button(right_btns, text="📦 Stash 選中", command=on_stash, width=12).pack(side="left", padx=2)
             ttk.Button(right_btns, text="📦 Stash 其他", command=on_stash_rest, width=12).pack(side="left", padx=2)
             ttk.Button(right_btns, text="✗ 取消", command=dialog.destroy, width=8).pack(side="left", padx=2)
 
         except Exception as e:
             messagebox.showerror("錯誤", f"無法獲取檔案列表: {str(e)}")
-
-    def execute_configured_git(self, config, params, repo_path):
-        """根據參數配置執行 Git 指令"""
-        # 檢查是否有自訂處理器
-        if config.get('base_cmd') == 'custom' and 'custom_handler' in config:
-            handler_name = config['custom_handler']
-            handler = getattr(self, handler_name, None)
-            if handler:
-                handler(params, repo_path)
-                return
-
-        cmd_parts = ['git', config['base_cmd']]
-
-        # 特殊處理：checkout -b 的順序
-        if config['base_cmd'] == 'checkout' and params.get('create'):
-            cmd_parts.append('-b')
-            if params.get('branch'):
-                cmd_parts.append(params['branch'])
-            # 提前返回，避免重複處理
-            full_cmd = ' '.join(cmd_parts)
-            self.execute_git_command(full_cmd, repo_path)
-            return
-
-        # 組裝指令
-        for param_def in config['params']:
-            name = param_def['name']
-            value = params.get(name)
-
-            if param_def['type'] == 'toggle' and value:
-                # Toggle 參數
-                flag_map = {
-                    'interactive': '-i',
-                    'soft': '--soft',
-                    'hard': '--hard',
-                    'amend': '--amend',
-                    'no_edit': '--no-edit',
-                    'no_commit': '-n',
-                    'force': '-f',
-                    'force_with_lease': '--force-with-lease',
-                    'force_delete': '-D',
-                    'delete': '--delete',
-                    'dry_run': '--dry-run'
-                }
-                if name in flag_map:
-                    cmd_parts.append(flag_map[name])
-
-            elif param_def['type'] == 'text' and value:
-                # 文字參數
-                if name == 'message':
-                    cmd_parts.extend(['-m', f'"{value}"'])
-                elif name in ['branch', 'commit', 'tag', 'file', 'source', 'remote']:
-                    cmd_parts.append(value)
-
-        full_cmd = ' '.join(cmd_parts)
-        self.execute_git_command(full_cmd, repo_path)
-
-    # === Custom Handlers ===
-
-    def handle_stash_commit(self, params, repo_path):
-        """Stash → Commit 's' 的自訂流程"""
-        message = params.get('message', 'WIP')
-
-        # 1. Stash
-        self.execute_git_command("git stash", repo_path)
-
-        # 2. Stash pop
-        self.execute_git_command("git stash pop", repo_path)
-
-        # 3. Add all
-        self.execute_git_command("git add .", repo_path)
-
-        # 4. Commit
-        self.execute_git_command(f'git commit -m "{message}"', repo_path)
-
-    def handle_prune_branches(self, params, repo_path):
-        """清理遠端分支的自訂流程"""
-        remote = params.get('remote', 'origin')
-        dry_run = params.get('dry_run', False)
-
-        # Fetch with prune
-        if dry_run:
-            self.execute_git_command(f"git fetch {remote} --prune --dry-run", repo_path)
-        else:
-            self.execute_git_command(f"git fetch {remote} --prune", repo_path)
-            self.execute_git_command(f"git remote prune {remote}", repo_path)
-
-    def quick_commit(self, message, repo_path):
-        """快速 commit 功能（f = fixup, s = squash）"""
-        # 先 add 所有變更
-        self.execute_git_command("git add .", repo_path)
-        # 再 commit
-        self.execute_git_command(f'git commit -m "{message}"', repo_path)
-
-    def execute_simple_git(self, cmd, repo_path):
-        """執行簡單的 Git 指令 (無參數)"""
-        full_cmd = f"git {cmd}"
-        self.execute_git_command(full_cmd, repo_path)
-
-    def execute_git_command(self, full_cmd, repo_path):
-        """執行 Git 指令並更新 UI"""
-        try:
-            # 必須加入 encoding 和 errors，否則執行指令遇到中文路徑或錯誤時會閃退
-            res = subprocess.run(full_cmd, cwd=repo_path, shell=True, capture_output=True,
-                                 text=True, encoding='utf-8', errors='replace')
-
-            tab_id = self.notebook.select()
-            current_tab = self.notebook.nametowidget(tab_id)
-
-            texts = []
-            self._get_all_texts(current_tab, texts)
-            if len(texts) >= 2:
-                adog_w, term_w = texts[0], texts[1]
-                # 輸出到 Terminal
-                term_w.insert(tk.END, f"\n$ {full_cmd}\n{res.stdout}{res.stderr}\n{'-' * 50}\n")
-                term_w.see(tk.END)
-                self.refresh_adog(repo_path, adog_w)
-        except Exception as e:
-            messagebox.showerror("錯誤", f"指令執行失敗: {str(e)}")
-
-    def _get_all_texts(self, parent, result):
-        for child in parent.winfo_children():
-            if isinstance(child, tk.Text):
-                result.append(child)
-            else:
-                self._get_all_texts(child, result)
-
-    def refresh_adog(self, path, text_widget):
-        text_widget.config(state=tk.NORMAL)
-        text_widget.delete('1.0', tk.END)
-        cmd = "git log --graph --oneline --all --decorate -n 150"
-        # 關鍵修正：指定 encoding 和 errors 處理
-        res = subprocess.run(cmd, cwd=path, shell=True, capture_output=True,
-                             text=True, encoding='utf-8', errors='replace')
-        text_widget.insert(tk.END, res.stdout if res.stdout else "目前尚無 Commit 紀錄")
-        text_widget.config(state=tk.DISABLED)
-
-    def view_reflog(self, path, text_widget):
-        text_widget.config(state=tk.NORMAL)
-        text_widget.delete('1.0', tk.END)
-        # 關鍵修正：指定 encoding 和 errors 處理
-        res = subprocess.run("git reflog -n 150", cwd=path, shell=True, capture_output=True,
-                             text=True, encoding='utf-8', errors='replace')
-        text_widget.insert(tk.END, "--- REFLOG HISTORY ---\n" + res.stdout)
-        text_widget.config(state=tk.DISABLED)
 
 
 if __name__ == "__main__":
