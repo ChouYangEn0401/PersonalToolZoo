@@ -23,9 +23,26 @@ class GitCommandDialog:
         self._center_window()
 
     def _center_window(self):
+        """確保彈窗出現在父視窗的正中央"""
         self.dialog.update_idletasks()
-        x = (self.dialog.winfo_screenwidth() // 2) - (self.dialog.winfo_width() // 2)
-        y = (self.dialog.winfo_screenheight() // 2) - (self.dialog.winfo_height() // 2)
+
+        # 取得父視窗 (主程式) 的尺寸與位置
+        parent = self.dialog.master
+        parent_width = parent.winfo_width()
+        parent_height = parent.winfo_height()
+        parent_x = parent.winfo_x()
+        parent_y = parent.winfo_y()
+
+        # 取得彈窗目前的尺寸
+        dialog_width = self.dialog.winfo_width()
+        dialog_height = self.dialog.winfo_height()
+
+        # 計算相對於父視窗的中心座標
+        # 公式：父座標 + (父寬 - 子寬) // 2
+        x = parent_x + (parent_width // 2) - (dialog_width // 2)
+        y = parent_y + (parent_height // 2) - (dialog_height // 2)
+
+        # 設定位置
         self.dialog.geometry(f"+{x}+{y}")
 
     def _build_ui(self):

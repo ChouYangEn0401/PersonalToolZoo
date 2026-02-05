@@ -161,11 +161,10 @@ class GitAdvancedTool:
         executor.run(' '.join(cmd_parts))
 
     def open_file_selector(self, executor):
-        """開啟檔案選擇器：自動聚焦 Commit 欄位，Enter 直接執行 Add+Commit"""
+        """開啟檔案選擇器：區分 Commit 與 Stash 的精確行為"""
         repo_path = executor.repo_path
 
         try:
-            # 1. 獲取檔案狀態
             res = subprocess.run("git status --short", cwd=repo_path, shell=True,
                                  capture_output=True, text=True, encoding='utf-8', errors='replace')
             files = []
@@ -173,113 +172,103 @@ class GitAdvancedTool:
                 if line.strip():
                     parts = line.strip().split(maxsplit=1)
                     if len(parts) == 2:
-                        files.append(parts)  # (status, filepath)
+                        files.append(parts)
 
             if not files:
                 messagebox.showinfo("提示", "目前沒有任何變更的檔案")
                 return
 
-            # 2. 建立彈窗
             dialog = tk.Toplevel(self.root)
-            dialog.title("檔案管理 - Add / Stash / Commit")
+            dialog.title("檔案管理 - 精確 Add / Stash / Commit")
             dialog.geometry("700x600")
             dialog.transient(self.root)
             dialog.grab_set()
 
-            # 置中
+            # 置中邏輯 (使用修正後的父視窗基準)
             dialog.update_idletasks()
-            x = (dialog.winfo_screenwidth() // 2) - (dialog.winfo_width() // 2)
-            y = (dialog.winfo_screenheight() // 2) - (dialog.winfo_height() // 2)
-            dialog.geometry(f"+{x}+{y}")
+            rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
+            dw, dh = dialog.winfo_width(), dialog.winfo_height()
+            dialog.geometry(f"+{rx + (rw // 2) - (dw // 2)}+{ry + (rh // 2) - (dh // 2)}")
 
             main_frame = ttk.Frame(dialog, padding=15)
             main_frame.pack(fill="both", expand=True)
 
-            # 3. 檔案列表區
+            # 檔案列表區 (含滾動條)
             list_frame = ttk.LabelFrame(main_frame, text=f" 待處理檔案 ({len(files)}) ", padding=10)
             list_frame.pack(fill="both", expand=True, pady=(0, 10))
-
             canvas = tk.Canvas(list_frame, bg="#f0f0f0", highlightthickness=0)
             scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=canvas.yview)
             scroll_frame = ttk.Frame(canvas)
-            canvas_window = canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-
+            canvas.create_window((0, 0), window=scroll_frame, anchor="nw", tags="frame")
             canvas.configure(yscrollcommand=scrollbar.set)
             scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-            canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_window, width=e.width))
-
+            canvas.bind("<Configure>", lambda e: canvas.itemconfigure("frame", width=e.width))
             canvas.pack(side="left", fill="both", expand=True)
             scrollbar.pack(side="right", fill="y")
 
-            # --- 重點：定義 file_vars 字典存放狀態 ---
             file_vars = {}
-            status_map = {
-                '??': ('🆕', '新增', '#4CAF50'), 'M': ('✏️', '修改', '#2196F3'),
-                'A': ('✅', '已加入', '#9C27B0'), 'D': ('🗑️', '刪除', '#F44336')
-            }
+            status_map = {'??': ('🆕', '新增', '#4CAF50'), 'M': ('✏️', '修改', '#2196F3'),
+                          'A': ('✅', '已加入', '#9C27B0'), 'D': ('🗑️', '刪除', '#F44336')}
 
             for status, filepath in files:
                 f_frame = ttk.Frame(scroll_frame)
                 f_frame.pack(fill="x", pady=2)
-
                 var = tk.BooleanVar(value=True)
-                file_vars[filepath] = var  # 將路徑與變數綁定
-
+                file_vars[filepath] = var
                 ttk.Checkbutton(f_frame, variable=var).pack(side="left")
                 icon, txt, color = status_map.get(status.strip(), ('❓', status, 'black'))
                 tk.Label(f_frame, text=f"{icon} {txt}", fg=color, width=10, anchor="w").pack(side="left")
                 tk.Label(f_frame, text=filepath, font=("Consolas", 9)).pack(side="left", fill="x")
 
-            # 4. Commit 訊息區
-            commit_frame = ttk.LabelFrame(main_frame, text=" Commit 訊息 (填寫後按 Enter 直接執行) ", padding=10)
+            # Commit 訊息區
+            commit_frame = ttk.LabelFrame(main_frame, text=" 操作訊息 (Commit 或 Stash 說明) ", padding=10)
             commit_frame.pack(fill="x", pady=(0, 10))
-
             commit_var = tk.StringVar()
             commit_entry = ttk.Entry(commit_frame, textvariable=commit_var, font=("Consolas", 10))
             commit_entry.pack(fill="x")
 
-            # 5. 操作邏輯
+            # --- 功能邏輯函數 ---
             def get_selected():
-                return [f for f, v in file_vars.items() if v.get()]
+                return [f'"{f}"' for f, v in file_vars.items() if v.get()]
 
             def on_add_commit():
                 selected = get_selected()
-                if not selected:
-                    return messagebox.showwarning("警告", "請至少勾選一個檔案")
+                if not selected: return messagebox.showwarning("警告", "請選擇檔案")
                 msg = commit_var.get().strip()
                 if not msg:
-                    commit_entry.focus_set()  # 沒寫訊息就閃紅燈(這裡僅提示)
+                    commit_entry.focus_set()
                     return messagebox.showwarning("警告", "請輸入 Commit 訊息")
 
-                for fp in selected: executor.run(f'git add "{fp}"')
+                # 行為：只 Add 勾選的檔案並 Commit
+                executor.run(f"git add {' '.join(selected)}")
                 executor.run(f'git commit -m "{msg}"')
                 dialog.destroy()
 
-            def on_stash():
+            def on_stash_selected():
                 selected = get_selected()
-                if not selected: return
-                for fp in selected: executor.run(f'git add "{fp}"')
-                msg = commit_var.get().strip() or "Quick Stash"
-                executor.run(f'git stash push -m "{msg}"')
+                if not selected: return messagebox.showwarning("警告", "請選擇要 Stash 的檔案")
+                msg = commit_var.get().strip() or "Manual stash from GUI"
+
+                # 行為：使用 git stash push 針對特定路徑
+                # 這樣不會動到沒被勾選的檔案
+                executor.run(f"git stash push -m {msg} -- {' '.join(selected)}")
                 dialog.destroy()
 
-            # --- 自動聚焦與 Enter 綁定 ---
+            # --- 自動聚焦與 Enter 綁定 (預設行為設為 Add+Commit) ---
             commit_entry.focus_set()
             commit_entry.bind("<Return>", lambda e: on_add_commit())
 
-            # 6. 按鈕列
+            # 按鈕列
             btn_bar = ttk.Frame(main_frame)
             btn_bar.pack(fill="x")
 
             ttk.Button(btn_bar, text="✓ Add + Commit", command=on_add_commit, width=18).pack(side="right", padx=2)
-            ttk.Button(btn_bar, text="📦 Stash 選中", command=on_stash, width=12).pack(side="right", padx=2)
+            ttk.Button(btn_bar, text="📦 Stash 選中", command=on_stash_selected, width=12).pack(side="right", padx=2)
             ttk.Button(btn_bar, text="✗ 取消", command=dialog.destroy).pack(side="right", padx=2)
 
-            # 全選/全不選按鈕
-            ttk.Button(btn_bar, text="全選", command=lambda: [v.set(True) for v in file_vars.values()], width=8).pack(
-                side="left", padx=2)
-            ttk.Button(btn_bar, text="清空", command=lambda: [v.set(False) for v in file_vars.values()], width=8).pack(
-                side="left", padx=2)
+            # 輔助按鈕
+            ttk.Button(btn_bar, text="全選", command=lambda: [v.set(True) for v in file_vars.values()], width=8).pack(side="left", padx=2)
+            ttk.Button(btn_bar, text="清空", command=lambda: [v.set(False) for v in file_vars.values()], width=8).pack(side="left", padx=2)
 
         except Exception as e:
             messagebox.showerror("錯誤", f"開啟檔案選擇器失敗: {str(e)}")
