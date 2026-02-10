@@ -56,6 +56,26 @@ class GitExecutor:
         self.adog_text.config(state=tk.DISABLED)
 
     def quick_commit(self, mode, message):
-        """處理 fixup / squash"""
-        self.run("git add .")
-        self.run(f'git commit -m "{message}"')
+        """處理 fixup / squash，並檢查暫存區是否為空"""
+        try:
+            # 檢查 Stage 區是否有變更內容
+            # --quiet 會根據是否有差異回傳 exit code (0: 無差異, 1: 有差異)
+            check_res = subprocess.run(
+                "git diff --cached --quiet",
+                cwd=self.repo_path,
+                shell=True
+            )
+
+            # exit_code 為 0 代表暫存區 (Stage) 是空的
+            if check_res.returncode == 0:
+                messagebox.showwarning("操作中止",
+                                       "暫存區 (Stage) 目前沒有任何檔案！\n請先使用 'Add 選擇檔案' 將變更加入暫存。")
+                return
+
+            # 如果有東西，執行 Commit
+            # 這裡移除 git add .，僅針對已經在 stage 的檔案處理
+            self.run(f'git commit -m "{message}"')
+
+        except Exception as e:
+            self.terminal.insert(tk.END, f"\n[ERROR] 檢查暫存區失敗: {str(e)}\n")
+
