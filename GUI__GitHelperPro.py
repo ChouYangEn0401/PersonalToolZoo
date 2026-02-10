@@ -16,7 +16,7 @@ from src.gui.dialogs import GitCommandDialog
 class GitAdvancedTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("Git Pro Organizer - 智能參數管理")
+        self.root.title("Git Helper Pro - 進階Git版控小工具")
         self.root.geometry("1300x850")
 
         self._init_styles()
