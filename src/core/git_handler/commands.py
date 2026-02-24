@@ -43,6 +43,15 @@ def get_commands_configs():
             ]
         },
 
+        # === restore_file_from_commit 系列 ===
+        'restore_file_from_commit': {
+            'name': '從特定提交還原檔案',
+            'base_cmd': 'custom',  # 使用自訂邏輯
+            'params': [
+                {'name': 'commit', 'label': 'Commit Hash', 'type': 'text', 'required': True, 'default': 'HEAD~1'}
+            ]
+        },
+
         # === Reset 系列 ===
         'reset_soft': {
             'name': 'Soft Reset',

@@ -115,10 +115,17 @@ class GitAdvancedTool:
 
     def _execute_configured_git(self, config, params, executor):
         """解析參數並交給 Executor 執行"""
-        # 自訂 Handler 邏輯
-        if config.get('base_cmd') == 'custom' and 'custom_handler' in config:
-            # 這裡簡化處理，若有需要可將 custom handlers 也移入 Executor
-            handler_name = config['custom_handler']
+        cmd_key = next((k for k, v in self.command_configs.items() if v == config), None)
+
+        # === 1. 自訂 Handler 邏輯 ===
+        if config.get('base_cmd') == 'custom':
+            # 處理：從特定 Commit 還原檔案 (你剛要求的功能)
+            if cmd_key == 'restore_file_from_commit':
+                self.open_commit_file_selector(executor, params.get('commit'))
+                return
+
+            # 處理：Prune 遠端分支
+            handler_name = config.get('custom_handler')
             if handler_name == 'handle_prune_branches':
                 remote = params.get('remote', 'origin')
                 if params.get('dry_run'):
@@ -126,11 +133,12 @@ class GitAdvancedTool:
                 else:
                     executor.run(f"git fetch {remote} --prune")
                     executor.run(f"git remote prune {remote}")
+                return
             return
 
+        # === 2. 特殊指令組裝 (如 checkout -b) ===
         cmd_parts = ['git', config['base_cmd']]
 
-        # 特殊處理：checkout -b
         if config['base_cmd'] == 'checkout' and params.get('create'):
             cmd_parts.append('-b')
             if params.get('branch'):
@@ -138,7 +146,7 @@ class GitAdvancedTool:
             executor.run(' '.join(cmd_parts))
             return
 
-        # 一般參數組裝
+        # === 3. 一般參數自動化組裝 ===
         for param_def in config['params']:
             name = param_def['name']
             value = params.get(name)
@@ -153,8 +161,11 @@ class GitAdvancedTool:
                     cmd_parts.append(flag_map[name])
 
             elif param_def['type'] == 'text' and value:
+                # 針對不同參數名稱加上對應的 Flag
                 if name == 'message':
                     cmd_parts.extend(['-m', f'"{value}"'])
+                elif name == 'commit' and config['base_cmd'] == 'reset':
+                    cmd_parts.append(value)  # reset 不需要 -m
                 elif name in ['branch', 'commit', 'tag', 'file', 'source', 'remote']:
                     cmd_parts.append(value)
 
@@ -305,6 +316,181 @@ class GitAdvancedTool:
         except Exception as e:
             messagebox.showerror("錯誤", f"狀態讀取失敗: {str(e)}")
 
+    def _show_quick_preview(self, executor, commit_hash, filepath, parent=None):
+        preview_parent = parent if parent else self.root
+        preview = tk.Toplevel(preview_parent)
+
+        # 移除邊框（可選），讓它看起來更像真正的懸浮預覽，但也保留標題供辨識
+        preview.title(f"預覽: {os.path.basename(filepath)}")
+        preview.geometry("700x500")
+        preview.attributes("-topmost", True)
+
+        x = self.root.winfo_pointerx() + 15
+        y = self.root.winfo_pointery() + 15
+        preview.geometry(f"+{x}+{y}")
+
+        def close_preview(event=None):
+            if preview.winfo_exists():
+                preview.destroy()
+
+        # 標題欄：僅顯示資訊，不觸發離開關閉
+        header = tk.Label(preview, text=f" 檔案: {filepath} (移出文字區域或按右鍵關閉) ",
+                          bg="#444", fg="#fff", font=("Arial", 9), pady=3)
+        header.pack(fill="x")
+
+        # 文字區域
+        text_area = tk.Text(preview, bg="#1e1e1e", fg="#d4d4d4", font=("Consolas", 10),
+                            padx=10, pady=10, wrap="none", highlightthickness=0)
+
+        # 滾動條
+        v_scroll = ttk.Scrollbar(preview, orient="vertical", command=text_area.yview)
+        h_scroll = ttk.Scrollbar(preview, orient="horizontal", command=text_area.xview)
+        text_area.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+
+        v_scroll.pack(side="right", fill="y")
+        h_scroll.pack(side="bottom", fill="x")
+        text_area.pack(fill="both", expand=True)
+
+        # --- 核心邏輯改動 ---
+        # 1. 只有滑鼠離開「文字區域」時才關閉
+        # 這樣你從 Header 移入 Text 的過程不會被觸發
+        text_area.bind("<Leave>", close_preview)
+
+        # 2. 右鍵點擊文字區域或標題皆可關閉
+        text_area.bind("<Button-3>", close_preview)
+        header.bind("<Button-3>", close_preview)
+
+        # 3. 視窗層級的 Esc 鍵支援
+        preview.bind("<Escape>", close_preview)
+
+        try:
+            # 使用 git show 讀取內容
+            cmd = f'git show "{commit_hash}:{filepath}"'
+            res = subprocess.run(cmd, cwd=executor.repo_path, shell=True,
+                                 capture_output=True, text=True, encoding='utf-8', errors='replace')
+
+            text_area.insert("1.0", res.stdout if res.returncode == 0 else res.stderr)
+            text_area.config(state="disabled")
+
+            # 讓內容能滾動但保持焦點，避免立刻觸發 Leave
+            text_area.focus_set()
+
+        except Exception as e:
+            text_area.insert("1.0", str(e))
+
+    def open_commit_file_selector(self, executor, commit_hash):
+        """從特定 Commit 提取檔案內容：不切換分支、不產生 Commit"""
+        if not commit_hash:
+            messagebox.showwarning("警告", "必須提供 Commit Hash")
+            return
+
+        try:
+            # 1. 使用 diff-tree 獲取該次提交相對於其父提交的檔案清單
+            # -r: 遞迴子目錄, --no-commit-id: 隱藏 commit hash, --name-only: 只顯示檔名
+            cmd = f"git diff-tree -r --no-commit-id --name-only {commit_hash}"
+            res = subprocess.run(
+                cmd,
+                cwd=executor.repo_path, shell=True,
+                capture_output=True, text=True, encoding='utf-8', errors='replace'
+            )
+
+            # 過濾空白行
+            files = [line.strip() for line in res.stdout.splitlines() if line.strip()]
+
+            # 偵錯檢查：如果還是空，可能是 Hash 錯或該 Commit 真的沒東西
+            if not files:
+                # 備援方案：嘗試 git show (針對首個 commit 情況)
+                res = subprocess.run(f"git show --name-only --pretty=format: {commit_hash}",
+                                     cwd=executor.repo_path, shell=True, capture_output=True, text=True)
+                files = [line.strip() for line in res.stdout.splitlines() if line.strip()]
+
+            if not files:
+                messagebox.showerror("錯誤",
+                                     f"找不到 Commit [{commit_hash}] 的檔案變更。\n請確認 Hash 是否正確（例如：a1b2c3d）。")
+                return
+
+            # 2. 建立彈窗 (與 open_file_selector 風格一致)
+            dialog = tk.Toplevel(self.root)
+            dialog.title(f"還原檔案自: {commit_hash[:7]}")
+            dialog.geometry("750x600")
+            dialog.transient(self.root)
+            dialog.grab_set()
+
+            # 置中
+            dialog.update_idletasks()
+            rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
+            dw, dh = dialog.winfo_width(), dialog.winfo_height()
+            dialog.geometry(f"+{rx + (rw // 2) - (dw // 2)}+{ry + (rh // 2) - (dh // 2)}")
+
+            main_frame = ttk.Frame(dialog, padding=15)
+            main_frame.pack(fill="both", expand=True)
+
+            ttk.Label(main_frame, text=f"📂 從 Commit [{commit_hash}] 提取檔案內容", font=("Arial", 10, "bold")).pack(anchor="w")
+            ttk.Label(main_frame, text="注意：這會直接覆蓋工作區檔案，且不會自動 Commit。", foreground="red").pack(anchor="w", pady=(0, 10))
+
+            # 3. 檔案列表區
+            list_frame = ttk.LabelFrame(main_frame, text=" 該次提交的變更檔案 ", padding=10)
+            list_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+            canvas = tk.Canvas(list_frame, bg="#f0f0f0", highlightthickness=0)
+            scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=canvas.yview)
+            scroll_frame = ttk.Frame(canvas)
+            canvas.create_window((0, 0), window=scroll_frame, anchor="nw", tags="frame")
+
+            canvas.configure(yscrollcommand=scrollbar.set)
+            scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+            canvas.bind("<Configure>", lambda e: canvas.itemconfigure("frame", width=e.width))
+            canvas.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+
+            file_vars = {}
+            for filepath in files:
+                f_frame = ttk.Frame(scroll_frame)
+                f_frame.pack(fill="x", pady=2)
+
+                var = tk.BooleanVar(value=True)
+                file_vars[filepath] = var
+
+                ttk.Checkbutton(f_frame, variable=var).pack(side="left")
+
+                # 建立檔名標籤
+                lbl = tk.Label(f_frame, text=f"📄 {filepath}", font=("Consolas", 9), anchor="w", cursor="hand2")
+                lbl.pack(side="left", fill="x", expand=True)
+
+                # --- 超強功能：右鍵點擊預覽 ---
+                # 傳入 dialog 作為 parent
+                # 綁定右鍵 (Windows: <Button-3>, MacOS: <Button-2>)
+                lbl.bind("<Button-3>", lambda e, p=filepath: self._show_quick_preview(executor, commit_hash, p, parent=dialog))
+
+                # 順便加個懸停提示效果
+                lbl.bind("<Enter>", lambda e, l=lbl: l.config(fg="blue", underline=True))
+                lbl.bind("<Leave>", lambda e, l=lbl: l.config(fg="black", underline=False))
+
+            # 4. 執行還原邏輯
+            def on_restore():
+                selected = [f'"{f}"' for f, v in file_vars.items() if v.get()]
+                if not selected:
+                    return messagebox.showwarning("警告", "請至少勾選一個檔案")
+
+                # 確認視窗：確保使用者知道這會蓋掉目前的代碼
+                if messagebox.askyesno("確認還原",
+                                       f"確定要將選中的 {len(selected)} 個檔案還原到 {commit_hash[:7]} 的狀態？\n\n這只會修改檔案內容，不會切換分支，也不會產生 Commit。"):
+                    # 關鍵指令：從特定 commit 抽出檔案
+                    # 此指令完全不影響 HEAD 指標
+                    executor.run(f"git checkout {commit_hash} -- {' '.join(selected)}")
+                    dialog.destroy()
+                    messagebox.showinfo("完成", f"已成功提取 {len(selected)} 個檔案內容。\n請在工作區確認變更。")
+
+            # 5. 按鈕列
+            btn_bar = ttk.Frame(main_frame)
+            btn_bar.pack(fill="x")
+            ttk.Button(btn_bar, text="⏮️ 提取內容至工作區", command=on_restore, width=25, style="Danger.TButton").pack(side="right", padx=2)
+            ttk.Button(btn_bar, text="✗ 取消", command=dialog.destroy).pack(side="right", padx=2)
+            ttk.Button(btn_bar, text="全選", command=lambda: [v.set(True) for v in file_vars.values()], width=8).pack(side="left", padx=2)
+            ttk.Button(btn_bar, text="清空", command=lambda: [v.set(False) for v in file_vars.values()], width=8).pack(side="left", padx=2)
+
+        except Exception as e:
+            messagebox.showerror("錯誤", f"讀取失敗: {str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()

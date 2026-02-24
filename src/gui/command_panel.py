@@ -84,7 +84,8 @@ class CommandPanel(ttk.Frame):
                 ("⏭️ Skip", lambda: self.executor.run_simple("rebase --skip"), 12, False)],
             ]),
             ("🍒 Cherry-pick", [
-                [("Cherry-pick Hash", 'cherry_pick', 24, False)],
+                [("Cherry-pick Hash", 'cherry_pick', 24, False),
+                ("⟲ 從 Hash 還原檔案", 'restore_file_from_commit', 24, False)],
                 [("▶️ Continue", lambda: self.executor.run_simple("cherry-pick --continue"), 12, False),
                 ("🛑 Abort", lambda: self.executor.run_simple("cherry-pick --abort"), 12, False)],
             ]),
@@ -174,3 +175,25 @@ class CommandPanel(ttk.Frame):
 
                     # 關鍵：根據這一列的按鈕數量動態分配權重
                     row_frame.columnconfigure(c_idx, weight=1)
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    root.title("Git Command Panel 測試")
+    root.geometry("380x800")  # 設定適合的高度來測試捲動
+
+    # 設定 Danger 按鈕樣式 (不然你的代碼會報錯)
+    style = ttk.Style()
+    style.configure("Danger.TButton", foreground="red")
+
+    # 初始化模擬組件
+    executor = None # MockExecutor()
+    confirm_mgr = None # MockConfirmMgr()
+    app_handler = None # MockAppHandler()
+
+    # 建立面板
+    panel = CommandPanel(root, executor, confirm_mgr, app_handler)
+    panel.pack(fill="both", expand=True)
+
+    root.mainloop()
+
