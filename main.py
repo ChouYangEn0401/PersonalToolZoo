@@ -88,11 +88,24 @@ class TableTool(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Table Tool")
-        self.geometry("820x620")
+        self.geometry("820x720")
         self.configure(bg="#f0f0f0")
         self.resizable(True, True)
 
         self.rows: list[list[str]] = []
+        # UI state
+        self.encoding_var = tk.StringVar(value="utf-8-sig")
+
+        # ttk styling
+        style = ttk.Style()
+        try:
+            style.theme_use('clam')
+        except Exception:
+            pass
+        style.configure("Treeview", font=("Consolas", 11), rowheight=24)
+        style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"))
+        style.configure("TButton", padding=6)
+
         self._build_ui()
 
     def _build_ui(self):
@@ -122,6 +135,9 @@ class TableTool(tk.Tk):
         hsb.pack(side="bottom", fill="x")
         vsb.pack(side="right", fill="y")
         self.tree.pack(fill="both", expand=True)
+        # alternate row colors
+        self.tree.tag_configure('odd', background='#ffffff')
+        self.tree.tag_configure('even', background='#f7f7f7')
 
         # ── 底部：輸出按鈕 ──
         out_frame = ttk.LabelFrame(self, text="輸出", padding=6)
@@ -136,6 +152,13 @@ class TableTool(tk.Tk):
         for label, cmd in btns:
             ttk.Button(out_frame, text=label, command=cmd, width=18).pack(
                 side="left", padx=5, pady=2)
+
+        # CSV encoding chooser
+        enc_label = ttk.Label(out_frame, text="編碼:")
+        enc_label.pack(side="left", padx=(12, 4))
+        enc_box = ttk.Combobox(out_frame, textvariable=self.encoding_var,
+                               values=("utf-8-sig", "utf-8", "cp950"), width=10, state="readonly")
+        enc_box.pack(side="left")
 
     # ── 動作 ──────────────────────────────────────────────
 
@@ -158,9 +181,10 @@ class TableTool(tk.Tk):
         for i, c in enumerate(cols):
             self.tree.heading(str(i), text=c)
             self.tree.column(str(i), width=max(80, len(c) * 10), anchor="w")
-        for row in self.rows[1:]:
+        for idx, row in enumerate(self.rows[1:]):
             padded = row + [""] * (len(cols) - len(row))
-            self.tree.insert("", "end", values=padded)
+            tag = 'even' if idx % 2 else 'odd'
+            self.tree.insert("", "end", values=padded, tags=(tag,))
 
     def clear_all(self):
         self.input_box.delete("1.0", "end")
@@ -198,9 +222,14 @@ class TableTool(tk.Tk):
             title="存成 CSV")
         if not path:
             return
-        with open(path, "w", newline="", encoding="utf-8-sig") as f:
-            csv.writer(f).writerows(self.rows)
-        self.status_var.set(f"✓ 已儲存 {path}")
+        enc = self.encoding_var.get() or "utf-8-sig"
+        try:
+            with open(path, "w", newline="", encoding=enc) as f:
+                csv.writer(f).writerows(self.rows)
+        except Exception as e:
+            messagebox.showerror("儲存失敗", f"無法儲存 CSV：{e}")
+            return
+        self.status_var.set(f"✓ 已儲存 {path} ({enc})")
 
     def save_xlsx(self):
         if not self._require_rows():
