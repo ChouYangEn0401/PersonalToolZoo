@@ -114,7 +114,7 @@ def _apply_styles() -> None:
 # ══════════════════════════════════════════════
 
 def _make_card(parent, label: str, var: tk.StringVar) -> ttk.Frame:
-    f = ttk.Frame(parent, style="Card.TFrame", padding=(14, 10))
+    f = ttk.Frame(parent, style="Card.TFrame", padding=(10, 5))
     cv = tk.Canvas(f, width=4, bg=ACCENT, highlightthickness=0)
     cv.pack(side="left", fill="y", padx=(0, 10))
     inner = ttk.Frame(f, style="Card.TFrame")
@@ -170,8 +170,33 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     btn = ttk.Button(inp, text="▶  Compute", style="Accent.TButton")
     btn.grid(row=0, column=4)
 
+    # ── Filter panel (checkbox list populated after compute) ─────
+    filter_panel = ttk.Frame(main)
+    filter_panel.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+    ttk.Label(filter_panel, text="Extensions (uncheck to exclude)", font=FONT_LABEL).grid(row=0, column=0, sticky="w")
+    # horizontal scroll area for many extensions (full-width)
+    filter_panel.columnconfigure(0, weight=1)
+    cb_canvas = tk.Canvas(filter_panel, height=32, bg=BG, highlightthickness=0)
+    cb_frame = ttk.Frame(cb_canvas)
+    cb_hsb = ttk.Scrollbar(filter_panel, orient="horizontal", command=cb_canvas.xview)
+    win_id = cb_canvas.create_window((0, 0), window=cb_frame, anchor="nw")
+    cb_canvas.grid(row=1, column=0, sticky="ew")
+    cb_canvas.configure(xscrollcommand=cb_hsb.set)
+    cb_hsb.grid(row=2, column=0, sticky="ew")
+    cb_frame.bind("<Configure>", lambda e: cb_canvas.configure(scrollregion=cb_canvas.bbox("all")))
+    # make inner window width follow content when wider than canvas, otherwise fill canvas
+    def _on_canvas_config(e):
+        try:
+            reqw = cb_frame.winfo_reqwidth()
+            target = reqw if reqw > e.width else e.width
+            cb_canvas.itemconfig(win_id, width=target)
+        except Exception:
+            pass
+    cb_canvas.bind("<Configure>", _on_canvas_config)
+    ext_vars = {}  # ext -> BooleanVar
+
     ttk.Separator(main, orient="horizontal").grid(
-        row=1, column=0, sticky="ew", pady=10)
+        row=2, column=0, sticky="ew", pady=10)
 
     # ── Stat cards ──────────────────────────────────
     cards_frm = ttk.Frame(main)
@@ -198,6 +223,7 @@ def build_ui(root: tk.Tk) -> tk.Tk:
         c = _make_card(cards_frm, lbl, var)
         c.grid(row=0, column=col, padx=(0, 8), sticky="nsew")
         cards_frm.columnconfigure(col, weight=1)
+        cards_frm.rowconfigure(0, weight=0)
 
     # ── Treeview ────────────────────────────────────
     tv_frm = ttk.Frame(main)
@@ -228,7 +254,7 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     }
 
     tree = ttk.Treeview(tv_frm, columns=cols, show="headings",
-                        height=14, selectmode="browse")
+                        height=8, selectmode="browse")
     for c in cols:
         tree.heading(c, text=hdrs[c])
         stretch = c == "sample"
@@ -252,7 +278,7 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     sum_frm.rowconfigure(0, weight=1)
 
     summary_txt = tk.Text(
-        sum_frm, height=6, font=FONT_MONO,
+        sum_frm, height=4, font=FONT_MONO,
         bg=TXT_BG, fg=TXT_FG, insertbackground=TXT_FG,
         relief="flat", padx=12, pady=8, wrap="word",
     )
@@ -273,6 +299,86 @@ def build_ui(root: tk.Tk) -> tk.Tk:
               ).grid(row=2, column=0, sticky="ew")
 
     # ── Compute logic ───────────────────────────────
+    last_agg = {}
+
+    def render_from_selection(selected_exts: set):
+        """Render cards, table and summary using filtered ext set (no new git calls)."""
+        by_ext_local = {k: v for k, v in last_agg["by_ext"].items() if k in selected_exts}
+
+        # compute totals
+        total_added  = sum(v["added"]       for v in by_ext_local.values())
+        total_del    = sum(v["deleted"]      for v in by_ext_local.values())
+        total_bytes  = sum(v["bytes_change"] for v in by_ext_local.values())
+        total_binary = sum(v["binary"]       for v in by_ext_local.values())
+        net_lines    = total_added - total_del
+
+        # update cards
+        v_total  .set(str(last_agg["total_files"]))
+        v_types  .set(str(len(by_ext_local)))
+        v_added  .set(f"+{total_added:,}")
+        v_deleted.set(f"-{total_del:,}")
+        v_net    .set(_fmt_net(net_lines))
+        v_bytes  .set(_fmt_bytes(total_bytes))
+        v_binary .set(str(total_binary))
+
+        # fill table
+        tree.delete(*tree.get_children())
+        for i, (ext, v) in enumerate(sorted(by_ext_local.items(), key=lambda x: -x[1]["files"])):
+            net = v["added"] - v["deleted"]
+            tag = "odd" if i % 2 == 0 else "even"
+            tree.insert("", "end", tags=(tag,), values=(
+                ext,
+                v["files"],
+                v["binary"] if v["binary"] else "",
+                v["added"],
+                v["deleted"],
+                _fmt_net(net),
+                _fmt_bytes(v["bytes_change"]),
+                ", ".join(v["sample"]),
+            ))
+
+        # update summary text
+        summary_txt.configure(state="normal")
+        summary_txt.delete("1.0", "end")
+        def w(text, tag=""):
+            summary_txt.insert("end", text, tag)
+        DIV = "─" * 78 + "\n"
+        w(DIV, "dim")
+        w("  diff  ", "bold")
+        w(last_agg.get("init_ref", ""), "acc"); w("  →  ", "dim"); w(last_agg.get("latest_ref", "") + "\n", "acc")
+
+        # time range if available
+        init_iso   = last_agg.get("init_time") or ""
+        latest_iso = last_agg.get("latest_time") or ""
+        dur_h      = last_agg.get("duration_human") or ""
+        if init_iso and latest_iso:
+            w(DIV, "dim")
+            w(f"  時間範圍      ", "dim"); w(f"{init_iso}  →  {latest_iso}\n", "acc")
+            w(f"  持續時間      ", "dim"); w(f"{dur_h}\n", "bold")
+
+        w(DIV, "dim")
+        w(f"  總共變動檔案   ", "dim"); w(f"{last_agg['total_files']}\n", "bold")
+        w(f"  副檔名種類     ", "dim"); w(f"{len(by_ext_local)}\n", "bold")
+        w(f"  Binary 檔案    ", "dim"); w(f"{total_binary}\n", "bold")
+        w("\n")
+        w(f"  新增行（+）    ", "dim"); w(f"+{total_added:,}\n", "grn")
+        w(f"  刪除行（-）    ", "dim"); w(f"-{total_del:,}\n",   "red")
+        w(f"  淨變動         ", "dim")
+        w(f"{_fmt_net(net_lines)}\n", "grn" if net_lines >= 0 else "red")
+        w("\n")
+        w(f"  位元組變動合計  ", "dim"); w(f"{_fmt_bytes(total_bytes)}\n", "bold")
+
+        # show excluded extensions
+        all_exts = set(last_agg["by_ext"].keys())
+        excluded = sorted(list(all_exts - selected_exts))
+        if excluded:
+            exs = ", ".join(excluded[:12]) + ("..." if len(excluded) > 12 else "")
+            w("\n")
+            w(f"  Excluded ({len(excluded)}): {exs}\n", "acc")
+
+        w(DIV, "dim")
+        summary_txt.configure(state="disabled")
+
     def run():
         init   = init_e.get().strip()
         latest = latest_e.get().strip()
@@ -293,66 +399,39 @@ def build_ui(root: tk.Tk) -> tk.Tk:
             btn.state(["!disabled"])
             return
 
-        tree.delete(*tree.get_children())
-        summary_txt.configure(state="normal")
-        summary_txt.delete("1.0", "end")
+        # cache aggregation
+        last_agg.clear()
+        last_agg.update(agg)
+        last_agg["init_ref"] = init
+        last_agg["latest_ref"] = latest
 
-        by_ext       = agg["by_ext"]
-        total_added  = sum(v["added"]       for v in by_ext.values())
-        total_del    = sum(v["deleted"]      for v in by_ext.values())
-        total_bytes  = sum(v["bytes_change"] for v in by_ext.values())
-        total_binary = sum(v["binary"]       for v in by_ext.values())
-        net_lines    = total_added - total_del
+        # rebuild checkbox list
+        for wdg in cb_frame.winfo_children():
+            wdg.destroy()
+        ext_vars.clear()
+        for i, (ext, v) in enumerate(sorted(agg["by_ext"].items(), key=lambda x: -x[1]["files"])):
+            var = tk.BooleanVar(value=True)
+            cb = ttk.Checkbutton(cb_frame, text=f"{ext}  ({v['files']})", variable=var)
+            cb.grid(row=0, column=i, padx=(6, 4), pady=4)
+            ext_vars[ext] = var
 
-        v_total  .set(str(agg["total_files"]))
-        v_types  .set(str(len(by_ext)))
-        v_added  .set(f"+{total_added:,}")
-        v_deleted.set(f"-{total_del:,}")
-        v_net    .set(_fmt_net(net_lines))
-        v_bytes  .set(_fmt_bytes(total_bytes))
-        v_binary .set(str(total_binary))
+        # initial full render
+        render_from_selection(set(ext_vars.keys()))
 
-        for i, (ext, v) in enumerate(
-                sorted(by_ext.items(), key=lambda x: -x[1]["files"])):
-            net = v["added"] - v["deleted"]
-            tag = "odd" if i % 2 == 0 else "even"
-            tree.insert("", "end", tags=(tag,), values=(
-                ext,
-                v["files"],
-                v["binary"] if v["binary"] else "",
-                v["added"],
-                v["deleted"],
-                _fmt_net(net),
-                _fmt_bytes(v["bytes_change"]),
-                ", ".join(v["sample"]),
-            ))
+        # live update on checkbox change
+        def on_cb_change(*_):
+            render_from_selection(set(k for k, var in ext_vars.items() if var.get()))
+        for var in ext_vars.values():
+            var.trace_add("write", on_cb_change)
 
-        def w(text, tag=""):
-            summary_txt.insert("end", text, tag)
-
-        DIV = "─" * 78 + "\n"
-        w(DIV, "dim")
-        w("  diff  ", "bold")
-        w(init, "acc"); w("  →  ", "dim"); w(latest + "\n", "acc")
-        w(DIV, "dim")
-        w(f"  總共變動檔案   ", "dim"); w(f"{agg['total_files']}\n", "bold")
-        w(f"  副檔名種類     ", "dim"); w(f"{len(by_ext)}\n", "bold")
-        w(f"  Binary 檔案    ", "dim"); w(f"{total_binary}\n", "bold")
-        w("\n")
-        w(f"  新增行（+）    ", "dim"); w(f"+{total_added:,}\n", "grn")
-        w(f"  刪除行（-）    ", "dim"); w(f"-{total_del:,}\n",   "red")
-        w(f"  淨變動         ", "dim")
-        w(f"{_fmt_net(net_lines)}\n", "grn" if net_lines >= 0 else "red")
-        w("\n")
-        w(f"  位元組變動合計  ", "dim"); w(f"{_fmt_bytes(total_bytes)}\n", "bold")
-        w(DIV, "dim")
-
-        summary_txt.configure(state="disabled")
         btn.state(["!disabled"])
+        total_added = sum(v["added"]   for v in agg["by_ext"].values())
+        total_del   = sum(v["deleted"] for v in agg["by_ext"].values())
+        total_bytes = sum(v["bytes_change"] for v in agg["by_ext"].values())
         status_var.set(
             f"Done — {agg['total_files']} files  |  "
             f"+{total_added:,} / -{total_del:,} lines  |  "
-            f"{_fmt_bytes(total_bytes)} bytes"
+            f"{_fmt_bytes(total_bytes)}"
         )
 
     btn.configure(command=run)
