@@ -1,33 +1,19 @@
-# 套件說明
-```text
-此套件是為了解決 *** 問題 而生成
-提供以下功能：
-1. ...
-2. ...
-3. ...
+# diff_showcaser
+
+簡單的 Git diff 統計 GUI 工具。
+
+用法：
+
+- 在專案根目錄下執行（必須是 git 倉庫）
+
+```
+python -m diff_showcaser
 ```
 
-# 使用說明書教學
-## 版本限定
-```commandline
-python 3.11 以上
-```
+輸入 `init_commit` 與 `latest_commit`（可以是 branch 名稱或 commit hash），按 `Compute`。
 
-## 環境預備
-請在專案 root folder 下，建立 `.env` 文件
-```text
-```
-請在專案 root folder 下，建立 以下資料夾 [``, ``, ``]
+顯示：
+- 每種副檔名的檔案數、加上/刪除行數、淨行數、近似位元組差異（若可得）與範例檔案。
+- 上方會顯示總共變更的檔案數與總加/刪行數。
 
-## 使用方式
-### 簡單訪問服務流程 \[初階]
-```text
-```
-
-### 參數化訪問方式 \[中階]
-```text
-```
-
-## 其他補充說明
-...
-
+備註：本工具使用 `git diff --numstat` 與 `git ls-tree -r -l` 來計算，對大型倉庫可能需些時間。

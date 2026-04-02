@@ -1,0 +1,98 @@
+import subprocess
+import shlex
+import os
+from typing import Dict, Tuple, List
+
+
+def _git(cmd: List[str]) -> str:
+    try:
+        return subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode("utf-8", errors="replace")
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"git command failed: {' '.join(cmd)}")
+
+
+def parse_numstat(init: str, latest: str) -> List[Dict]:
+    """Return list of records: {path, added, deleted, binary}
+    Uses `git diff --numstat init..latest`.
+    """
+    out = _git(["git", "diff", "--numstat", f"{init}..{latest}"])
+    records = []
+    for line in out.splitlines():
+        parts = line.split('\t')
+        if len(parts) < 3:
+            continue
+        a, d, path = parts[0], parts[1], parts[2]
+        binary = False
+        try:
+            added = int(a)
+            deleted = int(d)
+        except ValueError:
+            # binary file shows -    -
+            binary = True
+            added = 0
+            deleted = 0
+        records.append({"path": path, "added": added, "deleted": deleted, "binary": binary})
+    return records
+
+
+def ls_tree_sizes(commit: str) -> Dict[str, int]:
+    """Return dict path -> size (bytes) for a tree of a commit using `git ls-tree -r -l`.
+    Size will be an int; if file missing, it won't appear.
+    """
+    out = _git(["git", "ls-tree", "-r", "-l", commit])
+    sizes = {}
+    for line in out.splitlines():
+        if '\t' not in line:
+            continue
+        left, path = line.split('\t', 1)
+        left_parts = left.split()
+        if len(left_parts) < 4:
+            continue
+        size_token = left_parts[-1]
+        try:
+            size = int(size_token)
+        except ValueError:
+            size = 0
+        sizes[path] = size
+    return sizes
+
+
+def aggregate_by_extension(init: str, latest: str) -> Dict:
+    """Compute per-file and per-extension aggregates between two commits.
+    Returns a dict with 'files' list and 'by_ext' mapping.
+    """
+    records = parse_numstat(init, latest)
+    sizes_init = ls_tree_sizes(init)
+    sizes_latest = ls_tree_sizes(latest)
+
+    files = []
+    by_ext = {}
+    total_files = 0
+    for r in records:
+        path = r["path"]
+        added = r["added"]
+        deleted = r["deleted"]
+        binary = r["binary"]
+        size_i = sizes_init.get(path)
+        size_l = sizes_latest.get(path)
+        bytes_change = None
+        if size_i is not None or size_l is not None:
+            bytes_change = (size_l or 0) - (size_i or 0)
+
+        ext = os.path.splitext(path)[1].lower() or "(no_ext)"
+        rec = {"path": path, "ext": ext, "added": added, "deleted": deleted, "binary": binary, "bytes_change": bytes_change}
+        files.append(rec)
+
+        ag = by_ext.setdefault(ext, {"files": 0, "added": 0, "deleted": 0, "bytes_change": 0, "binary": 0, "sample": []})
+        ag["files"] += 1
+        ag["added"] += added
+        ag["deleted"] += deleted
+        if binary:
+            ag["binary"] += 1
+        if bytes_change is not None:
+            ag["bytes_change"] += bytes_change
+        if len(ag["sample"]) < 3:
+            ag["sample"].append(path)
+        total_files += 1
+
+    return {"total_files": total_files, "files": files, "by_ext": by_ext}
