@@ -129,7 +129,7 @@ def _make_card(parent, label: str, var: tk.StringVar) -> ttk.Frame:
 # ══════════════════════════════════════════════
 
 def build_ui(root: tk.Tk) -> tk.Tk:
-    root.title("diff_showcaser — Git Diff Statistics")
+    root.title("diff_showcaser — Git Diff Statistics — v1.0.0")
     root.configure(bg=BG)
     root.minsize(1060, 740)
     root.columnconfigure(0, weight=1)
