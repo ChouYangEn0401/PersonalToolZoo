@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
 try:
     from . import git_utils
@@ -157,18 +157,28 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     inp = ttk.Frame(main)
     inp.grid(row=0, column=0, sticky="ew", pady=(0, 6))
 
+    ttk.Label(inp, text="Repository", font=FONT_LABEL).grid(row=0, column=0, sticky="w", padx=(0, 6))
+    repo_e = ttk.Entry(inp, width=40, font=(MONO, 10))
+    repo_e.grid(row=0, column=1, sticky="w", padx=(0, 8))
+    def _browse_repo():
+        path = filedialog.askdirectory(title="Select Git repository")
+        if path:
+            repo_e.delete(0, "end")
+            repo_e.insert(0, path)
+    ttk.Button(inp, text="Browse", command=_browse_repo).grid(row=0, column=2, padx=(0, 12))
+
     ttk.Label(inp, text="Init commit", font=FONT_LABEL
-              ).grid(row=0, column=0, sticky="w", padx=(0, 6))
+              ).grid(row=0, column=3, sticky="w", padx=(0, 6))
     init_e = ttk.Entry(inp, width=36, font=(MONO, 10))
-    init_e.grid(row=0, column=1, sticky="w", padx=(0, 20))
+    init_e.grid(row=0, column=4, sticky="w", padx=(0, 20))
 
     ttk.Label(inp, text="Latest commit", font=FONT_LABEL
-              ).grid(row=0, column=2, sticky="w", padx=(0, 6))
+              ).grid(row=0, column=5, sticky="w", padx=(0, 6))
     latest_e = ttk.Entry(inp, width=36, font=(MONO, 10))
-    latest_e.grid(row=0, column=3, sticky="w", padx=(0, 20))
+    latest_e.grid(row=0, column=6, sticky="w", padx=(0, 20))
 
     btn = ttk.Button(inp, text="▶  Compute", style="Accent.TButton")
-    btn.grid(row=0, column=4)
+    btn.grid(row=0, column=7)
 
     # ── Filter panel (checkbox list populated after compute) ─────
     filter_panel = ttk.Frame(main)
@@ -382,6 +392,7 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     def run():
         init   = init_e.get().strip()
         latest = latest_e.get().strip()
+        repo = repo_e.get().strip() or None
         if not init or not latest:
             messagebox.showwarning("Input missing",
                                    "請輸入 Init 與 Latest commit hash 或 ref")
@@ -392,7 +403,7 @@ def build_ui(root: tk.Tk) -> tk.Tk:
         root.update_idletasks()
 
         try:
-            agg = git_utils.aggregate_by_extension(init, latest)
+            agg = git_utils.aggregate_by_extension(init, latest, repo_path=repo)
         except Exception as exc:
             status_var.set("Error")
             messagebox.showerror("Error", str(exc))

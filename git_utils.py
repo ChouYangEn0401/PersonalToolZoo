@@ -5,18 +5,18 @@ from typing import Dict, Tuple, List
 from datetime import datetime, timezone
 
 
-def _git(cmd: List[str]) -> str:
+def _git(cmd: List[str], cwd: str = None) -> str:
     try:
-        return subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode("utf-8", errors="replace")
+        return subprocess.check_output(cmd, stderr=subprocess.DEVNULL, cwd=cwd).decode("utf-8", errors="replace")
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"git command failed: {' '.join(cmd)}")
 
 
-def parse_numstat(init: str, latest: str) -> List[Dict]:
+def parse_numstat(init: str, latest: str, repo_path: str = None) -> List[Dict]:
     """Return list of records: {path, added, deleted, binary}
     Uses `git diff --numstat init..latest`.
     """
-    out = _git(["git", "diff", "--numstat", f"{init}..{latest}"])
+    out = _git(["git", "diff", "--numstat", f"{init}..{latest}"], cwd=repo_path)
     records = []
     for line in out.splitlines():
         parts = line.split('\t')
@@ -36,11 +36,11 @@ def parse_numstat(init: str, latest: str) -> List[Dict]:
     return records
 
 
-def ls_tree_sizes(commit: str) -> Dict[str, int]:
+def ls_tree_sizes(commit: str, repo_path: str = None) -> Dict[str, int]:
     """Return dict path -> size (bytes) for a tree of a commit using `git ls-tree -r -l`.
     Size will be an int; if file missing, it won't appear.
     """
-    out = _git(["git", "ls-tree", "-r", "-l", commit])
+    out = _git(["git", "ls-tree", "-r", "-l", commit], cwd=repo_path)
     sizes = {}
     for line in out.splitlines():
         if '\t' not in line:
@@ -58,13 +58,13 @@ def ls_tree_sizes(commit: str) -> Dict[str, int]:
     return sizes
 
 
-def aggregate_by_extension(init: str, latest: str) -> Dict:
+def aggregate_by_extension(init: str, latest: str, repo_path: str = None) -> Dict:
     """Compute per-file and per-extension aggregates between two commits.
     Returns a dict with 'files' list and 'by_ext' mapping.
     """
-    records = parse_numstat(init, latest)
-    sizes_init = ls_tree_sizes(init)
-    sizes_latest = ls_tree_sizes(latest)
+    records = parse_numstat(init, latest, repo_path=repo_path)
+    sizes_init = ls_tree_sizes(init, repo_path=repo_path)
+    sizes_latest = ls_tree_sizes(latest, repo_path=repo_path)
 
     files = []
     by_ext = {}
@@ -80,7 +80,7 @@ def aggregate_by_extension(init: str, latest: str) -> Dict:
         # try fallback to git cat-file for missing sizes (useful for binary files)
         def _try_cat_size(commit, pth):
             try:
-                out = _git(["git", "cat-file", "-s", f"{commit}:{pth}"])
+                out = _git(["git", "cat-file", "-s", f"{commit}:{pth}"], cwd=repo_path)
                 return int(out.strip())
             except Exception:
                 return None
@@ -119,13 +119,13 @@ def aggregate_by_extension(init: str, latest: str) -> Dict:
     def _get_iso(commit: str) -> str:
         """Return ISO 8601 committer date for a commit/ref, or empty string."""
         try:
-            out = _git(["git", "show", "-s", "--format=%cI", commit]).strip()
+            out = _git(["git", "show", "-s", "--format=%cI", commit], cwd=repo_path).strip()
             if out:
                 return out
         except Exception:
             pass
         try:
-            out = _git(["git", "show", "-s", "--format=%ci", commit]).strip()
+            out = _git(["git", "show", "-s", "--format=%ci", commit], cwd=repo_path).strip()
             return out
         except Exception:
             return ""
