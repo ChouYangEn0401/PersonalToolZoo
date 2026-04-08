@@ -171,6 +171,129 @@ class GitAdvancedTool:
 
         executor.run(' '.join(cmd_parts))
 
+    def open_rebase_onto_dialog(self, executor):
+        """Rebase --onto 對話框：三個欄位可點選下拉填寫"""
+        repo_path = executor.repo_path
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Rebase --onto")
+        dialog.geometry("580x430")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        dialog.update_idletasks()
+        rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
+        dw, dh = dialog.winfo_width(), dialog.winfo_height()
+        dialog.geometry(f"+{rx + (rw // 2) - (dw // 2)}+{ry + (rh // 2) - (dh // 2)}")
+
+        main_frame = ttk.Frame(dialog, padding=15)
+        main_frame.pack(fill="both", expand=True)
+
+        # 說明區
+        info_frame = ttk.LabelFrame(main_frame, text=" 📌 指令說明 ", padding=8)
+        info_frame.pack(fill="x", pady=(0, 12))
+        ttk.Label(info_frame, text="git rebase --onto <newbase> <upstream> [<branch>]",
+                  font=("Consolas", 9), foreground="#555").pack(anchor="w")
+        ttk.Label(info_frame, text="將 upstream..branch 之間的 commit 搬移到 newbase 上",
+                  font=("Arial", 9), foreground="#333").pack(anchor="w", pady=(3, 0))
+
+        # 載入下拉選項
+        def get_branches():
+            try:
+                res = subprocess.run("git branch -a", cwd=repo_path, shell=True,
+                                     capture_output=True, text=True, encoding='utf-8', errors='replace')
+                items = [b.strip().replace("* ", "").strip() for b in res.stdout.splitlines() if b.strip()]
+                return sorted(set(items))
+            except:
+                return []
+
+        def get_short_commits():
+            try:
+                res = subprocess.run("git log --oneline -n 30", cwd=repo_path, shell=True,
+                                     capture_output=True, text=True, encoding='utf-8', errors='replace')
+                return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+            except:
+                return []
+
+        branches = get_branches()
+        commit_lines = get_short_commits()
+        commit_hashes = [c.split()[0] for c in commit_lines]
+        head_shortcuts = ["HEAD~1", "HEAD~2", "HEAD~3", "HEAD~5", "HEAD~10"]
+
+        # 三組 Combobox 欄位
+        fields_frame = ttk.Frame(main_frame)
+        fields_frame.pack(fill="x", pady=(0, 12))
+        fields_frame.columnconfigure(1, weight=1)
+
+        newbase_var = tk.StringVar(value=branches[0] if branches else "main")
+        upstream_var = tk.StringVar(value="HEAD~3")
+        branch_var = tk.StringVar(value="")
+
+        field_defs = [
+            (0, "New Base *",
+             "目標基底，commit 會搬到這裡之上（例如：main、dev、某個 hash）",
+             newbase_var, branches + head_shortcuts + commit_hashes),
+            (1, "Upstream *",
+             "舊基底起點（不含此點）：搬移範圍從這裡之後開始",
+             upstream_var, head_shortcuts + commit_hashes + branches),
+            (2, "Branch",
+             "要搬移的分支（留空 = 當前分支）",
+             branch_var, [""] + branches),
+        ]
+
+        comboboxes = []
+        for row, label, hint, var, choices in field_defs:
+            ttk.Label(fields_frame, text=label, font=("Arial", 9, "bold")).grid(
+                row=row * 2, column=0, sticky="nw", padx=(0, 10), pady=(10, 0))
+            cb = ttk.Combobox(fields_frame, textvariable=var, values=choices,
+                              font=("Consolas", 10), state="normal")
+            cb.grid(row=row * 2, column=1, sticky="ew", pady=(10, 0))
+            ttk.Label(fields_frame, text=hint, font=("Arial", 8), foreground="#777").grid(
+                row=row * 2 + 1, column=1, sticky="w", padx=(2, 0))
+            comboboxes.append(cb)
+
+        # 即時預覽
+        preview_var = tk.StringVar()
+
+        def update_preview(*_):
+            nb = newbase_var.get().strip()
+            up = upstream_var.get().strip()
+            br = branch_var.get().strip()
+            cmd = f"git rebase --onto {nb or '<newbase>'} {up or '<upstream>'}"
+            if br:
+                cmd += f" {br}"
+            preview_var.set(cmd)
+
+        for v in (newbase_var, upstream_var, branch_var):
+            v.trace_add("write", update_preview)
+        update_preview()
+
+        preview_frame = ttk.LabelFrame(main_frame, text=" 📋 指令預覽 ", padding=8)
+        preview_frame.pack(fill="x", pady=(0, 12))
+        ttk.Label(preview_frame, textvariable=preview_var,
+                  font=("Consolas", 10), foreground="#0066cc").pack(anchor="w")
+
+        # 按鈕列
+        def on_execute():
+            nb = newbase_var.get().strip()
+            up = upstream_var.get().strip()
+            br = branch_var.get().strip()
+            if not nb or not up:
+                messagebox.showwarning("參數不完整", "New Base 與 Upstream 為必填欄位！")
+                return
+            cmd = f"git rebase --onto {nb} {up}"
+            if br:
+                cmd += f" {br}"
+            executor.run(cmd)
+            dialog.destroy()
+
+        btn_bar = ttk.Frame(main_frame)
+        btn_bar.pack(fill="x")
+        ttk.Button(btn_bar, text="✓ 執行 Rebase --onto", command=on_execute, width=22).pack(side="right", padx=2)
+        ttk.Button(btn_bar, text="✗ 取消", command=dialog.destroy, width=10).pack(side="right", padx=2)
+
+        comboboxes[0].focus_set()
+
     def open_file_selector(self, executor):
         """開啟檔案選擇器：支援單獨 Add、雙重狀態計數"""
         repo_path = executor.repo_path

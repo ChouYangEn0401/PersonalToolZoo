@@ -77,8 +77,9 @@ class CommandPanel(ttk.Frame):
                 ("HEAD~10", lambda: self.executor.run_simple("rebase -i HEAD~10"), 8, False)],
             ]),
             ("🔄 Rebase 流程控制", [
-                [("指定位置", 'rebase_branch', 12, False),
-                ("互動模式", 'rebase_interactive', 12, False)],
+                [("互動模式", 'rebase_interactive', 10, False),
+                ("指定位置", 'rebase_branch', 10, False),
+                ("🔀 OnTo", lambda: self.app.open_rebase_onto_dialog(self.executor), 10, False)],
                 [("▶️ Continue", lambda: self.executor.run_simple("rebase --continue"), 12, False),
                 ("🛑 Abort", lambda: self.executor.run_simple("rebase --abort"), 12, False),
                 ("⏭️ Skip", lambda: self.executor.run_simple("rebase --skip"), 12, False)],
@@ -96,8 +97,9 @@ class CommandPanel(ttk.Frame):
                 ("⚠️ Hard (捨棄變更)", 'reset_hard', 12, True)],
             ]),
             ("📝 提交與暫存", [
-                [("🔧 Fixup (f)", lambda: self.executor.quick_commit("f", "fixup"), 12, False),
-                ("📦 Squash (s)", lambda: self.executor.quick_commit("s", "squash"), 12, False)],
+                [("🔧 Fixup (f)", lambda: self.executor.quick_commit("f", "fixup"), 6, False),
+                ("📦 Squash (s)", lambda: self.executor.quick_commit("s", "squash"), 6, False),
+                ("⚡ FastCommit (stash)", lambda: self.executor.quick_commit("stash", "stash"), 14, False)],
                 [(("➕ Add 選擇檔案", lambda: self.app.open_file_selector(self.executor), 12, False))],
                 [("💬 Commit -m", 'commit_message', 12, False),
                 ("✏️ Amend", 'commit_amend', 12, False)],

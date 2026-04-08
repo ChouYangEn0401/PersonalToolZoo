@@ -42,10 +42,29 @@ HEAD~4    # 整理最近 4 個 commit
 HEAD~10   # 整理最近 10 個 commit
 ```
 
-**進階模式**：
-- 點擊「互動模式」可自訂 `HEAD~N` 或指定 commit hash
+**進階模式**（Rebase 流程控制區）：
+
+| 按鈕 | 功能 |
+|------|------|
+| **互動模式** | 自訂 `HEAD~N` 或指定 commit hash 執行 `rebase -i` |
+| **指定位置** | 將當前分支 rebase 到指定目標分支 |
+| **🔀 OnTo** | `git rebase --onto`，三欄位可點選下拉填寫（見下方說明）|
+
 - 完整的 `--continue` / `--abort` / `--skip` 流程控制
-- 支援 rebase 到指定分支
+
+#### Rebase --onto 說明
+
+```
+git rebase --onto <newbase> <upstream> [<branch>]
+```
+
+| 欄位 | 說明 | 範例 |
+|------|------|------|
+| **New Base** | 目標基底，commit 搬移到此之上 | `main`、`dev`、commit hash |
+| **Upstream** | 舊基底起點（不含此點） | `HEAD~3`、commit hash |
+| **Branch** | 要搬移的分支（留空=當前分支） | `feature/my-branch` |
+
+各欄位皆提供**下拉選單**，可直接點選現有分支或近期 commit，也可手動輸入。底部**即時預覽**顯示完整指令。
 
 ---
 
@@ -73,9 +92,16 @@ abc123 def456 789ghi
 
 ### 4. 提交與暫存 📝
 
-- **Squash 訊息**：快速 commit 一個 `s` 訊息，稍後整理
+| 按鈕 | 指令 | 說明 |
+|------|------|------|
+| **🔧 Fixup (f)** | `git commit -m "fixup"` | 快速提交暫存區，訊息為 `fixup`，稍後 rebase -i 整理 |
+| **📦 Squash (s)** | `git commit -m "squash"` | 快速提交，訊息為 `squash` |
+| **⚡ FastCommit (stash)** | `git commit -m "stash"` | 快速提交，訊息命名為 `stash`，語義上標記為臨時存放點 |
+
+三個按鈕執行前均會檢查**暫存區是否為空**，若無已 staged 的文件則提示警告。
+
 - **Amend 上則**：修改上次提交（可選 `--no-edit`）
-- **Add All (.)**：一鍵加入所有變更
+- **Add 選擇檔案**：精確選擇要 Add/Commit/Stash 的檔案
 
 ---
 
