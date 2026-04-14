@@ -495,11 +495,10 @@ language/<lang>.json             ← 次選（exe 旁，向下相容）
 
 ### 新增語言（開發環境）
 
-1. 複製 `language/_template.json` 為 `language/<語言代碼>.json`（例如 `ja.json`）
+1. 複製 `language/_template.json` 為 `language/<語言代碼>.json`（例如 `ja.json`；檔名（不含 `.json`）即為語言代碼）
 2. 修改 `_meta.display_name` 為語言名稱（例如 `日本語`）
-3. 修改 `_meta.language_code` 為語言代碼（例如 `ja`）
-4. 翻譯所有 key 的值
-5. 儲存後重啟程式，語言選單會自動出現新語言
+3. 翻譯所有 key 的值
+4. 儲存後重啟程式，語言選單會自動出現新語言
 
 ### 新增／覆蓋語言（exe 發佈版本）
 
@@ -509,7 +508,7 @@ language/<lang>.json             ← 次選（exe 旁，向下相容）
    - 覆蓋既有語言：`en.json`（只需包含要修改的 key；未提供的 key 自動沿用內建）
 3. 重新啟動 exe 即生效
 
-> **注意**：JSON 中 `_meta.display_name` 與 `_meta.language_code` 決定在語言選單的顯示名稱；
+> **注意**：JSON 中以 `_meta.display_name` 作為在語言選單顯示的名稱；檔名（不含 `.json`）為語言代碼。
 > 若外部檔案未提供 `_meta.display_name`，將自動 fallback 到內建版本的名稱。
 > 檔名不能以 `_` 開頭（`_template.json` 等不會被掃描），語言代碼即為檔名去掉 `.json`。
 

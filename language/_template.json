@@ -1,6 +1,6 @@
 {
-  "_meta.display_name": "Your Language Name",
-  "_meta.language_code": "xx",
+  "_meta.display_name": "Your Language Name (e.g. 日本語)",
+  "_meta.hint": "Filename (without .json) is the language code; do NOT set _meta.language_code.",
   "app.title": "Git Helper Pro - Advanced Git Management Tool - v1.2.0",
   "last_edit": "2026/04/14 12:00:00",
   "app_version": "1.2.0",
