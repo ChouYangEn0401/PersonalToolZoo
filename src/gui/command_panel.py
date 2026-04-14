@@ -84,6 +84,11 @@ class CommandPanel(ttk.Frame):
                 ("🛑 Abort", lambda: self.executor.run_simple("rebase --abort"), 12, False),
                 ("⏭️ Skip", lambda: self.executor.run_simple("rebase --skip"), 12, False)],
             ]),
+            ("🔀 Merge 合併", [
+                [("🔀 Merge 分支", lambda: self.app.open_merge_dialog(self.executor), 24, False)],
+                [("▶️ Continue", lambda: self.executor.run_simple("merge --continue"), 12, False),
+                ("🛑 Abort", lambda: self.executor.run_simple("merge --abort"), 12, True)],
+            ]),
             ("🍒 Cherry-pick", [
                 [("Cherry-pick Hash", 'cherry_pick', 24, False),
                 ("⟲ 從 Hash 還原檔案", 'restore_file_from_commit', 24, False)],

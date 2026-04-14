@@ -194,8 +194,11 @@ class GitAdvancedTool:
         info_frame.pack(fill="x", pady=(0, 12))
         ttk.Label(info_frame, text="git rebase --onto <newbase> <upstream> [<branch>]",
                   font=("Consolas", 9), foreground="#555").pack(anchor="w")
-        ttk.Label(info_frame, text="將 upstream..branch 之間的 commit 搬移到 newbase 上",
+        ttk.Label(info_frame, text="把 upstream 之後（不含）到 branch 之間的 commit，搬到 newbase 的上面",
                   font=("Arial", 9), foreground="#333").pack(anchor="w", pady=(3, 0))
+        ttk.Label(info_frame,
+                  text="範例：只把 feature 最後 3 個 commit 搬到 main → newbase=main，upstream=HEAD~3",
+                  font=("Arial", 8), foreground="#888").pack(anchor="w", pady=(2, 0))
 
         # 載入下拉選項
         def get_branches():
@@ -231,13 +234,13 @@ class GitAdvancedTool:
 
         field_defs = [
             (0, "New Base *",
-             "目標基底，commit 會搬到這裡之上（例如：main、dev、某個 hash）",
+             "commit 要搬到哪裡的上面（目標基底，例如：main、dev、某個 hash）",
              newbase_var, branches + head_shortcuts + commit_hashes),
             (1, "Upstream *",
-             "舊基底起點（不含此點）：搬移範圍從這裡之後開始",
+             "搬移起點（不含此點）：此點之後的 commit 才會被搬移（例如：HEAD~3、某個 hash）",
              upstream_var, head_shortcuts + commit_hashes + branches),
             (2, "Branch",
-             "要搬移的分支（留空 = 當前分支）",
+             "要操作的分支（留空 = 使用當前分支 HEAD）",
              branch_var, [""] + branches),
         ]
 
@@ -293,6 +296,135 @@ class GitAdvancedTool:
         ttk.Button(btn_bar, text="✗ 取消", command=dialog.destroy, width=10).pack(side="right", padx=2)
 
         comboboxes[0].focus_set()
+
+    def open_merge_dialog(self, executor):
+        """Merge 對話框：支援一般、--no-ff、--squash、--ff-only 四種模式"""
+        repo_path = executor.repo_path
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Merge - 合併分支")
+        dialog.geometry("580x460")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        dialog.update_idletasks()
+        rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
+        dw, dh = dialog.winfo_width(), dialog.winfo_height()
+        dialog.geometry(f"+{rx + (rw // 2) - (dw // 2)}+{ry + (rh // 2) - (dh // 2)}")
+
+        main_frame = ttk.Frame(dialog, padding=15)
+        main_frame.pack(fill="both", expand=True)
+
+        # === 說明區 ===
+        info_frame = ttk.LabelFrame(main_frame, text=" 📌 指令說明 ", padding=8)
+        info_frame.pack(fill="x", pady=(0, 12))
+        ttk.Label(info_frame, text="git merge <來源分支>  [--no-ff | --squash | --ff-only]",
+                  font=("Consolas", 9), foreground="#555").pack(anchor="w")
+        ttk.Label(info_frame, text="將指定分支的提交合併進當前分支",
+                  font=("Arial", 9), foreground="#333").pack(anchor="w", pady=(3, 0))
+
+        mode_descs = [
+            ("一般 (預設)",    "Git 自行決定：能 fast-forward 就直接接上，不能才建 merge commit"),
+            ("--no-ff",        "強制建立 merge commit，保留分支歷史，推薦 feature branch 合回主線時使用"),
+            ("--squash",       "把所有 commit 壓成一筆變更放入暫存區，需自行手動 commit（不會自動提交）"),
+            ("--ff-only",      "只允許 fast-forward，若無法快速合併則直接失敗，適合嚴格線性歷史"),
+        ]
+        for mode, desc in mode_descs:
+            row = ttk.Frame(info_frame)
+            row.pack(anchor="w", fill="x", pady=(2, 0))
+            ttk.Label(row, text=f"  {mode}", font=("Consolas", 8), foreground="#0066cc",
+                      width=16, anchor="w").pack(side="left")
+            ttk.Label(row, text=desc, font=("Arial", 8), foreground="#555").pack(side="left")
+
+        # === 載入選項 ===
+        def get_branches():
+            try:
+                res = subprocess.run("git branch -a", cwd=repo_path, shell=True,
+                                     capture_output=True, text=True, encoding='utf-8', errors='replace')
+                items = [b.strip().replace("* ", "").replace("remotes/", "").strip()
+                         for b in res.stdout.splitlines() if b.strip()]
+                return sorted(set(items))
+            except:
+                return []
+
+        def get_short_commits():
+            try:
+                res = subprocess.run("git log --oneline -n 30", cwd=repo_path, shell=True,
+                                     capture_output=True, text=True, encoding='utf-8', errors='replace')
+                return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+            except:
+                return []
+
+        branches = get_branches()
+        commit_hashes = [c.split()[0] for c in get_short_commits()]
+
+        # === 欄位 ===
+        fields_frame = ttk.Frame(main_frame)
+        fields_frame.pack(fill="x", pady=(0, 10))
+        fields_frame.columnconfigure(1, weight=1)
+
+        source_var = tk.StringVar(value="")
+        mode_var = tk.StringVar(value="normal")
+
+        ttk.Label(fields_frame, text="來源分支 *", font=("Arial", 9, "bold")).grid(
+            row=0, column=0, sticky="nw", padx=(0, 10))
+        source_cb = ttk.Combobox(fields_frame, textvariable=source_var,
+                                 values=branches + commit_hashes, font=("Consolas", 10), state="normal")
+        source_cb.grid(row=0, column=1, sticky="ew")
+        ttk.Label(fields_frame, text="要合併進來的分支或 commit（會合併到你目前所在的分支）",
+                  font=("Arial", 8), foreground="#777").grid(row=1, column=1, sticky="w", padx=(2, 0))
+
+        ttk.Label(fields_frame, text="合併模式", font=("Arial", 9, "bold")).grid(
+            row=2, column=0, sticky="nw", padx=(0, 10), pady=(12, 0))
+        mode_frame = ttk.Frame(fields_frame)
+        mode_frame.grid(row=2, column=1, sticky="w", pady=(12, 0))
+        for val, lbl in [("normal", "一般 (預設)"), ("--no-ff", "強制 merge commit (--no-ff)"),
+                         ("--squash", "壓縮 commit (--squash)"), ("--ff-only", "僅 fast-forward (--ff-only)")]:
+            ttk.Radiobutton(mode_frame, text=lbl, variable=mode_var, value=val).pack(anchor="w")
+
+        # === 預覽 ===
+        preview_var = tk.StringVar()
+
+        def update_preview(*_):
+            src = source_var.get().strip() or '<branch>'
+            mode = mode_var.get()
+            if mode == "normal":
+                preview_var.set(f"git merge {src}")
+            else:
+                preview_var.set(f"git merge {mode} {src}")
+
+        source_var.trace_add("write", update_preview)
+        mode_var.trace_add("write", update_preview)
+        update_preview()
+
+        preview_frame = ttk.LabelFrame(main_frame, text=" 📋 指令預覽 ", padding=8)
+        preview_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(preview_frame, textvariable=preview_var,
+                  font=("Consolas", 10), foreground="#0066cc").pack(anchor="w")
+
+        # === 按鈕 ===
+        def on_execute():
+            src = source_var.get().strip()
+            if not src:
+                messagebox.showwarning("參數不完整", "請選擇來源分支或輸入 commit hash！")
+                return
+            mode = mode_var.get()
+            cmd = f"git merge {src}" if mode == "normal" else f"git merge {mode} {src}"
+            executor.run(cmd)
+            dialog.destroy()
+
+        btn_bar = ttk.Frame(main_frame)
+        btn_bar.pack(fill="x")
+        ttk.Button(btn_bar, text="✓ 執行 Merge", command=on_execute, width=16).pack(side="right", padx=2)
+        ttk.Button(btn_bar, text="✗ 取消", command=dialog.destroy, width=10).pack(side="right", padx=2)
+        ttk.Button(btn_bar, text="🛑 Abort",
+                   command=lambda: (executor.run_simple("merge --abort"), dialog.destroy()),
+                   width=10, style="Danger.TButton").pack(side="left", padx=2)
+        ttk.Button(btn_bar, text="▶️ Continue",
+                   command=lambda: (executor.run_simple("merge --continue"), dialog.destroy()),
+                   width=14).pack(side="left", padx=2)
+
+        source_cb.focus_set()
 
     def open_checkout_dialog(self, executor):
         """更進階的 Checkout 對話框：可搜尋 branch、origin/branch、tag、commit hash 並支援 -b 建立新分支"""
