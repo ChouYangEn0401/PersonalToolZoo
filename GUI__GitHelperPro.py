@@ -177,9 +177,10 @@ class GitAdvancedTool:
 
         dialog = tk.Toplevel(self.root)
         dialog.title("Rebase --onto")
-        dialog.geometry("580x430")
+        dialog.geometry("600x550")
         dialog.transient(self.root)
         dialog.grab_set()
+        dialog.resizable(False, False)
 
         dialog.update_idletasks()
         rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
@@ -188,10 +189,11 @@ class GitAdvancedTool:
 
         main_frame = ttk.Frame(dialog, padding=15)
         main_frame.pack(fill="both", expand=True)
+        main_frame.columnconfigure(0, weight=1)
 
-        # 說明區
+        # === 說明區 ===
         info_frame = ttk.LabelFrame(main_frame, text=" 📌 指令說明 ", padding=8)
-        info_frame.pack(fill="x", pady=(0, 12))
+        info_frame.pack(fill="x", pady=(0, 10))
         ttk.Label(info_frame, text="git rebase --onto <newbase> <upstream> [<branch>]",
                   font=("Consolas", 9), foreground="#555").pack(anchor="w")
         ttk.Label(info_frame, text="把 upstream 之後（不含）到 branch 之間的 commit，搬到 newbase 的上面",
@@ -200,7 +202,20 @@ class GitAdvancedTool:
                   text="範例：只把 feature 最後 3 個 commit 搬到 main → newbase=main，upstream=HEAD~3",
                   font=("Arial", 8), foreground="#888").pack(anchor="w", pady=(2, 0))
 
-        # 載入下拉選項
+        # === 共用函式 ===
+        def get_current_branch():
+            try:
+                r = subprocess.run("git rev-parse --abbrev-ref HEAD", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                cur = r.stdout.strip()
+                if not cur or cur == "HEAD":
+                    r2 = subprocess.run("git rev-parse --short HEAD", cwd=repo_path, shell=True,
+                                        capture_output=True, text=True, encoding='utf-8', errors='replace')
+                    cur = f"(detached) {r2.stdout.strip()}" or "(unknown)"
+                return cur
+            except:
+                return "(unknown)"
+
         def get_branches():
             try:
                 res = subprocess.run("git branch -a", cwd=repo_path, shell=True,
@@ -219,14 +234,25 @@ class GitAdvancedTool:
                 return []
 
         branches = get_branches()
-        commit_lines = get_short_commits()
-        commit_hashes = [c.split()[0] for c in commit_lines]
+        commit_hashes = [c.split()[0] for c in get_short_commits()]
         head_shortcuts = ["HEAD~1", "HEAD~2", "HEAD~3", "HEAD~5", "HEAD~10"]
 
-        # 三組 Combobox 欄位
-        fields_frame = ttk.Frame(main_frame)
-        fields_frame.pack(fill="x", pady=(0, 12))
-        fields_frame.columnconfigure(1, weight=1)
+        # === 目前分支 ===
+        cur_lf = ttk.LabelFrame(main_frame, text=" 🌿 目前分支 ", padding=8)
+        cur_lf.pack(fill="x", pady=(0, 10))
+        current_var = tk.StringVar(value=get_current_branch())
+        cur_row = ttk.Frame(cur_lf)
+        cur_row.pack(fill="x")
+        ttk.Label(cur_row, textvariable=current_var, font=("Consolas", 11), foreground="#0066cc").pack(side="left")
+        ttk.Button(cur_row, text="↻ Refresh", command=lambda: current_var.set(get_current_branch()),
+                   width=10).pack(side="right")
+        ttk.Label(cur_lf, text="rebase 操作會套用到這個分支上（或 Branch 欄指定的分支）",
+                  font=("Arial", 8), foreground="#888").pack(anchor="w", pady=(4, 0))
+
+        # === 欄位區 ===
+        fields_lf = ttk.LabelFrame(main_frame, text=" ⚙️ 參數設定 ", padding=10)
+        fields_lf.pack(fill="x", pady=(0, 10))
+        fields_lf.columnconfigure(1, weight=1)
 
         newbase_var = tk.StringVar(value=branches[0] if branches else "main")
         upstream_var = tk.StringVar(value="HEAD~3")
@@ -240,22 +266,44 @@ class GitAdvancedTool:
              "搬移起點（不含此點）：此點之後的 commit 才會被搬移（例如：HEAD~3、某個 hash）",
              upstream_var, head_shortcuts + commit_hashes + branches),
             (2, "Branch",
-             "要操作的分支（留空 = 使用當前分支 HEAD）",
+             "要搬移的分支（留空 = 使用當前分支 HEAD）",
              branch_var, [""] + branches),
         ]
 
         comboboxes = []
         for row, label, hint, var, choices in field_defs:
-            ttk.Label(fields_frame, text=label, font=("Arial", 9, "bold")).grid(
-                row=row * 2, column=0, sticky="nw", padx=(0, 10), pady=(10, 0))
-            cb = ttk.Combobox(fields_frame, textvariable=var, values=choices,
+            ttk.Label(fields_lf, text=label, font=("Arial", 9, "bold")).grid(
+                row=row * 2, column=0, sticky="nw", padx=(0, 10), pady=(8, 0))
+            cb = ttk.Combobox(fields_lf, textvariable=var, values=choices,
                               font=("Consolas", 10), state="normal")
-            cb.grid(row=row * 2, column=1, sticky="ew", pady=(10, 0))
-            ttk.Label(fields_frame, text=hint, font=("Arial", 8), foreground="#777").grid(
-                row=row * 2 + 1, column=1, sticky="w", padx=(2, 0))
+            cb.grid(row=row * 2, column=1, sticky="ew", pady=(8, 0))
             comboboxes.append(cb)
 
-        # 即時預覽
+            hint_row = ttk.Frame(fields_lf)
+            hint_row.grid(row=row * 2 + 1, column=1, sticky="ew", padx=(2, 0), pady=(2, 0))
+            ttk.Label(hint_row, text=hint, font=("Arial", 8), foreground="#777").pack(side="left")
+
+            # Branch 欄加「↪ 先切換到此分支」按鈕
+            if row == 2:
+                def checkout_branch_field():
+                    target = branch_var.get().strip()
+                    if not target:
+                        messagebox.showwarning("參數缺失", "Branch 欄位為空，請先填寫要切換的分支")
+                        return
+                    res = executor.run(f"git checkout {target}")
+                    if res is None:
+                        messagebox.showerror("執行失敗", "執行 checkout 時發生錯誤，請查看 Terminal 日誌。")
+                        return
+                    if getattr(res, 'returncode', 1) == 0:
+                        current_var.set(get_current_branch())
+                        messagebox.showinfo("完成", f"已切換到: {target}")
+                    else:
+                        stderr = (res.stderr or res.stdout or "").strip()
+                        messagebox.showerror("切換失敗", f"切換分支失敗：\n{stderr}")
+                ttk.Button(hint_row, text="↪ 先切換到此分支", command=checkout_branch_field,
+                           width=16).pack(side="right")
+
+        # === 預覽 ===
         preview_var = tk.StringVar()
 
         def update_preview(*_):
@@ -272,11 +320,11 @@ class GitAdvancedTool:
         update_preview()
 
         preview_frame = ttk.LabelFrame(main_frame, text=" 📋 指令預覽 ", padding=8)
-        preview_frame.pack(fill="x", pady=(0, 12))
+        preview_frame.pack(fill="x", pady=(0, 10))
         ttk.Label(preview_frame, textvariable=preview_var,
                   font=("Consolas", 10), foreground="#0066cc").pack(anchor="w")
 
-        # 按鈕列
+        # === 按鈕列 ===
         def on_execute():
             nb = newbase_var.get().strip()
             up = upstream_var.get().strip()
