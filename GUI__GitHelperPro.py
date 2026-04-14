@@ -1117,7 +1117,7 @@ class GitAdvancedTool:
 
         dialog = tk.Toplevel(self.root)
         dialog.title(lm.t('dialog.delete_tag.title'))
-        dialog.geometry("520x240")
+        dialog.geometry("520x260")
         dialog.transient(self.root)
         dialog.grab_set()
         dialog.resizable(False, False)
@@ -1200,7 +1200,7 @@ class GitAdvancedTool:
 
         btn_row = ttk.Frame(frame)
         btn_row.pack(fill="x")
-        ttk.Button(btn_row, text=lm.t('dialog.delete_tag.execute_btn'), command=on_execute, width=16, style="Danger.TButton").pack(side="right", padx=4)
+        ttk.Button(btn_row, text=lm.t('dialog.delete_tag.execute_btn'), command=on_execute, width=20, style="Danger.TButton").pack(side="right", padx=4)
         ttk.Button(btn_row, text=lm.t('dialog.shared.cancel_btn'), command=dialog.destroy, width=10).pack(side="right")
 
         tag_cb.focus_set()
