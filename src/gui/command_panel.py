@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+from src.core.language_manager import lm
 
 # ==========================================
 # CommandPanel (按鈕佈局與生成模組)
@@ -18,6 +19,13 @@ class CommandPanel(ttk.Frame):
         self._build_quick_entry()
         self._build_buttons()
         self._bind_mouse_wheel()
+
+    def rebuild(self):
+        """Destroy and re-create all button widgets (called after language switch)."""
+        for widget in self.scrollable_frame.winfo_children():
+            widget.destroy()
+        self._build_quick_entry()
+        self._build_buttons()
 
     def _init_scroll_area(self):
         self.canvas = tk.Canvas(self, bg="#f0f0f0", highlightthickness=0)
@@ -51,7 +59,7 @@ class CommandPanel(ttk.Frame):
         self.after(100, lambda: bind_recursive(self.canvas))
 
     def _build_quick_entry(self):
-        quick_frame = ttk.LabelFrame(self.scrollable_frame, text=" ⚡ 快速執行 ")
+        quick_frame = ttk.LabelFrame(self.scrollable_frame, text=f" {lm.t('quick.group_title')} ")
         quick_frame.pack(fill="x", padx=5, pady=5)
 
         entry_var = tk.StringVar()
@@ -65,143 +73,113 @@ class CommandPanel(ttk.Frame):
                 self.executor.run(full)
                 entry_var.set("")
 
-        ttk.Button(quick_frame, text="執行", width=8, command=run_q).pack(side="right", padx=5)
+        ttk.Button(quick_frame, text=lm.t('quick.execute_btn'), width=8, command=run_q).pack(side="right", padx=5)
         entry.bind("<Return>", lambda e: run_q())
 
     def _build_buttons(self):
-        # 這裡定義按鈕配置
         layout_configs = [
-            ("🛠️ 快速互動 Rebase", [
-                [("HEAD~2", lambda: self.executor.run_simple("rebase -i HEAD~2"), 8, False),
-                ("HEAD~4", lambda: self.executor.run_simple("rebase -i HEAD~4"), 8, False),
-                ("HEAD~10", lambda: self.executor.run_simple("rebase -i HEAD~10"), 8, False)],
+            (lm.t('group.rebase_control'), [
+                [(lm.t('btn.rebase_interactive'), 'rebase_interactive', 12, False),
+                (lm.t('btn.rebase_head4'),  lambda: self.executor.run_simple("rebase -i HEAD~4"),  8, False),
+                (lm.t('btn.rebase_head8'),  lambda: self.executor.run_simple("rebase -i HEAD~8"),  8, False),
+                (lm.t('btn.rebase_head14'), lambda: self.executor.run_simple("rebase -i HEAD~14"), 10, False)],
+                [(lm.t('btn.rebase_branch'), 'rebase_branch', 10, False),
+                (lm.t('btn.rebase_onto'), lambda: self.app.open_rebase_onto_dialog(self.executor), 10, False)],
+                [(lm.t('btn.continue'), lambda: self.executor.run_simple("rebase --continue"), 12, False),
+                (lm.t('btn.abort'),    lambda: self.executor.run_simple("rebase --abort"),    12, False),
+                (lm.t('btn.skip'),     lambda: self.executor.run_simple("rebase --skip"),     12, False)],
             ]),
-            ("🔄 Rebase 流程控制", [
-                [("互動模式", 'rebase_interactive', 10, False),
-                ("指定位置", 'rebase_branch', 10, False),
-                ("🔀 OnTo", lambda: self.app.open_rebase_onto_dialog(self.executor), 10, False)],
-                [("▶️ Continue", lambda: self.executor.run_simple("rebase --continue"), 12, False),
-                ("🛑 Abort", lambda: self.executor.run_simple("rebase --abort"), 12, False),
-                ("⏭️ Skip", lambda: self.executor.run_simple("rebase --skip"), 12, False)],
+            (lm.t('group.merge'), [
+                [(lm.t('btn.merge_branch'), lambda: self.app.open_merge_dialog(self.executor), 24, False),
+                (lm.t('btn.continue'), lambda: self.executor.run_simple("merge --continue"), 20, False),
+                (lm.t('btn.abort'),    lambda: self.executor.run_simple("merge --abort"),    20, False)],
             ]),
-            ("🔀 Merge 合併", [
-                [("🔀 Merge 分支", lambda: self.app.open_merge_dialog(self.executor), 24, False)],
-                [("▶️ Continue", lambda: self.executor.run_simple("merge --continue"), 12, False),
-                ("🛑 Abort", lambda: self.executor.run_simple("merge --abort"), 12, True)],
+            (lm.t('group.cherry_pick'), [
+                [(lm.t('btn.cherry_pick_hash'), 'cherry_pick', 24, False),
+                (lm.t('btn.continue'), lambda: self.executor.run_simple("cherry-pick --continue"), 20, False),
+                (lm.t('btn.abort'),    lambda: self.executor.run_simple("cherry-pick --abort"),    20, False)],
+                [(lm.t('btn.restore_from_commit'), 'restore_file_from_commit', 24, False)],
             ]),
-            ("🍒 Cherry-pick", [
-                [("Cherry-pick Hash", 'cherry_pick', 24, False),
-                ("⟲ 從 Hash 還原檔案", 'restore_file_from_commit', 24, False)],
-                [("▶️ Continue", lambda: self.executor.run_simple("cherry-pick --continue"), 12, False),
-                ("🛑 Abort", lambda: self.executor.run_simple("cherry-pick --abort"), 12, False)],
-            ]),
-            ("⏪ Reset 回退", [
+            (lm.t('group.reset'), [
                 [("Soft HEAD~1", lambda: self.executor.run_simple("reset --soft HEAD~1"), 12, False),
-                ("Soft HEAD~2", lambda: self.executor.run_simple("reset --soft HEAD~2"), 12, False)],
-                [("🧨 Soft (保留變更)", 'reset_soft', 12, False),
-                ("⚠️ Hard (捨棄變更)", 'reset_hard', 12, True)],
+                ("Soft HEAD~2",  lambda: self.executor.run_simple("reset --soft HEAD~2"), 12, False)],
+                [(lm.t('btn.soft_reset'), 'reset_soft', 12, False),
+                (lm.t('btn.hard_reset'), 'reset_hard', 12, True)],
             ]),
-            ("📝 提交與暫存", [
-                [("🔧 Fixup (f)", lambda: self.executor.quick_commit("f", "fixup"), 6, False),
-                ("📦 Squash (s)", lambda: self.executor.quick_commit("s", "squash"), 6, False),
-                ("⚡ FastCommit (stash)", lambda: self.executor.quick_commit("stash", "stash"), 14, False)],
-                [(("➕ Add 選擇檔案", lambda: self.app.open_file_selector(self.executor), 12, False))],
-                [("💬 Commit -m", 'commit_message', 12, False),
-                ("✏️ Amend", 'commit_amend', 12, False)],
+            (lm.t('group.commit'), [
+                [(lm.t('btn.fixup'),       lambda: self.executor.quick_commit("f", "fixup"),    6, False),
+                (lm.t('btn.squash'),       lambda: self.executor.quick_commit("s", "squash"),   6, False),
+                (lm.t('btn.fast_commit'),  lambda: self.executor.quick_commit("stash", "stash"), 14, False)],
+                [(lm.t('btn.add_files'),   lambda: self.app.open_file_selector(self.executor),  12, False)],
+                [(lm.t('btn.commit_msg'),  'commit_message', 12, False),
+                (lm.t('btn.amend'),        'commit_amend',   12, False)],
             ]),
-            ("✈️ 遠端推送", [
-                [("⬆️ Push", lambda: self.executor.run_simple("push"), 12, False),
-                ("⚡ Force Push", 'force_push', 12, True)],
-                [("🛰️ Push Tags", lambda: self.executor.run_simple("push --tags"), 14, False)],
+            (lm.t('group.push'), [
+                [(lm.t('btn.push'),       lambda: self.executor.run_simple("push"),       12, False),
+                (lm.t('btn.force_push'),  'force_push',                                    12, True),
+                (lm.t('btn.push_tags'),   lambda: self.executor.run_simple("push --tags"), 14, False)],
             ]),
-            ("📦 Stash 緩衝區", [
-                [("📥 Stash Save", lambda: self.executor.run_simple("stash"), 12, False),
-                ("📤 Stash Pop", lambda: self.executor.run_simple("stash pop"), 12, False)],
-                [("📜 Stash List", lambda: self.executor.run_simple("stash list"), 12, False),
-                ("🧹 Stash Clear",
-                 lambda: self.confirm_mgr.confirm("清空 stash", lambda: self.executor.run_simple("stash clear")), 12,
-                 True),
-                ("🗑️ Stash Drop",
-                 lambda: self.confirm_mgr.confirm("刪除 stash", lambda: self.executor.run_simple("stash drop")), 12,
-                 True)],
+            (lm.t('group.stash'), [
+                [(lm.t('btn.stash_list'), lambda: self.executor.run_simple("stash list"), 12, False),
+                (lm.t('btn.stash_pop'),   lambda: self.executor.run_simple("stash pop"),  12, False)],
+                [(lm.t('btn.stash_save'),  lambda: self.executor.run_simple("stash"),     12, False),
+                (lm.t('btn.stash_clear'),
+                 lambda: self.confirm_mgr.confirm(lm.t('confirm.stash_clear'), lambda: self.executor.run_simple("stash clear")), 12, True),
+                (lm.t('btn.stash_drop'),
+                 lambda: self.confirm_mgr.confirm(lm.t('confirm.stash_drop'), lambda: self.executor.run_simple("stash drop")),   12, True)],
             ]),
-            ("🌿 Branch 分支管理", [
-                [("📋 List", lambda: self.executor.run_simple("branch -a"), 10, False),
-                (("🔁 Checkout", lambda: self.app.open_checkout_dialog(self.executor), 12, False)),
-                ("📌 Create", 'checkout_branch', 10, False)],
-                [("✂️ Del Local", 'delete_branch', 12, True),
-                ("🌐 Del Remote", 'delete_remote_branch', 12, True)],
-                [("🧹 Prune", 'prune_branches', 12, False)],
+            (lm.t('group.branch'), [
+                [(lm.t('btn.branch_list'),   lambda: self.executor.run_simple("branch -a"),                    10, False),
+                (lm.t('btn.branch_create'),  'checkout_branch',                                                10, False),
+                (lm.t('btn.prune'),          'prune_branches',                                                 10, False),
+                (lm.t('btn.delete_branch'),  lambda: self.app.open_delete_branch_dialog(self.executor),        20, True)],
             ]),
-            ("🏷️ Tag 標籤管理", [
-                [("📜 List Tags", lambda: self.executor.run_simple("tag -l"), 12, False),
-                ("📌 Create Tag", 'create_tag', 12, False)],
-                [("🔥 Delete Local", 'delete_tag', 12, True),
-                ("☁️ Delete Remote", 'delete_remote_tag', 12, True)],
+            (lm.t('group.tag'), [
+                [(lm.t('btn.tag_list'),   lambda: self.executor.run_simple("tag -l"), 16, False),
+                (lm.t('btn.tag_create'),  'create_tag',                               16, False),
+                (lm.t('btn.delete_tag'),  lambda: self.app.open_delete_tag_dialog(self.executor), 20, True)],
             ]),
-            ("🔍 狀態與工具", [
-                ("📢 Status", lambda: self.executor.run_simple("status"), 12, False),
-                ("🎯 Checkout File", 'checkout_file', 12, False),
-                ("📟 Diff", lambda: self.executor.run_simple("diff"), 12, False),
-                ("🧽 Clean -fd",
-                 lambda: self.confirm_mgr.confirm("清理未追蹤檔案", lambda: self.executor.run_simple("clean -fd")), 12,
-                 True),
-            ])
+            (lm.t('group.tools'), [
+                [(lm.t('btn.status'),    lambda: self.executor.run_simple("status"), 12, False),
+                (lm.t('btn.checkouts'),  lambda: self.app.open_checkouts_dialog(self.executor), 12, False),
+                (lm.t('btn.diff'),       lambda: self.executor.run_simple("diff"),   12, False)],
+                [(lm.t('btn.clean_fd'),
+                 lambda: self.confirm_mgr.confirm(lm.t('confirm.clean_fd'), lambda: self.executor.run_simple("clean -fd")), 12, True)],
+            ]),
         ]
 
-        # 生成按鈕
         for g_title, rows in layout_configs:
             group_box = ttk.LabelFrame(self.scrollable_frame, text=f" {g_title} ")
             group_box.pack(fill="x", padx=5, pady=5)
 
             for r_idx, row_content in enumerate(rows):
-                # 統一轉成列表處理：單個按鈕轉成長度 1 的列表
                 items = row_content if isinstance(row_content, list) else [row_content]
-
-                # 為這一列建立一個專用的容器 Frame，達成獨立排版
                 row_frame = ttk.Frame(group_box)
                 row_frame.pack(fill="x", expand=True)
 
                 for c_idx, item in enumerate(items):
-                    # 解析參數
-                    label = item[0]
-                    action = item[1]
-                    width = item[2]
+                    label    = item[0]
+                    action   = item[1]
+                    width    = item[2]
                     is_danger = item[3] if len(item) > 3 else False
 
-                    # 指令綁定邏輯
                     if isinstance(action, str):
                         cmd_key = action
-                        btn_cmd = lambda k=cmd_key: self.app.open_command_dialog(k, self.executor.repo_path,
-                                                                                 self.executor)
+                        btn_cmd = lambda k=cmd_key: self.app.open_command_dialog(k, self.executor.repo_path, self.executor)
                     else:
                         btn_cmd = action
 
                     btn = ttk.Button(row_frame, text=label, command=btn_cmd, width=width,
                                      style="Danger.TButton" if is_danger else "TButton")
                     btn.grid(row=0, column=c_idx, padx=3, pady=3, sticky="ew")
-
-                    # 關鍵：根據這一列的按鈕數量動態分配權重
                     row_frame.columnconfigure(c_idx, weight=1)
 
 
 if __name__ == "__main__":
     root = tk.Tk()
     root.title("Git Command Panel 測試")
-    root.geometry("380x800")  # 設定適合的高度來測試捲動
-
-    # 設定 Danger 按鈕樣式 (不然你的代碼會報錯)
+    root.geometry("380x800")
     style = ttk.Style()
     style.configure("Danger.TButton", foreground="red")
-
-    # 初始化模擬組件
-    executor = None # MockExecutor()
-    confirm_mgr = None # MockConfirmMgr()
-    app_handler = None # MockAppHandler()
-
-    # 建立面板
-    panel = CommandPanel(root, executor, confirm_mgr, app_handler)
-    panel.pack(fill="both", expand=True)
-
     root.mainloop()
 

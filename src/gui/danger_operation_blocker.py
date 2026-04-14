@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 import time
+from src.core.language_manager import lm
 
 # ==========================================
 # ConfirmationManager (危險操作管理模組)
@@ -27,7 +28,7 @@ class ConfirmationManager:
 
         # 建立彈窗
         dialog = tk.Toplevel(self.root)
-        dialog.title("⚠️ 危險操作確認")
+        dialog.title(lm.t('dialog.danger.title', default='⚠️ 危險操作確認'))
         dialog.geometry("400x300")
         dialog.transient(self.root)
         dialog.grab_set()
@@ -45,11 +46,11 @@ class ConfirmationManager:
         main_frame = ttk.Frame(dialog, padding=20)
         main_frame.pack(fill="both", expand=True)
 
-        ttk.Label(main_frame, text="⚠️", font=("Arial", 32), foreground="red").pack(pady=10)
-        ttk.Label(main_frame, text=f"確定要執行危險操作嗎？\n\n操作: {action_name}",
-                  font=("Arial", 11), justify="center").pack(pady=10)
+        ttk.Label(main_frame, text=lm.t('dialog.danger.icon', default='⚠️'), font=("Arial", 32), foreground="red").pack(pady=10)
+        ttk.Label(main_frame, text=lm.t('dialog.danger.prompt', default=f"確定要執行危險操作嗎？\n\n操作: {action_name}").format(action=action_name),
+              font=("Arial", 11), justify="center").pack(pady=10)
 
-        ttk.Checkbutton(main_frame, text="1 分鐘內不再詢問", variable=no_ask_var).pack(pady=5)
+        ttk.Checkbutton(main_frame, text=lm.t('dialog.danger.no_ask', default='1 分鐘內不再詢問'), variable=no_ask_var).pack(pady=5)
 
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(pady=10)
@@ -65,8 +66,8 @@ class ConfirmationManager:
         def on_cancel():
             dialog.destroy()
 
-        ttk.Button(btn_frame, text="✓ 確定執行", command=on_confirm, width=12).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="✗ 取消", command=on_cancel, width=12).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text=lm.t('dialog.danger.confirm_btn', default='✓ 確定執行'), command=on_confirm, width=12).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text=lm.t('dialog.danger.cancel_btn', default='✗ 取消'), command=on_cancel, width=12).pack(side="left", padx=5)
 
         self.root.wait_window(dialog)
         return result['confirmed']

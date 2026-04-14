@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox
+from src.core.language_manager import lm
 import subprocess
 
 # ==========================================
@@ -25,7 +26,10 @@ class GitExecutor:
             self.refresh_adog()
             return res
         except Exception as e:
-            messagebox.showerror("錯誤", f"指令執行失敗: {str(e)}")
+            # show localized error title/message; append exception detail for debugging
+            title = lm.t('msg.run_error_title', default='錯誤')
+            base_msg = lm.t('msg.run_error_msg', default='執行指令時發生錯誤，請查看 Terminal 日誌。')
+            messagebox.showerror(title, f"{base_msg}\n\n{str(e)}")
             return None
 
     def run_simple(self, cmd_base):
@@ -41,7 +45,7 @@ class GitExecutor:
         res = subprocess.run(cmd, cwd=self.repo_path, shell=True, capture_output=True,
                              text=True, encoding='utf-8', errors='replace')
 
-        self.adog_text.insert(tk.END, res.stdout if res.stdout else "目前尚無 Commit 紀錄")
+        self.adog_text.insert(tk.END, res.stdout if res.stdout else lm.t('executor.no_commits'))
         self.adog_text.config(state=tk.DISABLED)
 
     def view_reflog(self):
@@ -52,7 +56,7 @@ class GitExecutor:
         res = subprocess.run("git reflog -n 150", cwd=self.repo_path, shell=True, capture_output=True,
                              text=True, encoding='utf-8', errors='replace')
 
-        self.adog_text.insert(tk.END, "--- REFLOG HISTORY ---\n" + res.stdout)
+        self.adog_text.insert(tk.END, lm.t('executor.reflog_header') + "\n" + res.stdout)
         self.adog_text.config(state=tk.DISABLED)
 
     def quick_commit(self, mode, message):
@@ -68,8 +72,8 @@ class GitExecutor:
 
             # exit_code 為 0 代表暫存區 (Stage) 是空的
             if check_res.returncode == 0:
-                messagebox.showwarning("操作中止",
-                                       "暫存區 (Stage) 目前沒有任何檔案！\n請先使用 'Add 選擇檔案' 將變更加入暫存。")
+                messagebox.showwarning(lm.t('msg.operation_aborted', default='操作中止'),
+                                       lm.t('msg.stage_empty', default="暫存區 (Stage) 目前沒有任何檔案！\n請先使用 'Add 選擇檔案' 將變更加入暫存。"))
                 return
 
             # 如果有東西，執行 Commit
@@ -77,5 +81,5 @@ class GitExecutor:
             self.run(f'git commit -m "{message}"')
 
         except Exception as e:
-            self.terminal.insert(tk.END, f"\n[ERROR] 檢查暫存區失敗: {str(e)}\n")
+            self.terminal.insert(tk.END, f"\n{lm.t('executor.stage_check_error', err=str(e))}\n")
 

@@ -1,216 +1,218 @@
+from src.core.language_manager import lm
+
 
 def get_commands_configs():
     return {
         # === Branch 相關 ===
         'checkout_branch': {
-            'name': '建立並切換分支',
+            'name': lm.t('cmd.checkout_branch.name'),
             'base_cmd': 'checkout',
             'params': [
-                {'name': 'branch', 'label': '新分支名稱', 'required': True, 'type': 'text',
+                {'name': 'branch', 'label': lm.t('cmd.checkout_branch.param.branch'), 'required': True, 'type': 'text',
                  'autocomplete': 'branch'},
-                {'name': 'create', 'label': '建立新分支 (-b)', 'required': True, 'type': 'toggle', 'default': True}
+                {'name': 'create', 'label': lm.t('cmd.checkout_branch.param.create'), 'required': True, 'type': 'toggle', 'default': True}
             ]
         },
 
         # === Rebase 系列 ===
         'rebase_branch': {
-            'name': 'Rebase 到分支',
+            'name': lm.t('cmd.rebase_branch.name'),
             'base_cmd': 'rebase',
             'params': [
-                {'name': 'branch', 'label': '目標分支', 'required': True, 'type': 'text', 'default': 'main',
+                {'name': 'branch', 'label': lm.t('cmd.rebase_branch.param.branch'), 'required': True, 'type': 'text', 'default': 'main',
                  'autocomplete': 'branch'}
             ]
         },
         'rebase_interactive': {
-            'name': 'Rebase Interactive',
+            'name': lm.t('cmd.rebase_interactive.name'),
             'base_cmd': 'rebase',
             'params': [
-                {'name': 'commit', 'label': '起始 Commit (HEAD~N 或 Hash)', 'required': True, 'type': 'text',
+                {'name': 'commit', 'label': lm.t('cmd.rebase_interactive.param.commit'), 'required': True, 'type': 'text',
                  'default': 'HEAD~5', 'autocomplete': 'commit'},
-                {'name': 'interactive', 'label': '互動模式 (-i)', 'required': True, 'type': 'toggle',
+                {'name': 'interactive', 'label': lm.t('cmd.rebase_interactive.param.interactive'), 'required': True, 'type': 'toggle',
                  'default': True}
             ]
         },
 
         # === Cherry-pick 系列 ===
         'cherry_pick': {
-            'name': 'Cherry-pick',
+            'name': lm.t('cmd.cherry_pick.name'),
             'base_cmd': 'cherry-pick',
             'params': [
-                {'name': 'commit', 'label': 'Commit Hash (可多個，空格分隔)', 'required': True, 'type': 'text',
+                {'name': 'commit', 'label': lm.t('cmd.cherry_pick.param.commit'), 'required': True, 'type': 'text',
                  'autocomplete': 'commit'},
-                {'name': 'no_commit', 'label': '不自動提交 (-n)', 'required': False, 'type': 'toggle'}
+                {'name': 'no_commit', 'label': lm.t('cmd.cherry_pick.param.no_commit'), 'required': False, 'type': 'toggle'}
             ]
         },
 
         # === restore_file_from_commit 系列 ===
         'restore_file_from_commit': {
-            'name': '從特定提交還原檔案',
-            'base_cmd': 'custom',  # 使用自訂邏輯
+            'name': lm.t('cmd.restore_file.name'),
+            'base_cmd': 'custom',
             'params': [
-                {'name': 'commit', 'label': 'Commit Hash', 'type': 'text', 'required': True, 'default': 'HEAD~1'}
+                {'name': 'commit', 'label': lm.t('cmd.restore_file.param.commit'), 'type': 'text', 'required': True, 'default': 'HEAD~1'}
             ]
         },
 
         # === Reset 系列 ===
         'reset_soft': {
-            'name': 'Soft Reset',
+            'name': lm.t('cmd.reset_soft.name'),
             'base_cmd': 'reset',
             'params': [
-                {'name': 'commit', 'label': '目標 Commit (HEAD~N 或 Hash)', 'required': True, 'type': 'text',
+                {'name': 'commit', 'label': lm.t('cmd.reset_soft.param.commit'), 'required': True, 'type': 'text',
                  'default': 'HEAD~1', 'autocomplete': 'commit'},
-                {'name': 'soft', 'label': 'Soft 模式 (保留修改)', 'required': True, 'type': 'toggle',
+                {'name': 'soft', 'label': lm.t('cmd.reset_soft.param.soft'), 'required': True, 'type': 'toggle',
                  'default': True}
             ]
         },
         'reset_hard': {
-            'name': 'Hard Reset',
+            'name': lm.t('cmd.reset_hard.name'),
             'base_cmd': 'reset',
             'danger': True,
             'params': [
-                {'name': 'commit', 'label': '目標 Commit (HEAD~N 或 Hash)', 'required': True, 'type': 'text',
+                {'name': 'commit', 'label': lm.t('cmd.reset_hard.param.commit'), 'required': True, 'type': 'text',
                  'default': 'HEAD~1', 'autocomplete': 'commit'},
-                {'name': 'hard', 'label': 'Hard 模式 (捨棄所有修改 ⚠️)', 'required': True, 'type': 'toggle',
+                {'name': 'hard', 'label': lm.t('cmd.reset_hard.param.hard'), 'required': True, 'type': 'toggle',
                  'default': True}
             ]
         },
 
         # === Stash 系列 ===
         'stash_commit': {
-            'name': 'Stash → Commit Squash',
+            'name': lm.t('cmd.stash_commit.name'),
             'base_cmd': 'custom',
             'custom_handler': 'handle_stash_commit',
             'params': [
-                {'name': 'message', 'label': 'Commit 訊息 (預設: WIP)', 'required': False, 'type': 'text',
+                {'name': 'message', 'label': lm.t('cmd.stash_commit.param.message'), 'required': False, 'type': 'text',
                  'default': 'WIP'}
             ]
         },
 
         # === Commit 系列 ===
         'commit_message': {
-            'name': 'Commit 訊息',
+            'name': lm.t('cmd.commit_message.name'),
             'base_cmd': 'commit',
             'params': [
-                {'name': 'message', 'label': 'Commit 訊息', 'required': True, 'type': 'text'}
+                {'name': 'message', 'label': lm.t('cmd.commit_message.param.message'), 'required': True, 'type': 'text'}
             ]
         },
         'commit_amend': {
-            'name': 'Commit Amend',
+            'name': lm.t('cmd.commit_amend.name'),
             'base_cmd': 'commit',
             'params': [
-                {'name': 'message', 'label': 'Commit 訊息 (留空則不改)', 'required': False, 'type': 'text'},
-                {'name': 'amend', 'label': '修改上次提交 (--amend)', 'required': True, 'type': 'toggle',
+                {'name': 'message', 'label': lm.t('cmd.commit_amend.param.message'), 'required': False, 'type': 'text'},
+                {'name': 'amend', 'label': lm.t('cmd.commit_amend.param.amend'), 'required': True, 'type': 'toggle',
                  'default': True},
-                {'name': 'no_edit', 'label': '不修改訊息 (--no-edit)', 'required': False, 'type': 'toggle'}
+                {'name': 'no_edit', 'label': lm.t('cmd.commit_amend.param.no_edit'), 'required': False, 'type': 'toggle'}
             ]
         },
         'commit_squash': {
-            'name': 'Squash Commit',
+            'name': lm.t('cmd.commit_squash.name'),
             'base_cmd': 'commit',
             'params': [
-                {'name': 'message', 'label': 'Squash 訊息', 'required': True, 'type': 'text', 'default': 's'}
+                {'name': 'message', 'label': lm.t('cmd.commit_squash.param.message'), 'required': True, 'type': 'text', 'default': 's'}
             ]
         },
 
         # === Push 系列 ===
         'force_push': {
-            'name': 'Force Push',
+            'name': lm.t('cmd.force_push.name'),
             'base_cmd': 'push',
             'danger': True,
             'params': [
-                {'name': 'remote', 'label': '遠端名稱', 'required': False, 'type': 'text', 'default': 'origin'},
-                {'name': 'branch', 'label': '分支名稱 (留空=當前)', 'required': False, 'type': 'text',
+                {'name': 'remote', 'label': lm.t('cmd.force_push.param.remote'), 'required': False, 'type': 'text', 'default': 'origin'},
+                {'name': 'branch', 'label': lm.t('cmd.force_push.param.branch'), 'required': False, 'type': 'text',
                  'autocomplete': 'branch'},
-                {'name': 'force', 'label': '強制推送 (-f)', 'required': True, 'type': 'toggle', 'default': True},
-                {'name': 'force_with_lease', 'label': '安全強推 (--force-with-lease)', 'required': False,
+                {'name': 'force', 'label': lm.t('cmd.force_push.param.force'), 'required': True, 'type': 'toggle', 'default': True},
+                {'name': 'force_with_lease', 'label': lm.t('cmd.force_push.param.force_with_lease'), 'required': False,
                  'type': 'toggle'}
             ]
         },
 
         # === Branch 系列 ===
         'delete_branch': {
-            'name': 'Delete Branch',
+            'name': lm.t('cmd.delete_branch.name'),
             'base_cmd': 'branch',
             'danger': True,
             'params': [
-                {'name': 'branch', 'label': '分支名稱 (可多個，空格分隔)', 'required': True, 'type': 'text',
+                {'name': 'branch', 'label': lm.t('cmd.delete_branch.param.branch'), 'required': True, 'type': 'text',
                  'autocomplete': 'branch'},
-                {'name': 'force_delete', 'label': '強制刪除 (-D)', 'required': True, 'type': 'toggle',
+                {'name': 'force_delete', 'label': lm.t('cmd.delete_branch.param.force_delete'), 'required': True, 'type': 'toggle',
                  'default': True}
             ]
         },
         'delete_remote_branch': {
-            'name': 'Delete Remote Branch',
+            'name': lm.t('cmd.delete_remote_branch.name'),
             'base_cmd': 'push',
             'danger': True,
             'params': [
-                {'name': 'remote', 'label': '遠端名稱', 'required': False, 'type': 'text', 'default': 'origin'},
-                {'name': 'branch', 'label': '分支名稱', 'required': True, 'type': 'text', 'autocomplete': 'branch'},
-                {'name': 'delete', 'label': '刪除遠端分支 (--delete)', 'required': True, 'type': 'toggle',
+                {'name': 'remote', 'label': lm.t('cmd.delete_remote_branch.param.remote'), 'required': False, 'type': 'text', 'default': 'origin'},
+                {'name': 'branch', 'label': lm.t('cmd.delete_remote_branch.param.branch'), 'required': True, 'type': 'text', 'autocomplete': 'branch'},
+                {'name': 'delete', 'label': lm.t('cmd.delete_remote_branch.param.delete'), 'required': True, 'type': 'toggle',
                  'default': True}
             ]
         },
         'prune_branches': {
-            'name': 'Prune Branches',
+            'name': lm.t('cmd.prune.name'),
             'base_cmd': 'custom',
             'custom_handler': 'handle_prune_branches',
             'params': [
-                {'name': 'remote', 'label': '遠端名稱', 'required': False, 'type': 'text', 'default': 'origin'},
-                {'name': 'dry_run', 'label': '僅預覽 (--dry-run)', 'required': False, 'type': 'toggle'}
+                {'name': 'remote', 'label': lm.t('cmd.prune.param.remote'), 'required': False, 'type': 'text', 'default': 'origin'},
+                {'name': 'dry_run', 'label': lm.t('cmd.prune.param.dry_run'), 'required': False, 'type': 'toggle'}
             ]
         },
 
         # === Checkout (switch to branch or commit) ===
         'checkout': {
-            'name': 'Checkout (分支/Commit)',
+            'name': lm.t('cmd.checkout.name'),
             'base_cmd': 'checkout',
             'params': [
-                {'name': 'branch', 'label': '分支或 Commit (branch 或 hash)', 'required': True, 'type': 'text',
+                {'name': 'branch', 'label': lm.t('cmd.checkout.param.branch'), 'required': True, 'type': 'text',
                  'autocomplete': 'branch'},
-                {'name': 'create', 'label': '建立新分支 (-b)', 'required': False, 'type': 'toggle'}
+                {'name': 'create', 'label': lm.t('cmd.checkout.param.create'), 'required': False, 'type': 'toggle'}
             ]
         },
 
         # === Tag 系列 ===
         'create_tag': {
-            'name': 'Create Tag',
+            'name': lm.t('cmd.create_tag.name'),
             'base_cmd': 'tag',
             'params': [
-                {'name': 'tag', 'label': 'Tag 名稱', 'required': True, 'type': 'text', 'autocomplete': 'tag'},
-                {'name': 'message', 'label': 'Tag 訊息 (-m)', 'required': False, 'type': 'text'},
-                {'name': 'commit', 'label': '指定 Commit (留空=HEAD)', 'required': False, 'type': 'text',
+                {'name': 'tag', 'label': lm.t('cmd.create_tag.param.tag'), 'required': True, 'type': 'text', 'autocomplete': 'tag'},
+                {'name': 'message', 'label': lm.t('cmd.create_tag.param.message'), 'required': False, 'type': 'text'},
+                {'name': 'commit', 'label': lm.t('cmd.create_tag.param.commit'), 'required': False, 'type': 'text',
                  'autocomplete': 'commit'}
             ]
         },
         'delete_tag': {
-            'name': 'Delete Tag',
+            'name': lm.t('cmd.delete_tag.name'),
             'base_cmd': 'tag',
             'danger': True,
             'params': [
-                {'name': 'tag', 'label': 'Tag 名稱 (可多個，空格分隔)', 'required': True, 'type': 'text',
+                {'name': 'tag', 'label': lm.t('cmd.delete_tag.param.tag'), 'required': True, 'type': 'text',
                  'autocomplete': 'tag'},
-                {'name': 'delete', 'label': '刪除標籤 (-d)', 'required': True, 'type': 'toggle', 'default': True}
+                {'name': 'delete', 'label': lm.t('cmd.delete_tag.param.delete'), 'required': True, 'type': 'toggle', 'default': True}
             ]
         },
         'delete_remote_tag': {
-            'name': '刪除遠端標籤',
+            'name': lm.t('cmd.delete_remote_tag.name'),
             'base_cmd': 'push',
             'danger': True,
             'params': [
-                {'name': 'remote', 'label': '遠端名稱', 'required': False, 'type': 'text', 'default': 'origin'},
-                {'name': 'tag', 'label': 'Tag 名稱', 'required': True, 'type': 'text', 'autocomplete': 'tag'},
-                {'name': 'delete', 'label': '刪除 (--delete)', 'required': True, 'type': 'toggle', 'default': True}
+                {'name': 'remote', 'label': lm.t('cmd.delete_remote_tag.param.remote'), 'required': False, 'type': 'text', 'default': 'origin'},
+                {'name': 'tag', 'label': lm.t('cmd.delete_remote_tag.param.tag'), 'required': True, 'type': 'text', 'autocomplete': 'tag'},
+                {'name': 'delete', 'label': lm.t('cmd.delete_remote_tag.param.delete'), 'required': True, 'type': 'toggle', 'default': True}
             ]
         },
 
         # === 其他 ===
         'checkout_file': {
-            'name': 'Checkout File',
+            'name': lm.t('cmd.checkout_file.name'),
             'base_cmd': 'checkout',
             'params': [
-                {'name': 'source', 'label': '來源 (Commit/Branch，留空=HEAD)', 'required': False, 'type': 'text',
+                {'name': 'source', 'label': lm.t('cmd.checkout_file.param.source'), 'required': False, 'type': 'text',
                  'autocomplete': 'commit'},
-                {'name': 'file', 'label': '檔案路徑', 'required': True, 'type': 'text'}
+                {'name': 'file', 'label': lm.t('cmd.checkout_file.param.file'), 'required': True, 'type': 'text'}
             ]
         }
     }

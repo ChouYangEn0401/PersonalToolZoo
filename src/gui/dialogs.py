@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import subprocess
+from src.core.language_manager import lm
 
 
 class GitCommandDialog:
@@ -10,7 +11,7 @@ class GitCommandDialog:
         self.result = None
         self.repo_path = repo_path
         self.dialog = tk.Toplevel(parent)
-        self.dialog.title(f"設定參數 - {command_name}")
+        self.dialog.title(lm.t('dialog.params.title_fmt', default=f'[{command_name}]').format(cmd=command_name))
         self.dialog.geometry("500x400")
         self.dialog.transient(parent)
         self.dialog.grab_set()
@@ -50,7 +51,7 @@ class GitCommandDialog:
         main_frame.pack(fill="both", expand=True)
 
         # 標題
-        title = ttk.Label(main_frame, text="請填寫指令參數", font=("Arial", 12, "bold"))
+        title = ttk.Label(main_frame, text=lm.t('dialog.params.header'), font=("Arial", 12, "bold"))
         title.pack(pady=(0, 15))
 
         # 捲動區域
@@ -106,8 +107,8 @@ class GitCommandDialog:
         # 底部按鈕
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill="x", pady=(15, 0))
-        ttk.Button(btn_frame, text="✓ 執行", command=self._on_submit, width=15).pack(side="right", padx=5)
-        ttk.Button(btn_frame, text="✗ 取消", command=self._on_cancel, width=15).pack(side="right")
+        ttk.Button(btn_frame, text=lm.t('dialog.params.submit_btn'), command=self._on_submit, width=15).pack(side="right", padx=5)
+        ttk.Button(btn_frame, text=lm.t('dialog.params.cancel_btn'), command=self._on_cancel, width=15).pack(side="right")
 
         # --- 自動聚焦 ---
         if first_entry:
@@ -135,7 +136,7 @@ class GitCommandDialog:
         style.configure('Error.TEntry', fieldbackground='#ffe6e6', bordercolor='red', borderwidth=2)
 
         if not self._validate_and_highlight():
-            messagebox.showwarning("參數不完整", "請填寫所有標記 * 的必填欄位！")
+            messagebox.showwarning(lm.t('dialog.params.incomplete_title'), lm.t('dialog.params.incomplete_msg'))
             return
 
         # 收集結果
@@ -322,17 +323,9 @@ class GitCommandDialog:
 
         # 在輸入框下方顯示簡短鍵盤說明（小字、灰色）
         try:
-            help_text = (
-                "Tab: 清單向下移一格（循環到首項）\n"
-                "Shift+Tab: 清單向上移一格（循環到末項）\n"
-                "Space: 確認目前反白項目，填入 Entry，關閉清單\n"
-                "Enter: 同 Space（亦可確認）\n"
-                "滑鼠單擊: 直接確認（ButtonRelease-1）\n"
-                "Escape / FocusOut: 隱藏清單"
-            )
-            help_label = ttk.Label(parent_frame, text=help_text, font=("Arial", 9), foreground="#666666", justify="left")
+            help_label = ttk.Label(parent_frame, text=lm.t('autocomplete.hint'),
+                                   font=("Arial", 9), foreground="#666666", justify="left")
             help_label.pack(fill="x", pady=(4, 0))
         except Exception:
-            # UI 輸出不影響功能
             pass
 

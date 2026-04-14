@@ -236,10 +236,9 @@ abc123 def456 789ghi
 | 功能 | 說明 |
 |------|------|
 | 📋 List | `git branch -a`（含遠端） |
-| 🔁 Checkout | 搜尋式切換器（見上方說明） |
+| 📂 Checkouts | 分頁切換器（見下方說明） |
 | 📌 Create | 建立並切換到新分支 (`-b`) |
-| ✂️ Del Local | 刪除本地分支（支援批量，`-D` 強制） |
-| 🌐 Del Remote | 刪除遠端分支 |
+| 🗑️ Delete Branch | 删除分支對話框（分頁：本地、遠端） |
 | 🧹 Prune | 清理過期遠端追蹤，支援 `--dry-run` 預覽 |
 
 ---
@@ -250,8 +249,7 @@ abc123 def456 789ghi
 |------|------|
 | 📜 List Tags | `git tag -l` |
 | 📌 Create Tag | 建立 annotated tag，可選訊息、指定 commit |
-| 🔥 Delete Local | 批量刪除本地 tag |
-| ☁️ Delete Remote | 刪除遠端 tag |
+| �️ Delete Tag | 删除 Tag 對話框（分頁：本地、遠端） |
 
 ---
 
@@ -260,7 +258,56 @@ abc123 def456 789ghi
 - **Status** — `git status`
 - **Diff** — `git diff`
 - **Clean -fd** — 清理未追蹤檔案（需確認）
-- **Checkout File** — 從指定 commit / branch 還原特定檔案
+
+---
+
+## 📂 Checkouts
+
+點擊 Branch 群組的「📂 Checkouts」開啟分頁對話框：
+
+### Tab 1：🔁 Checkout（分支/Tag/Commit）
+
+| 分區 | 內容 |
+|------|------|
+| 📌 指令說明 | `checkout` 與 `checkout -b` 用法 |
+| 🌿 目前分支 | 顯示當前所在分支，附 `↻ Refresh`（成功切換後自動更新）|
+| 🔍 搜尋目標 | 輸入框即時過濾清單，雙擊或點選填入，附排列卷軸 |
+| 選項列 | 「建立新分支 (-b)」 Checkbox |
+| 📋 指令預覽 | 即時顯示完整指令 |
+
+### Tab 2：🗂️ Checkout File
+
+| 分區 | 內容 |
+|------|------|
+| 📌 指令說明 | `git checkout <commit/branch> -- <file>` |
+| ⚙️ 參數設定 | 來源 Combobox（分支、commit）+ 檔案路徑 + 📂 瀏覽Button |
+| 📋 指令預覽 | 即時顯示完整指令 |
+
+---
+
+## 🗑️ Delete Branch
+
+點擊「🗑️ Delete Branch」開啟分頁對話框：
+
+此對話框支援一次對多個分支執行本地與/或遠端刪除：
+
+- 輸入多個分支名稱（以空格分隔）
+- 可勾選 `Delete local branch`（會執行 `git branch -D <name>`）
+- 可勾選 `Delete remote branch`（會執行 `git push <remote> --delete <name>`）
+- 即時顯示將要執行的指令預覽，並在執行前詢問確認
+
+---
+
+## 🗑️ Delete Tag
+
+點擊「🗑️ Delete Tag」開啟分頁對話框：
+
+此對話框支援一次對多個 tag 執行本地與/或遠端刪除：
+
+- 輸入多個 tag 名稱（以空格分隔）
+- 可勾選 `Delete local tag`（會執行 `git tag -d <name>`）
+- 可勾選 `Delete remote tag`（會執行 `git push <remote> --delete <name>`）
+- 即時顯示將要執行的指令預覽，並在執行前詢問確認
 
 ---
 
@@ -387,6 +434,34 @@ python GUI__GitHelperPro.py
 
 ---
 
+## 🌐 多語言支援 / Multi-language Support
+
+Git Helper Pro 支援完整多語言介面，所有 UI 文字均可切換。
+
+### 內建語言
+
+| 語言代碼 | 語言名稱 |
+|---------|---------|
+| `zh-tw` | 繁體中文（預設） |
+| `zh-cn` | 简体中文 |
+| `en`    | English |
+
+### 切換語言
+
+工具列右上方有語言下拉選單，選擇後立即生效。語言偏好會自動儲存至 `language_config.json`。
+
+### 新增語言
+
+1. 複製 `language/_template.json` 為 `language/<語言代碼>.json`（例如 `ja.json`）
+2. 修改 `_meta.display_name` 為語言名稱（例如 `日本語`）
+3. 修改 `_meta.language_code` 為語言代碼（例如 `ja`）
+4. 翻譯所有 key 的值
+5. 儲存後重啟程式，語言選單會自動出現新語言
+
+> **注意**：檔名不能以 `_` 開頭（`_template.json` 會被排除），語言代碼即為檔名去掉 `.json`。
+
+---
+
 ## 📝 指令對照表
 
 | 工具按鈕 | 實際 Git 指令 |
@@ -398,7 +473,8 @@ python GUI__GitHelperPro.py
 | 🔀 Merge 分支 (--no-ff) | `git merge --no-ff <branch>` |
 | 🔀 Merge 分支 (--squash) | `git merge --squash <branch>` |
 | 🔀 Merge 分支 (--ff-only) | `git merge --ff-only <branch>` |
-| 🔁 Checkout | `git checkout <branch/tag/hash>` |
+| � Checkouts (Tab1=Checkout) | `git checkout <branch/tag/hash>` |
+| 📂 Checkouts (Tab2=Checkout File) | `git checkout <commit> -- <file>` |
 | Cherry-pick Hash | `git cherry-pick <hash1> <hash2>...` |
 | Soft HEAD~1 | `git reset --soft HEAD~1` |
 | 🧨 Soft Reset | `git reset --soft <commit>` |
@@ -411,8 +487,8 @@ python GUI__GitHelperPro.py
 | Stash Pop | `git stash pop` |
 | 📋 List (Branch) | `git branch -a` |
 | 📌 Create (Branch) | `git checkout -b <branch>` |
-| ✂️ Del Local | `git branch -D <branch...>` |
-| 🌐 Del Remote | `git push origin --delete <branch>` |
+| 🗑️ Delete Branch (本地) | `git branch -d/-D <branch...>` |
+| 🗑️ Delete Branch (遠端) | `git push origin --delete <branch>` |
 | 🧹 Prune | `git fetch origin --prune && git remote prune origin` |
 | 📌 Create Tag | `git tag <name> -m "<message>"` |
 | 🔥 Delete Local (Tag) | `git tag -d <tag...>` |
@@ -431,8 +507,15 @@ GitHelper/
 ├── requirements.txt
 ├── README.md
 ├── builder.bat                   # 打包腳本
+├── language_config.json          # 語言偏好設定
+├── language/
+│   ├── zh-tw.json                # 繁體中文（預設）
+│   ├── zh-cn.json                # 簡體中文
+│   ├── en.json                   # English
+│   └── _template.json            # 語言範本（供社群翻譯用）
 ├── src/
 │   ├── core/
+│   │   ├── language_manager.py   # 多語言管理器
 │   │   └── git_handler/
 │   │       ├── commands.py       # 所有指令的參數配置
 │   │       └── executor.py       # Git 指令執行器
@@ -840,12 +923,12 @@ log --follow -- path/to/file.py
 | Add All (.) | `git add .` |
 | Stash Save | `git stash` |
 | Stash Pop | `git stash pop` |
-| Delete Local | `git branch -D <branch1> <branch2>...` |
-| Delete Remote | `git push origin --delete <branch>` |
+| 🗑️ Delete Branch （本地） | `git branch -D <branch1> <branch2>...` |
+| 🗑️ Delete Branch （遠端） | `git push origin --delete <branch>` |
 | Prune (修剪) | `git fetch origin --prune && git remote prune origin` |
 | Create Tag | `git tag <name> -m "<message>"` |
-| Delete Local (Tag) | `git tag -d <tag1> <tag2>...` |
-| Delete Remote (Tag) | `git push origin --delete <tag>` |
+| 🗑️ Delete Tag （本地） | `git tag -d <tag1> <tag2>...` |
+| 🗑️ Delete Tag （遠端） | `git push origin --delete <tag>` |
 | Force Push | `git push -f origin <branch>` |
 | Force Push (安全) | `git push --force-with-lease origin <branch>` |
 
