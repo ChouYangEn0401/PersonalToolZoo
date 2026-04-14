@@ -57,32 +57,45 @@
 
 ### 對話框功能
 
-點擊「🔀 Merge 分支」開啟互動對話框：
+點擊「🔀 Merge 分支」開啟互動對話框，版面分區如下：
+
+| 分區 | 內容 |
+|------|------|
+| 📌 指令說明 | 四種模式的說明（一般 / --no-ff / --squash / --ff-only）|
+| 🌿 目前分支 | 顯示當前所在分支，附 `↻ Refresh` 按鈕 |
+| ⚙️ 參數設定 | 來源分支 Combobox（含 remote / commit）、`↪ 先切換到此分支`、合併模式 Radio 選項 |
+| 📋 指令預覽 | 即時顯示完整指令 |
+| 按鈕列 | Continue / Abort（左）、取消 / 執行（右）|
+
+**四種合併模式：**
 
 | 模式 | 指令 | 說明 |
 |------|------|------|
 | 一般 (預設) | `git merge <branch>` | Git 自行決定：能 fast-forward 就接上，否則建立 merge commit |
 | `--no-ff` | `git merge --no-ff <branch>` | **強制**建立 merge commit，保留分支歷史脈絡，推薦 feature → main |
-| `--squash` | `git merge --squash <branch>` | 把所有 commit 壓成一筆變更放入暫存區，需手動 commit |
+| `--squash` | `git merge --squash <branch>` | 所有 commit 壓成一筆變更放入暫存區，需**手動** commit |
 | `--ff-only` | `git merge --ff-only <branch>` | 只允許 fast-forward，無法時直接失敗，適合嚴格線性歷史 |
 
-- 來源分支下拉選單：本地分支、remote 分支、近期 commit hash
-- 即時指令預覽
-- 對話框內也提供 **Continue** / **Abort** 衝突控制按鈕
+- 「↪ 先切換到此分支」：直接從 Merge 對話框切換到來源分支，並更新目前分支顯示
+- 對話框內提供 **Continue** / **Abort** 衝突控制
 
 ---
 
 ## 🔁 Checkout 搜尋器
 
-點擊 Branch 群組的「🔁 Checkout」開啟搜尋式切換器：
+點擊 Branch 群組的「🔁 Checkout」開啟搜尋式切換器，版面分區如下：
 
-- 即時搜尋：**本地 branch**、**origin/branch**、**tag**、**commit hash**（最近 60 筆）
-- 輸入框邊打字，下方清單即時過濾，點選即填入
-- 支援「**建立新分支 (-b)**」勾選
-- 即時預覽最終指令
+| 分區 | 內容 |
+|------|------|
+| 📌 指令說明 | `checkout` 與 `checkout -b` 的用法 |
+| 🌿 目前分支 | 顯示當前所在分支，附 `↻ Refresh`（成功切換後自動更新）|
+| 🔍 搜尋目標 | 輸入框即時過濾清單，雙擊或點選填入，附捲軸 |
+| 選項列 | 「建立新分支 (-b)」Checkbox |
+| 📋 指令預覽 | 即時顯示完整指令 |
+| 按鈕列 | 取消 / 執行（含成功/失敗驗證後提示）|
 
 ```bash
-# 點選後執行的指令範例
+# 支援以下格式
 git checkout feature/my-work
 git checkout origin/feature/remote
 git checkout v1.2.0
