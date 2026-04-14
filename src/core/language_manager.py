@@ -30,27 +30,30 @@ if getattr(sys, 'frozen', False):
     candidate_lang_plain = os.path.join(exe_dir, "language")
     bundle_root = getattr(sys, '_MEIPASS', _HERE)
     bundle_lang = os.path.join(bundle_root, "language")
-
     # choose config file location: prefer exe-side config (read/write), else user home
     if os.path.exists(candidate_config) or os.access(exe_dir, os.W_OK):
         _CONFIG_FILE = candidate_config
     else:
         _CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".githelper_config.json")
 
-    # choose language dir preference
+    # separate bundled vs external language dirs. External (.lang/GitHelperPro or language)
+    # will be used as overlays on top of bundled/base languages.
+    _BUNDLED_LANG_DIR = bundle_lang if os.path.isdir(bundle_lang) else None
+    _EXTERNAL_LANG_DIR = None
     if os.path.isdir(candidate_lang_dot):
-        _LANG_DIR = candidate_lang_dot
+        _EXTERNAL_LANG_DIR = candidate_lang_dot
     elif os.path.isdir(candidate_lang_plain):
-        _LANG_DIR = candidate_lang_plain
-    elif os.path.isdir(bundle_lang):
-        _LANG_DIR = bundle_lang
-    else:
-        _LANG_DIR = candidate_lang_dot  # default location next to exe (may not exist yet)
+        _EXTERNAL_LANG_DIR = candidate_lang_plain
+
+    # fall back _LANG_DIR for compatibility
+    _LANG_DIR = _EXTERNAL_LANG_DIR or _BUNDLED_LANG_DIR or candidate_lang_dot
     _ROOT = exe_dir
 else:
     _ROOT = os.path.dirname(os.path.dirname(_HERE))   # src/core → src → root
     _CONFIG_FILE = os.path.join(_ROOT, "language_config.json")
-    _LANG_DIR = os.path.join(_ROOT, "language")
+    _BUNDLED_LANG_DIR = os.path.join(_ROOT, "language")
+    _EXTERNAL_LANG_DIR = None
+    _LANG_DIR = _BUNDLED_LANG_DIR
 _DEFAULT_LANG = "zh-tw"
 
 
@@ -112,25 +115,49 @@ class LanguageManager:
     def load_language(self, lang_code: str) -> bool:
         """Load a language file by code (e.g. 'en', 'zh-tw').
         Returns True on success, False if file not found / unreadable."""
-        path = os.path.join(_LANG_DIR, f"{lang_code}.json")
-        self._logger.info(f"Attempting to load language '{lang_code}' from: {path}")
-        if not os.path.exists(path):
-            self._logger.info(f"Language file not found at: {path}")
-            # Fallback: try default language
+        # Load bundled base strings first (so defaults always present)
+        base = {}
+        if _BUNDLED_LANG_DIR and os.path.isdir(_BUNDLED_LANG_DIR):
+            bpath = os.path.join(_BUNDLED_LANG_DIR, f"{lang_code}.json")
+            if os.path.exists(bpath):
+                try:
+                    with open(bpath, "r", encoding="utf-8") as f:
+                        base = json.load(f)
+                    self._logger.info(f"Loaded bundled language '{lang_code}' from: {bpath}")
+                    self._last_loaded = bpath
+                except Exception:
+                    self._logger.exception(f"Failed to read bundled language file: {bpath}")
+
+        # Then load external overrides if any (external files override bundled keys)
+        overrides = {}
+        if _EXTERNAL_LANG_DIR and os.path.isdir(_EXTERNAL_LANG_DIR):
+            epath = os.path.join(_EXTERNAL_LANG_DIR, f"{lang_code}.json")
+            if os.path.exists(epath):
+                try:
+                    with open(epath, "r", encoding="utf-8") as f:
+                        overrides = json.load(f)
+                    self._logger.info(f"Loaded external language overrides for '{lang_code}' from: {epath}")
+                    self._last_loaded = epath
+                except Exception:
+                    self._logger.exception(f"Failed to read external language file: {epath}")
+
+        # If neither bundled nor external provided the language, fallback to default
+        if not base and not overrides:
             if lang_code != _DEFAULT_LANG:
                 return self.load_language(_DEFAULT_LANG)
             return False
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                self._strings = json.load(f)
-            self._current_lang = lang_code
-            self._last_loaded = path
-            self._logger.info(f"Loaded language '{lang_code}' from: {path}")
-            self._save_config()
-            return True
-        except Exception:
-            self._logger.exception(f"Failed to load language file: {path}")
-            return False
+
+        # Merge: base <- overrides (overrides win), preserving missing keys from base
+        merged = {}
+        if isinstance(base, dict):
+            merged.update(base)
+        if isinstance(overrides, dict):
+            merged.update(overrides)
+
+        self._strings = merged
+        self._current_lang = lang_code
+        self._save_config()
+        return True
 
     # ── Translation API ──────────────────────────────────────────────────
     def load_text(self, key: str, lang_code: str = None, default: str = None, **kwargs) -> str:
@@ -144,19 +171,33 @@ class LanguageManager:
         **kwargs  : named placeholders for str.format(), e.g. target="main"
         """
         if lang_code is not None and lang_code != self._current_lang:
-            # Load temporarily from the requested language without switching
-            path = os.path.join(_LANG_DIR, f"{lang_code}.json")
-            self._logger.info(f"Temporarily loading language '{lang_code}' from: {path}")
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    strings = json.load(f)
-                text = strings.get(key, default if default is not None else f"[{key}]")
-                # note: temporary load does not switch current_language, but note source
-                self._last_loaded = path
-                self._logger.info(f"Temporarily loaded '{lang_code}' from: {path}")
-            except Exception:
-                self._logger.exception(f"Failed to temporarily load language file: {path}")
-                text = default if default is not None else f"[{key}]"
+            # Build temporary merged strings from bundled + external (same logic as load_language)
+            temp_base = {}
+            if _BUNDLED_LANG_DIR and os.path.isdir(_BUNDLED_LANG_DIR):
+                bpath = os.path.join(_BUNDLED_LANG_DIR, f"{lang_code}.json")
+                if os.path.exists(bpath):
+                    try:
+                        with open(bpath, "r", encoding="utf-8") as f:
+                            temp_base = json.load(f)
+                        self._logger.info(f"Temporarily loaded bundled '{lang_code}' from: {bpath}")
+                    except Exception:
+                        self._logger.exception(f"Failed to read bundled language file: {bpath}")
+            temp_overrides = {}
+            if _EXTERNAL_LANG_DIR and os.path.isdir(_EXTERNAL_LANG_DIR):
+                epath = os.path.join(_EXTERNAL_LANG_DIR, f"{lang_code}.json")
+                if os.path.exists(epath):
+                    try:
+                        with open(epath, "r", encoding="utf-8") as f:
+                            temp_overrides = json.load(f)
+                        self._logger.info(f"Temporarily loaded external overrides '{lang_code}' from: {epath}")
+                    except Exception:
+                        self._logger.exception(f"Failed to read external language file: {epath}")
+            temp = {}
+            if isinstance(temp_base, dict):
+                temp.update(temp_base)
+            if isinstance(temp_overrides, dict):
+                temp.update(temp_overrides)
+            text = temp.get(key, default if default is not None else f"[{key}]")
         else:
             text = self._strings.get(key, default if default is not None else f"[{key}]")
 
@@ -182,21 +223,57 @@ class LanguageManager:
         return getattr(self, '_last_loaded', None)
 
     def available_languages(self) -> dict:
-        """Return {code: display_name} for every .json file in language/."""
+        """Return {code: display_name} for all available language codes.
+
+        A language is available if it exists in _BUNDLED_LANG_DIR or
+        _EXTERNAL_LANG_DIR (or both).  Display name resolution:
+          1. External file's _meta.display_name  (if present)
+          2. Bundled file's _meta.display_name   (fallback)
+          3. Language code string                 (last resort)
+        """
+        # Collect all codes from both dirs
+        all_codes: set = set()
+        if _BUNDLED_LANG_DIR and os.path.isdir(_BUNDLED_LANG_DIR):
+            for fname in os.listdir(_BUNDLED_LANG_DIR):
+                if fname.endswith(".json") and not fname.startswith("_"):
+                    all_codes.add(fname[:-5])
+        if _EXTERNAL_LANG_DIR and os.path.isdir(_EXTERNAL_LANG_DIR):
+            for fname in os.listdir(_EXTERNAL_LANG_DIR):
+                if fname.endswith(".json") and not fname.startswith("_"):
+                    all_codes.add(fname[:-5])
+
         result = {}
-        if not os.path.isdir(_LANG_DIR):
-            return result
-        for fname in sorted(os.listdir(_LANG_DIR)):
-            if fname.endswith(".json") and not fname.startswith("_"):
-                code = fname[:-5]
-                path = os.path.join(_LANG_DIR, fname)
-                try:
-                    with open(path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    result[code] = data.get("_meta.display_name", code)
-                except Exception:
-                    result[code] = code
+        used_display = set()
+        for code in sorted(all_codes):
+            # Try to get display_name: external first, then bundled, then code
+            display = None
+            if _EXTERNAL_LANG_DIR:
+                ext = os.path.join(_EXTERNAL_LANG_DIR, f"{code}.json")
+                if os.path.exists(ext):
+                    try:
+                        with open(ext, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                        display = data.get("_meta.display_name")
+                    except Exception:
+                        pass
+            if display is None and _BUNDLED_LANG_DIR:
+                bundle = os.path.join(_BUNDLED_LANG_DIR, f"{code}.json")
+                if os.path.exists(bundle):
+                    try:
+                        with open(bundle, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                        display = data.get("_meta.display_name")
+                    except Exception:
+                        pass
+            display = display if display is not None else code
+            # ensure display_name is unique; if duplicate, append code to disambiguate
+            if display in used_display:
+                display = f"{display} ({code})"
+            used_display.add(display)
+            result[code] = display
+
         return result
+        
 
 
 # ── Module-level singleton ───────────────────────────────────────────────
