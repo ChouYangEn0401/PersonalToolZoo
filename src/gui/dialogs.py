@@ -157,99 +157,182 @@ class GitCommandDialog:
         return self.result
 
     def _setup_autocomplete(self, entry, var, autocomplete_type, parent_frame):
-        """設置自動完成功能"""
+        """自動完成：Tab/Shift+Tab 導航清單，Space 確認選取，焦點留在 Entry"""
         listbox = None
         listbox_frame = None
+        _highlighted = [-1]          # 追蹤目前反白的 index
+        _ignore_trace = [False]       # 選取後寫回 var 時暫停 trace
 
+        # ── 取得建議清單 ─────────────────────────────────────────
         def get_suggestions(text):
-            """根據類型獲取建議列表"""
-            if not text or not self.repo_path:
+            if not self.repo_path:
                 return []
-
             try:
                 if autocomplete_type == 'branch':
-                    # 獲取所有分支
                     res = subprocess.run("git branch -a", cwd=self.repo_path, shell=True,
                                          capture_output=True, text=True, encoding='utf-8', errors='replace')
-                    branches = [b.strip().replace('* ', '').replace('remotes/origin/', '')
-                                for b in res.stdout.split('\n') if b.strip()]
-                    # 去重並過濾
-                    branches = list(set(b for b in branches if text.lower() in b.lower()))
-                    return sorted(branches)[:10]
+                    raw = [b.strip().replace('* ', '').replace('remotes/origin/', '')
+                           for b in res.stdout.split('\n') if b.strip()]
+                    items = sorted(set(b for b in raw if not text or text.lower() in b.lower()))
+                    return items[:12]
 
                 elif autocomplete_type == 'tag':
-                    # 獲取所有標籤
                     res = subprocess.run("git tag -l", cwd=self.repo_path, shell=True,
                                          capture_output=True, text=True, encoding='utf-8', errors='replace')
-                    tags = [t.strip() for t in res.stdout.split('\n') if t.strip() and text.lower() in t.lower()]
-                    return sorted(tags)[:10]
+                    items = sorted(t.strip() for t in res.stdout.split('\n')
+                                   if t.strip() and (not text or text.lower() in t.lower()))
+                    return items[:12]
 
                 elif autocomplete_type == 'commit':
-                    # 獲取最近的 commit
                     res = subprocess.run("git log --oneline -n 50", cwd=self.repo_path, shell=True,
                                          capture_output=True, text=True, encoding='utf-8', errors='replace')
                     commits = []
                     for line in res.stdout.split('\n'):
                         if line.strip():
                             parts = line.split(' ', 1)
-                            if len(parts) == 2 and text.lower() in line.lower():
+                            if len(parts) == 2 and (not text or text.lower() in line.lower()):
                                 commits.append(f"{parts[0]} - {parts[1][:50]}")
-                    return commits[:10]
+                    return commits[:12]
             except:
                 pass
             return []
 
-        def show_suggestions(event=None):
-            """顯示建議列表"""
-            nonlocal listbox, listbox_frame
-
-            text = var.get()
-            if len(text) < 1:
-                hide_suggestions()
+        # ── 把 listbox 第 idx 項反白（不改 Entry 內容）────────────
+        def _set_highlight(idx):
+            nonlocal listbox
+            if listbox is None:
                 return
+            size = listbox.size()
+            if size == 0:
+                return
+            idx = max(0, min(idx, size - 1))
+            _highlighted[0] = idx
+            listbox.selection_clear(0, tk.END)
+            listbox.selection_set(idx)
+            listbox.see(idx)
 
-            suggestions = get_suggestions(text)
+        # ── 確認選取當前反白項目 ───────────────────────────────────
+        def _confirm_selection():
+            nonlocal listbox
+            if listbox is None or _highlighted[0] < 0:
+                return
+            try:
+                value = listbox.get(_highlighted[0])
+                if autocomplete_type == 'commit':
+                    value = value.split(' - ')[0]
+                _ignore_trace[0] = True
+                var.set(value)
+                _ignore_trace[0] = False
+                # 把游標移到 Entry 末尾
+                entry.icursor(tk.END)
+                hide_suggestions()
+            except tk.TclError:
+                pass
+
+        # ── 顯示 / 更新 建議列表 ──────────────────────────────────
+        def show_suggestions():
+            nonlocal listbox, listbox_frame
+            suggestions = get_suggestions(var.get())
+
             if not suggestions:
                 hide_suggestions()
                 return
 
-            # 創建或更新 Listbox
-            if not listbox_frame:
-                listbox_frame = tk.Frame(parent_frame)
+            if listbox_frame is None:
+                listbox_frame = tk.Frame(parent_frame, relief="solid", bd=1)
                 listbox_frame.pack(fill="x", pady=(2, 0))
-
-                listbox = tk.Listbox(listbox_frame, height=min(len(suggestions), 6),
-                                     font=("Consolas", 9), bg="#fffacd")
+                nonlocal listbox
+                listbox = tk.Listbox(
+                    listbox_frame,
+                    font=("Consolas", 9),
+                    bg="#fffacd",
+                    selectbackground="#3399ff",
+                    selectforeground="#ffffff",
+                    activestyle="none",
+                    exportselection=False,
+                )
                 listbox.pack(fill="x")
 
-                def on_select(event):
-                    if listbox.curselection():
-                        value = listbox.get(listbox.curselection()[0])
-                        # 提取實際值（去除 commit 的描述部分）
-                        if autocomplete_type == 'commit':
-                            value = value.split(' - ')[0]
-                        var.set(value)
-                        hide_suggestions()
+                # 滑鼠點一下直接確認
+                listbox.bind('<ButtonRelease-1>', lambda e: _confirm_selection())
 
-                listbox.bind('<<ListboxSelect>>', on_select)
-                listbox.bind('<Double-Button-1>', on_select)
-
-            # 更新建議
             listbox.delete(0, tk.END)
             for s in suggestions:
                 listbox.insert(tk.END, s)
             listbox.config(height=min(len(suggestions), 6))
 
+            # 文字改變 → 清單刷新 → 反白第一項
+            _set_highlight(0)
+
+        # ── 隱藏建議列表 ──────────────────────────────────────────
         def hide_suggestions(event=None):
-            """隱藏建議列表"""
             nonlocal listbox, listbox_frame
             if listbox_frame:
                 listbox_frame.destroy()
                 listbox_frame = None
                 listbox = None
+            _highlighted[0] = -1
 
-        # 綁定事件
-        var.trace('w', lambda *args: show_suggestions())
-        entry.bind('<FocusOut>', lambda e: self.dialog.after(200, hide_suggestions))
-        entry.bind('<Escape>', hide_suggestions)
+        # ── Tab：往下，Shift+Tab：往上（焦點留在 Entry）────────────
+        def on_tab(event):
+            if listbox is not None and listbox.size() > 0:
+                cur = _highlighted[0]
+                _set_highlight(cur + 1 if cur < listbox.size() - 1 else 0)
+                return "break"          # 阻止 Tab 跳焦點
+            return None
+
+        def on_shift_tab(event):
+            if listbox is not None and listbox.size() > 0:
+                cur = _highlighted[0]
+                _set_highlight(cur - 1 if cur > 0 else listbox.size() - 1)
+                return "break"
+            return None
+
+        # ── Space：選取目前反白項目 ───────────────────────────────
+        def on_space(event):
+            if listbox is not None and _highlighted[0] >= 0:
+                _confirm_selection()
+                return "break"
+            return None
+
+        # ── Enter：也可以確認（不阻止表單提交） ───────────────────
+        def on_enter(event):
+            if listbox is not None and _highlighted[0] >= 0:
+                _confirm_selection()
+                return "break"
+            # 若沒有建議清單或未反白任何項目，維持原先 Enter 的行為（提交對話框）
+            try:
+                self._on_submit()
+            except Exception:
+                pass
+            return None
+
+        # ── 綁定事件 ──────────────────────────────────────────────
+        def on_var_change(*_):
+            if not _ignore_trace[0]:
+                show_suggestions()
+
+        var.trace('w', on_var_change)
+        entry.bind('<Tab>',            on_tab)
+        entry.bind('<Shift-Tab>',      on_shift_tab)
+        entry.bind('<space>',          on_space)
+        entry.bind('<Return>',         on_enter)
+        entry.bind('<Escape>',         hide_suggestions)
+        entry.bind('<FocusOut>',       lambda e: self.dialog.after(200, hide_suggestions))
+
+        # 在輸入框下方顯示簡短鍵盤說明（小字、灰色）
+        try:
+            help_text = (
+                "Tab: 清單向下移一格（循環到首項）\n"
+                "Shift+Tab: 清單向上移一格（循環到末項）\n"
+                "Space: 確認目前反白項目，填入 Entry，關閉清單\n"
+                "Enter: 同 Space（亦可確認）\n"
+                "滑鼠單擊: 直接確認（ButtonRelease-1）\n"
+                "Escape / FocusOut: 隱藏清單"
+            )
+            help_label = ttk.Label(parent_frame, text=help_text, font=("Arial", 9), foreground="#666666", justify="left")
+            help_label.pack(fill="x", pady=(4, 0))
+        except Exception:
+            # UI 輸出不影響功能
+            pass
 

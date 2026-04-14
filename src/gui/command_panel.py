@@ -141,11 +141,11 @@ class CommandPanel(ttk.Frame):
             ]),
             ("🔍 狀態與工具", [
                 ("📢 Status", lambda: self.executor.run_simple("status"), 12, False),
+                ("🎯 Checkout File", 'checkout_file', 12, False),
+                ("📟 Diff", lambda: self.executor.run_simple("diff"), 12, False),
                 ("🧽 Clean -fd",
                  lambda: self.confirm_mgr.confirm("清理未追蹤檔案", lambda: self.executor.run_simple("clean -fd")), 12,
                  True),
-                ("📟 Diff", lambda: self.executor.run_simple("diff"), 12, False),
-                ("🎯 Checkout File", 'checkout_file', 12, False),
             ])
         ]
 
