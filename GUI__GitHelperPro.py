@@ -303,9 +303,10 @@ class GitAdvancedTool:
 
         dialog = tk.Toplevel(self.root)
         dialog.title("Merge - 合併分支")
-        dialog.geometry("580x460")
+        dialog.geometry("600x630")
         dialog.transient(self.root)
         dialog.grab_set()
+        dialog.resizable(False, False)
 
         dialog.update_idletasks()
         rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
@@ -314,29 +315,42 @@ class GitAdvancedTool:
 
         main_frame = ttk.Frame(dialog, padding=15)
         main_frame.pack(fill="both", expand=True)
+        main_frame.columnconfigure(0, weight=1)
 
         # === 說明區 ===
         info_frame = ttk.LabelFrame(main_frame, text=" 📌 指令說明 ", padding=8)
-        info_frame.pack(fill="x", pady=(0, 12))
+        info_frame.pack(fill="x", pady=(0, 10))
         ttk.Label(info_frame, text="git merge <來源分支>  [--no-ff | --squash | --ff-only]",
                   font=("Consolas", 9), foreground="#555").pack(anchor="w")
-        ttk.Label(info_frame, text="將指定分支的提交合併進當前分支",
-                  font=("Arial", 9), foreground="#333").pack(anchor="w", pady=(3, 0))
-
+        ttk.Label(info_frame, text="將指定分支的提交合併進目前所在的分支",
+                  font=("Arial", 9), foreground="#333").pack(anchor="w", pady=(3, 4))
         mode_descs = [
-            ("一般 (預設)",    "Git 自行決定：能 fast-forward 就直接接上，不能才建 merge commit"),
-            ("--no-ff",        "強制建立 merge commit，保留分支歷史，推薦 feature branch 合回主線時使用"),
-            ("--squash",       "把所有 commit 壓成一筆變更放入暫存區，需自行手動 commit（不會自動提交）"),
-            ("--ff-only",      "只允許 fast-forward，若無法快速合併則直接失敗，適合嚴格線性歷史"),
+            ("一般 (預設)",  "Git 自行決定：能 fast-forward 就接上，否則建立 merge commit"),
+            ("--no-ff",      "強制建立 merge commit，保留分支歷史脈絡，推薦 feature → 主線"),
+            ("--squash",     "所有 commit 壓成一筆變更放入暫存區，需手動 commit"),
+            ("--ff-only",    "只允許 fast-forward，無法時直接失敗，適合嚴格線性歷史"),
         ]
         for mode, desc in mode_descs:
             row = ttk.Frame(info_frame)
-            row.pack(anchor="w", fill="x", pady=(2, 0))
+            row.pack(anchor="w", fill="x", pady=1)
             ttk.Label(row, text=f"  {mode}", font=("Consolas", 8), foreground="#0066cc",
-                      width=16, anchor="w").pack(side="left")
+                      width=14, anchor="w").pack(side="left")
             ttk.Label(row, text=desc, font=("Arial", 8), foreground="#555").pack(side="left")
 
-        # === 載入選項 ===
+        # === 共用函式 ===
+        def get_current_branch():
+            try:
+                r = subprocess.run("git rev-parse --abbrev-ref HEAD", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                cur = r.stdout.strip()
+                if not cur or cur == "HEAD":
+                    r2 = subprocess.run("git rev-parse --short HEAD", cwd=repo_path, shell=True,
+                                        capture_output=True, text=True, encoding='utf-8', errors='replace')
+                    cur = f"(detached) {r2.stdout.strip()}" or "(unknown)"
+                return cur
+            except:
+                return "(unknown)"
+
         def get_branches():
             try:
                 res = subprocess.run("git branch -a", cwd=repo_path, shell=True,
@@ -358,29 +372,71 @@ class GitAdvancedTool:
         branches = get_branches()
         commit_hashes = [c.split()[0] for c in get_short_commits()]
 
-        # === 欄位 ===
-        fields_frame = ttk.Frame(main_frame)
-        fields_frame.pack(fill="x", pady=(0, 10))
-        fields_frame.columnconfigure(1, weight=1)
+        # === 本分支列 ===
+        cur_lf = ttk.LabelFrame(main_frame, text=" 🌿 目前分支 ", padding=8)
+        cur_lf.pack(fill="x", pady=(0, 10))
+        current_var = tk.StringVar(value=get_current_branch())
+        cur_row = ttk.Frame(cur_lf)
+        cur_row.pack(fill="x")
+        ttk.Label(cur_row, textvariable=current_var, font=("Consolas", 11), foreground="#0066cc").pack(side="left")
+        ttk.Button(cur_row, text="↻ Refresh", command=lambda: current_var.set(get_current_branch()),
+                   width=10).pack(side="right")
+        ttk.Label(cur_lf, text="合併後的結果會套用到這個分支上",
+                  font=("Arial", 8), foreground="#888").pack(anchor="w", pady=(4, 0))
+
+        # === 欄位區 ===
+        fields_lf = ttk.LabelFrame(main_frame, text=" ⚙️ 參數設定 ", padding=10)
+        fields_lf.pack(fill="x", pady=(0, 10))
+        fields_lf.columnconfigure(1, weight=1)
 
         source_var = tk.StringVar(value="")
         mode_var = tk.StringVar(value="normal")
 
-        ttk.Label(fields_frame, text="來源分支 *", font=("Arial", 9, "bold")).grid(
-            row=0, column=0, sticky="nw", padx=(0, 10))
-        source_cb = ttk.Combobox(fields_frame, textvariable=source_var,
+        # 來源分支
+        ttk.Label(fields_lf, text="來源分支 *", font=("Arial", 9, "bold")).grid(
+            row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 2))
+        source_cb = ttk.Combobox(fields_lf, textvariable=source_var,
                                  values=branches + commit_hashes, font=("Consolas", 10), state="normal")
-        source_cb.grid(row=0, column=1, sticky="ew")
-        ttk.Label(fields_frame, text="要合併進來的分支或 commit（會合併到你目前所在的分支）",
-                  font=("Arial", 8), foreground="#777").grid(row=1, column=1, sticky="w", padx=(2, 0))
+        source_cb.grid(row=0, column=1, sticky="ew", pady=(0, 2))
 
-        ttk.Label(fields_frame, text="合併模式", font=("Arial", 9, "bold")).grid(
-            row=2, column=0, sticky="nw", padx=(0, 10), pady=(12, 0))
-        mode_frame = ttk.Frame(fields_frame)
-        mode_frame.grid(row=2, column=1, sticky="w", pady=(12, 0))
-        for val, lbl in [("normal", "一般 (預設)"), ("--no-ff", "強制 merge commit (--no-ff)"),
-                         ("--squash", "壓縮 commit (--squash)"), ("--ff-only", "僅 fast-forward (--ff-only)")]:
-            ttk.Radiobutton(mode_frame, text=lbl, variable=mode_var, value=val).pack(anchor="w")
+        def checkout_source():
+            src = source_var.get().strip()
+            if not src:
+                messagebox.showwarning("參數缺失", "請先選擇來源分支或 commit")
+                return
+            res = executor.run(f"git checkout {src}")
+            if res is None:
+                messagebox.showerror("執行失敗", "執行 checkout 時發生錯誤，請查看 Terminal 日誌。")
+                return
+            if getattr(res, 'returncode', 1) == 0:
+                current_var.set(get_current_branch())
+                messagebox.showinfo("完成", f"已切換到: {src}")
+            else:
+                stderr = (res.stderr or res.stdout or "").strip()
+                messagebox.showerror("切換失敗", f"切換分支失敗：\n{stderr}")
+
+        hint_row = ttk.Frame(fields_lf)
+        hint_row.grid(row=1, column=1, sticky="ew", pady=(0, 8))
+        ttk.Label(hint_row, text="要合併進來的分支（合進目前分支）",
+                  font=("Arial", 8), foreground="#777").pack(side="left")
+        ttk.Button(hint_row, text="↪ 先切換到此分支", command=checkout_source,
+                   width=16).pack(side="right")
+
+        # 合併模式
+        ttk.Label(fields_lf, text="合併模式", font=("Arial", 9, "bold")).grid(
+            row=2, column=0, sticky="nw", padx=(0, 10), pady=(4, 0))
+        mode_frame = ttk.Frame(fields_lf)
+        mode_frame.grid(row=2, column=1, sticky="w", pady=(4, 0))
+        for val, lbl, hint in [
+            ("normal",    "一般 (預設)",           "Git 自行決定合併方式"),
+            ("--no-ff",   "強制 merge commit",     "保留分支歷史，推薦 feature → main"),
+            ("--squash",  "壓縮 commit (squash)",  "壓成一筆需手動 commit"),
+            ("--ff-only", "僅 fast-forward",       "無法 FF 則失敗，嚴格線性"),
+        ]:
+            r = ttk.Frame(mode_frame)
+            r.pack(anchor="w", fill="x", pady=1)
+            ttk.Radiobutton(r, text=lbl, variable=mode_var, value=val, width=22).pack(side="left")
+            ttk.Label(r, text=hint, font=("Arial", 8), foreground="#888").pack(side="left")
 
         # === 預覽 ===
         preview_var = tk.StringVar()
@@ -388,10 +444,7 @@ class GitAdvancedTool:
         def update_preview(*_):
             src = source_var.get().strip() or '<branch>'
             mode = mode_var.get()
-            if mode == "normal":
-                preview_var.set(f"git merge {src}")
-            else:
-                preview_var.set(f"git merge {mode} {src}")
+            preview_var.set(f"git merge {src}" if mode == "normal" else f"git merge {mode} {src}")
 
         source_var.trace_add("write", update_preview)
         mode_var.trace_add("write", update_preview)
@@ -402,7 +455,7 @@ class GitAdvancedTool:
         ttk.Label(preview_frame, textvariable=preview_var,
                   font=("Consolas", 10), foreground="#0066cc").pack(anchor="w")
 
-        # === 按鈕 ===
+        # === 按鈕列 ===
         def on_execute():
             src = source_var.get().strip()
             if not src:
@@ -427,54 +480,62 @@ class GitAdvancedTool:
         source_cb.focus_set()
 
     def open_checkout_dialog(self, executor):
-        """更進階的 Checkout 對話框：可搜尋 branch、origin/branch、tag、commit hash 並支援 -b 建立新分支"""
+        """Checkout 搜尋器：可搜尋 branch / origin/branch / tag / commit，支援 -b 建立新分支"""
         repo_path = executor.repo_path
 
         dialog = tk.Toplevel(self.root)
-        dialog.title("Checkout - 切換分支/Commit")
-        dialog.geometry("560x400")
+        dialog.title("Checkout - 切換分支 / Commit")
+        dialog.geometry("580x490")
         dialog.transient(self.root)
         dialog.grab_set()
+        dialog.resizable(False, False)
 
-        # 置中
         dialog.update_idletasks()
         rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
         dw, dh = dialog.winfo_width(), dialog.winfo_height()
         dialog.geometry(f"+{rx + (rw // 2) - (dw // 2)}+{ry + (rh // 2) - (dh // 2)}")
 
-        main = ttk.Frame(dialog, padding=12)
+        main = ttk.Frame(dialog, padding=15)
         main.pack(fill="both", expand=True)
+        main.columnconfigure(0, weight=1)
 
-        ttk.Label(main, text="目標 (分支 / origin/分支 / tag / commit)", font=("Arial", 9, "bold")).pack(anchor="w")
+        # === 說明區 ===
+        info_frame = ttk.LabelFrame(main, text=" 📌 指令說明 ", padding=8)
+        info_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(info_frame, text="git checkout <target>      切換到分支、tag 或 commit",
+                  font=("Consolas", 9), foreground="#555").pack(anchor="w")
+        ttk.Label(info_frame, text="git checkout -b <name>     建立新分支並立刻切換過去",
+                  font=("Consolas", 9), foreground="#555").pack(anchor="w", pady=(2, 0))
+        ttk.Label(info_frame, text="支援：本地 branch、origin/branch、tag、commit hash",
+                  font=("Arial", 8), foreground="#888").pack(anchor="w", pady=(4, 0))
 
-        entry_var = tk.StringVar()
-        entry = ttk.Entry(main, textvariable=entry_var, font=("Consolas", 11))
-        entry.pack(fill="x", pady=(6, 4))
+        # === 共用函式 ===
+        def get_current_branch():
+            try:
+                r = subprocess.run("git rev-parse --abbrev-ref HEAD", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                cur = r.stdout.strip()
+                if not cur or cur == "HEAD":
+                    r2 = subprocess.run("git rev-parse --short HEAD", cwd=repo_path, shell=True,
+                                        capture_output=True, text=True, encoding='utf-8', errors='replace')
+                    cur = f"(detached) {r2.stdout.strip()}" or "(unknown)"
+                return cur
+            except:
+                return "(unknown)"
 
-        # 自動完成功能：彙整 branches, remotes, tags, commits
         def get_candidates(prefix):
             try:
-                # branches (本地 + remotes)
                 res_b = subprocess.run("git branch -a", cwd=repo_path, shell=True,
                                        capture_output=True, text=True, encoding='utf-8', errors='replace')
-                branches = [b.strip().replace('* ', '') for b in res_b.stdout.splitlines() if b.strip()]
-                # normalize remotes to origin/branch style
-                norm_branches = []
-                for b in branches:
-                    nb = b.replace('remotes/', '')
-                    norm_branches.append(nb)
-
-                # tags
+                branches = [b.strip().replace('* ', '').replace('remotes/', '')
+                            for b in res_b.stdout.splitlines() if b.strip()]
                 res_t = subprocess.run("git tag -l", cwd=repo_path, shell=True,
                                        capture_output=True, text=True, encoding='utf-8', errors='replace')
                 tags = [t.strip() for t in res_t.stdout.splitlines() if t.strip()]
-
-                # recent commits (short)
                 res_c = subprocess.run("git log --oneline -n 60", cwd=repo_path, shell=True,
                                        capture_output=True, text=True, encoding='utf-8', errors='replace')
                 commits = [line.split()[0] for line in res_c.stdout.splitlines() if line.strip()]
-
-                candidates = list(dict.fromkeys(norm_branches + tags + commits))
+                candidates = list(dict.fromkeys(branches + tags + commits))
                 if not prefix:
                     return candidates[:50]
                 p = prefix.lower()
@@ -482,60 +543,95 @@ class GitAdvancedTool:
             except:
                 return []
 
-        # 下拉建議區
-        listbox = tk.Listbox(main, height=6, font=("Consolas", 10))
-        listbox.pack(fill="both", expand=True, pady=(2, 6))
+        # === 本分支列 ===
+        cur_lf = ttk.LabelFrame(main, text=" 🌿 目前分支 ", padding=8)
+        cur_lf.pack(fill="x", pady=(0, 10))
+        current_var = tk.StringVar(value=get_current_branch())
+        cur_row = ttk.Frame(cur_lf)
+        cur_row.pack(fill="x")
+        ttk.Label(cur_row, textvariable=current_var, font=("Consolas", 11), foreground="#0066cc").pack(side="left")
+        ttk.Button(cur_row, text="↻ Refresh", command=lambda: current_var.set(get_current_branch()),
+                   width=10).pack(side="right")
+
+        # === 搜尋與清單 ===
+        search_lf = ttk.LabelFrame(main, text=" 🔍 搜尋目標 ", padding=10)
+        search_lf.pack(fill="both", expand=True, pady=(0, 10))
+        search_lf.columnconfigure(0, weight=1)
+
+        entry_var = tk.StringVar()
+        entry = ttk.Entry(search_lf, textvariable=entry_var, font=("Consolas", 11))
+        entry.pack(fill="x", pady=(0, 4))
+        ttk.Label(search_lf, text="即時過濾：輸入關鍵字篩選 branch / origin/branch / tag / hash",
+                  font=("Arial", 8), foreground="#888").pack(anchor="w", pady=(0, 6))
+
+        listbox_frame = ttk.Frame(search_lf)
+        listbox_frame.pack(fill="both", expand=True)
+        listbox = tk.Listbox(listbox_frame, font=("Consolas", 10), activestyle="dotbox",
+                             selectbackground="#cce5ff", selectforeground="#000")
+        lb_scroll = ttk.Scrollbar(listbox_frame, orient="vertical", command=listbox.yview)
+        listbox.configure(yscrollcommand=lb_scroll.set)
+        lb_scroll.pack(side="right", fill="y")
+        listbox.pack(side="left", fill="both", expand=True)
 
         def update_listbox(*_):
-            text = entry_var.get().strip()
-            items = get_candidates(text)
+            items = get_candidates(entry_var.get().strip())
             listbox.delete(0, tk.END)
             for it in items:
                 listbox.insert(tk.END, it)
 
         entry_var.trace_add("write", update_listbox)
+        update_listbox()
 
-        def on_select(e=None):
+        def on_lb_select(e=None):
             if listbox.curselection():
                 entry_var.set(listbox.get(listbox.curselection()[0]))
 
-        listbox.bind('<<ListboxSelect>>', on_select)
+        listbox.bind('<<ListboxSelect>>', on_lb_select)
         listbox.bind('<Double-Button-1>', lambda e: on_execute())
 
-        # create checkbox and preview
+        # === 選項列 ===
+        opt_frame = ttk.Frame(main)
+        opt_frame.pack(fill="x", pady=(0, 6))
         cb_var = tk.BooleanVar(value=False)
-        chk = ttk.Checkbutton(main, text="建立新分支 (-b)", variable=cb_var)
-        chk.pack(anchor="w")
+        ttk.Checkbutton(opt_frame, text="建立新分支 (-b)", variable=cb_var).pack(side="left")
 
+        # === 預覽 ===
+        preview_lf = ttk.LabelFrame(main, text=" 📋 指令預覽 ", padding=8)
+        preview_lf.pack(fill="x", pady=(0, 10))
         preview_var = tk.StringVar()
-        ttk.Label(main, textvariable=preview_var, foreground="#0066cc", font=("Consolas", 10)).pack(anchor="w", pady=(4, 6))
+        ttk.Label(preview_lf, textvariable=preview_var, font=("Consolas", 10), foreground="#0066cc").pack(anchor="w")
 
         def update_preview(*_):
-            target = entry_var.get().strip() or '<target>'
-            if cb_var.get():
-                preview_var.set(f"git checkout -b {target}")
-            else:
-                preview_var.set(f"git checkout {target}")
+            t = entry_var.get().strip() or '<target>'
+            preview_var.set(f"git checkout -b {t}" if cb_var.get() else f"git checkout {t}")
 
         entry_var.trace_add("write", update_preview)
         cb_var.trace_add("write", update_preview)
         update_preview()
 
+        # === 按鈕列 ===
         def on_execute():
             target = entry_var.get().strip()
             if not target:
-                tk.messagebox.showwarning("參數缺失", "請輸入分支、tag 或 commit hash")
+                messagebox.showwarning("參數缺失", "請輸入或選擇分支、tag 或 commit hash")
                 return
-            if cb_var.get():
-                executor.run(f"git checkout -b {target}")
+            cmd = f"git checkout -b {target}" if cb_var.get() else f"git checkout {target}"
+            res = executor.run(cmd)
+            if res is None:
+                messagebox.showerror("執行失敗", "執行指令時發生錯誤，請查看 Terminal 日誌。")
+                return
+            if getattr(res, 'returncode', 1) == 0:
+                current_var.set(get_current_branch())
+                messagebox.showinfo("完成", f"已切換到: {target}")
+                dialog.destroy()
             else:
-                executor.run(f"git checkout {target}")
-            dialog.destroy()
+                stderr = (res.stderr or res.stdout or "").strip()
+                messagebox.showerror("切換失敗", f"切換失敗：\n{stderr}")
 
         btn_bar = ttk.Frame(main)
         btn_bar.pack(fill="x")
-        ttk.Button(btn_bar, text="✓ 執行 Checkout", command=on_execute, width=16).pack(side="right", padx=4)
-        ttk.Button(btn_bar, text="✗ 取消", command=dialog.destroy, width=10).pack(side="right")
+        ttk.Button(btn_bar, text="✓ 執行 Checkout", command=on_execute, width=16).pack(side="right", padx=2)
+        ttk.Button(btn_bar, text="✗ 取消", command=dialog.destroy, width=10).pack(side="right", padx=2)
 
         entry.focus_set()
 
