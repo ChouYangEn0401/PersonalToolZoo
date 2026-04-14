@@ -9,6 +9,7 @@ from src.gui.command_panel import CommandPanel
 from src.gui.danger_operation_blocker import ConfirmationManager
 from src.gui.dialogs import GitCommandDialog
 from src.core.language_manager import lm
+from src.version import __version__
 
 
 # ==========================================
@@ -17,7 +18,7 @@ from src.core.language_manager import lm
 class GitAdvancedTool:
     def __init__(self, root):
         self.root = root
-        self.root.title(lm.t('app.title'))
+        self.root.title(f"{lm.t('app.title')} (v{__version__})")
         self.root.geometry("1300x850")
 
         self._init_styles()
@@ -60,7 +61,7 @@ class GitAdvancedTool:
 
     def _rebuild_ui(self):
         """Refresh all translatable UI text after a language switch."""
-        self.root.title(lm.t('app.title'))
+        self.root.title(f"{lm.t('app.title')} ({__version__})")
         self.open_btn.config(text=lm.t('toolbar.new_project'))
         # update toolbar language label and combobox values
         try:
