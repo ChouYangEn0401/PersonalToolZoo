@@ -160,6 +160,17 @@ def get_commands_configs():
             ]
         },
 
+        # === Checkout (switch to branch or commit) ===
+        'checkout': {
+            'name': 'Checkout (分支/Commit)',
+            'base_cmd': 'checkout',
+            'params': [
+                {'name': 'branch', 'label': '分支或 Commit (branch 或 hash)', 'required': True, 'type': 'text',
+                 'autocomplete': 'branch'},
+                {'name': 'create', 'label': '建立新分支 (-b)', 'required': False, 'type': 'toggle'}
+            ]
+        },
+
         # === Tag 系列 ===
         'create_tag': {
             'name': 'Create Tag',

@@ -121,8 +121,9 @@ class CommandPanel(ttk.Frame):
                  True)],
             ]),
             ("🌿 Branch 分支管理", [
-                [("📋 List", lambda: self.executor.run_simple("branch -a"), 12, False),
-                ("📌 Create", 'checkout_branch', 12, False)],
+                [("📋 List", lambda: self.executor.run_simple("branch -a"), 10, False),
+                (("🔁 Checkout", lambda: self.app.open_checkout_dialog(self.executor), 12, False)),
+                ("📌 Create", 'checkout_branch', 10, False)],
                 [("✂️ Del Local", 'delete_branch', 12, True),
                 ("🌐 Del Remote", 'delete_remote_branch', 12, True)],
                 [("🧹 Prune", 'prune_branches', 12, False)],

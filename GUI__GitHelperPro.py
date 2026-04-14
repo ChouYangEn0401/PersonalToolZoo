@@ -294,6 +294,119 @@ class GitAdvancedTool:
 
         comboboxes[0].focus_set()
 
+    def open_checkout_dialog(self, executor):
+        """更進階的 Checkout 對話框：可搜尋 branch、origin/branch、tag、commit hash 並支援 -b 建立新分支"""
+        repo_path = executor.repo_path
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Checkout - 切換分支/Commit")
+        dialog.geometry("560x400")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # 置中
+        dialog.update_idletasks()
+        rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
+        dw, dh = dialog.winfo_width(), dialog.winfo_height()
+        dialog.geometry(f"+{rx + (rw // 2) - (dw // 2)}+{ry + (rh // 2) - (dh // 2)}")
+
+        main = ttk.Frame(dialog, padding=12)
+        main.pack(fill="both", expand=True)
+
+        ttk.Label(main, text="目標 (分支 / origin/分支 / tag / commit)", font=("Arial", 9, "bold")).pack(anchor="w")
+
+        entry_var = tk.StringVar()
+        entry = ttk.Entry(main, textvariable=entry_var, font=("Consolas", 11))
+        entry.pack(fill="x", pady=(6, 4))
+
+        # 自動完成功能：彙整 branches, remotes, tags, commits
+        def get_candidates(prefix):
+            try:
+                # branches (本地 + remotes)
+                res_b = subprocess.run("git branch -a", cwd=repo_path, shell=True,
+                                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+                branches = [b.strip().replace('* ', '') for b in res_b.stdout.splitlines() if b.strip()]
+                # normalize remotes to origin/branch style
+                norm_branches = []
+                for b in branches:
+                    nb = b.replace('remotes/', '')
+                    norm_branches.append(nb)
+
+                # tags
+                res_t = subprocess.run("git tag -l", cwd=repo_path, shell=True,
+                                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+                tags = [t.strip() for t in res_t.stdout.splitlines() if t.strip()]
+
+                # recent commits (short)
+                res_c = subprocess.run("git log --oneline -n 60", cwd=repo_path, shell=True,
+                                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+                commits = [line.split()[0] for line in res_c.stdout.splitlines() if line.strip()]
+
+                candidates = list(dict.fromkeys(norm_branches + tags + commits))
+                if not prefix:
+                    return candidates[:50]
+                p = prefix.lower()
+                return [c for c in candidates if p in c.lower()][:50]
+            except:
+                return []
+
+        # 下拉建議區
+        listbox = tk.Listbox(main, height=6, font=("Consolas", 10))
+        listbox.pack(fill="both", expand=True, pady=(2, 6))
+
+        def update_listbox(*_):
+            text = entry_var.get().strip()
+            items = get_candidates(text)
+            listbox.delete(0, tk.END)
+            for it in items:
+                listbox.insert(tk.END, it)
+
+        entry_var.trace_add("write", update_listbox)
+
+        def on_select(e=None):
+            if listbox.curselection():
+                entry_var.set(listbox.get(listbox.curselection()[0]))
+
+        listbox.bind('<<ListboxSelect>>', on_select)
+        listbox.bind('<Double-Button-1>', lambda e: on_execute())
+
+        # create checkbox and preview
+        cb_var = tk.BooleanVar(value=False)
+        chk = ttk.Checkbutton(main, text="建立新分支 (-b)", variable=cb_var)
+        chk.pack(anchor="w")
+
+        preview_var = tk.StringVar()
+        ttk.Label(main, textvariable=preview_var, foreground="#0066cc", font=("Consolas", 10)).pack(anchor="w", pady=(4, 6))
+
+        def update_preview(*_):
+            target = entry_var.get().strip() or '<target>'
+            if cb_var.get():
+                preview_var.set(f"git checkout -b {target}")
+            else:
+                preview_var.set(f"git checkout {target}")
+
+        entry_var.trace_add("write", update_preview)
+        cb_var.trace_add("write", update_preview)
+        update_preview()
+
+        def on_execute():
+            target = entry_var.get().strip()
+            if not target:
+                tk.messagebox.showwarning("參數缺失", "請輸入分支、tag 或 commit hash")
+                return
+            if cb_var.get():
+                executor.run(f"git checkout -b {target}")
+            else:
+                executor.run(f"git checkout {target}")
+            dialog.destroy()
+
+        btn_bar = ttk.Frame(main)
+        btn_bar.pack(fill="x")
+        ttk.Button(btn_bar, text="✓ 執行 Checkout", command=on_execute, width=16).pack(side="right", padx=4)
+        ttk.Button(btn_bar, text="✗ 取消", command=dialog.destroy, width=10).pack(side="right")
+
+        entry.focus_set()
+
     def open_file_selector(self, executor):
         """開啟檔案選擇器：支援單獨 Add、雙重狀態計數"""
         repo_path = executor.repo_path
