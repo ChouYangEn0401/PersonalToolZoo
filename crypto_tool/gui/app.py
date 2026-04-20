@@ -82,9 +82,19 @@ class CryptoToolApp:
 
         ttk.Separator(self.root).pack(fill=X)
 
-        # ── Notebook (tabs) ───────────────────────────────────────────
-        nb = ttk.Notebook(self.root, bootstyle="dark")
-        nb.pack(fill=BOTH, expand=True, padx=PAD, pady=(PAD, 0))
+        # ── Notebook (tabs) inside a vertically scrollable canvas
+        container = ttk.Frame(self.root)
+        container.pack(fill=BOTH, expand=True, padx=PAD, pady=(PAD, 0))
+
+        # Canvas for scrolling and a vertical scrollbar
+        canvas = tk.Canvas(container, highlightthickness=0)
+        vscroll = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vscroll.set)
+        vscroll.pack(side=RIGHT, fill=Y)
+        canvas.pack(side=LEFT, fill=BOTH, expand=True)
+
+        # Notebook is placed inside the canvas so the whole tab area can scroll
+        nb = ttk.Notebook(canvas, bootstyle="dark")
 
         tab1 = FileTab(nb, self._status_var)
         tab2 = TextTab(nb, self._status_var)
@@ -95,6 +105,31 @@ class CryptoToolApp:
         nb.add(tab2, text="  📝  Text  ")
         nb.add(tab3, text="  🔗  Mixture  --UNTESTED")
         nb.add(tab4, text="  📦  Large File  --UNTESTED")
+
+        # create_window returns an id; keep a reference to prevent GC surprises
+        _nb_window = canvas.create_window((0, 0), window=nb, anchor="nw")
+
+        def _on_nb_config(event):
+            # Update scrollregion to encompass the notebook
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _on_canvas_config(event):
+            # Ensure notebook width matches canvas width to avoid horizontal scrolling
+            try:
+                canvas.itemconfig(_nb_window, width=event.width)
+            except Exception:
+                pass
+
+        nb.bind("<Configure>", _on_nb_config)
+        canvas.bind("<Configure>", _on_canvas_config)
+
+        # Support mousewheel scrolling over the canvas
+        def _on_mousewheel(event):
+            # Windows / Mac compatibility
+            delta = int(-1 * (event.delta / 120)) if hasattr(event, "delta") else 0
+            canvas.yview_scroll(delta, "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
 
         # ── Status bar ────────────────────────────────────────────────
         status = ttk.Frame(self.root, padding=(PAD, 4))

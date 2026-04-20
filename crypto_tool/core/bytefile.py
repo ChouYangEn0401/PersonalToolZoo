@@ -29,7 +29,7 @@ BYTEFILE_EXT = ".isd"
 def default_note(
     algorithm: str = "AES-256-CBC",
     key_type: str = "text",
-    mode: str = "simple",
+    mode: str = "layered",
     iterations: int = 1,
     author: str = "@anonymous",
     password_hint: str | None = None,
@@ -109,7 +109,13 @@ class ByteFile:
 
     @property
     def mode(self) -> str:
-        return self.note.get("mode", "simple")
+        m = self.note.get("mode", "layered")
+        # backward compat: old .isd files used "simple" / "node"
+        if m == "simple":
+            return "layered"
+        if m == "node":
+            return "nested"
+        return m
 
     @property
     def original_filename(self) -> str | None:

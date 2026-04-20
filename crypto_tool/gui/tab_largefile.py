@@ -143,9 +143,9 @@ class LargeFileTab(ttk.Frame):
         mode_frame = ttk.Frame(self._enc_panel)
         mode_frame.pack(fill=X, pady=(0, 6))
         ttk.Label(mode_frame, text="Mode:", font=FONT_BODY).pack(side=LEFT)
-        self.mode_var = tk.StringVar(value="simple")
-        ttk.Radiobutton(mode_frame, text="Simple", variable=self.mode_var, value="simple").pack(side=LEFT, padx=(6, 12))
-        ttk.Radiobutton(mode_frame, text="Node", variable=self.mode_var, value="node").pack(side=LEFT)
+        self.mode_var = tk.StringVar(value="layered")
+        ttk.Radiobutton(mode_frame, text="Layered", variable=self.mode_var, value="layered").pack(side=LEFT, padx=(6, 12))
+        ttk.Radiobutton(mode_frame, text="Nested", variable=self.mode_var, value="nested").pack(side=LEFT)
 
         # Pipeline stages
         stage_lbl = ttk.Label(self._enc_panel, text="Encryption pipeline:", font=FONT_BODY)
@@ -302,7 +302,7 @@ class LargeFileTab(ttk.Frame):
                         break
 
                     # Encrypt this chunk
-                    if mode == "node":
+                    if mode == "nested":
                         payload = chunk_data
                         for i, step in enumerate(chain):
                             if step["algorithm"] == "PGP":
@@ -312,7 +312,7 @@ class LargeFileTab(ttk.Frame):
                                 enc = EncryptionEngine.encrypt(payload, step["key_bytes"], step["algorithm"])
                             note = default_note(
                                 algorithm=step["algorithm"], key_type=step["key_type"],
-                                mode="node", iterations=len(chain),
+                                mode="nested", iterations=len(chain),
                             )
                             note["layer"] = i + 1
                             note["total_layers"] = len(chain)
@@ -335,7 +335,7 @@ class LargeFileTab(ttk.Frame):
                             encrypted = EncryptionEngine.encrypt_chain(chunk_data, chain)
                         note = default_note(
                             algorithm=chain[0]["algorithm"], key_type=chain[0]["key_type"],
-                            mode="simple", iterations=len(chain),
+                            mode="layered", iterations=len(chain),
                             mixture_chain=chain_meta,
                         )
                         bf = ByteFile(encrypted, note)
@@ -413,7 +413,7 @@ class LargeFileTab(ttk.Frame):
             chunk_dir = manifest_path.parent
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-            mode = manifest.get("mode", "simple")
+            mode = manifest.get("mode", "layered")
             chain_meta = manifest.get("encryption_chain", [])
             chunks = manifest.get("chunks", [])
             total = len(chunks)
@@ -429,7 +429,7 @@ class LargeFileTab(ttk.Frame):
             with open(dest, "wb") as out_f:
                 for ci, chunk_info in enumerate(chunks):
                     chunk_path = chunk_dir / chunk_info["filename"]
-                    if mode == "node":
+                    if mode == "nested":
                         payload = chunk_path.read_text(encoding="utf-8")
                         for step in reversed(chain_meta):
                             bf = ByteFile.parse(payload)

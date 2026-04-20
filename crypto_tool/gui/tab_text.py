@@ -80,8 +80,8 @@ class TextTab(ttk.Frame):
         Tooltip(_algo_cb, "AES-256-CBC：預設區塊加密 | AES-256-GCM：帶完整性驗證 | ChaCha20：現代高效演算法 | XOR/XOR-FOLD：輕量 | PGP：公開金鑰包覆")
 
         # PGP options (hidden unless PGP selected)
-        self.pgp_inner_var = tk.StringVar(value="AES-256-CBC")
-        inner_values = [a for a in ALGORITHMS if not a.startswith("PGP")]
+        self.pgp_inner_var = tk.StringVar(value="None")
+        inner_values = ["None"] + [a for a in ALGORITHMS if not a.startswith("PGP")]
         self._pgp_inner_cb = ttk.Combobox(
             settings, textvariable=self.pgp_inner_var, values=inner_values,
             state="readonly", width=18, font=FONT_BODY,
@@ -270,9 +270,17 @@ class TextTab(ttk.Frame):
         pw_source = self.pw.get_source()
         key_type = self.pw.get_key_type()
         algo = self.algo_var.get()
-        if not pw_source and algo != "Base64" and algo not in PGP_ALGORITHMS:
-            messagebox.showwarning("Password", "Enter a password.")
-            return
+        # If using PGP, ensure inner cipher has a password when required
+        if algo in PGP_ALGORITHMS:
+            inner_algo = self._pgp_enc_panel.get_inner_algo()
+            # 'None' inner algo means skip inner symmetric encryption; no password required
+            if inner_algo not in ("None", "Base64") and not pw_source:
+                messagebox.showwarning("Password", f"Password required for inner cipher '{inner_algo}'.")
+                return
+        else:
+            if not pw_source and algo != "Base64":
+                messagebox.showwarning("Password", "Enter a password.")
+                return
 
         self._status.set("Encrypting text...")
         threading.Thread(
@@ -288,9 +296,16 @@ class TextTab(ttk.Frame):
 
             if algo in PGP_ALGORITHMS:
                 inner_algo = self._pgp_enc_panel.get_inner_algo()
-                if not pw_source and inner_algo != "Base64":
-                    raise ValueError(f"Password required for inner cipher '{inner_algo}'")
-                inner_ct = EncryptionEngine.encrypt(data, key_bytes, inner_algo)
+                # If inner_algo == 'None', do not perform inner symmetric encryption
+                if inner_algo == "None":
+                    inner_ct = data
+                else:
+                    if not pw_source and inner_algo != "Base64":
+                        raise ValueError(f"Password required for inner cipher '{inner_algo}'")
+                    inner_ct = data
+                    # support iterations if needed
+                    for _ in range(1):
+                        inner_ct = EncryptionEngine.encrypt(inner_ct, key_bytes, inner_algo)
                 pub_pems = self._pgp_enc_panel.get_pub_pems()
                 escrow_pem = self._pgp_enc_panel.get_escrow_pem()
                 if algo == "PGP":
@@ -299,7 +314,7 @@ class TextTab(ttk.Frame):
                     all_pems = list(pub_pems) + ([escrow_pem] if escrow_pem else [])
                     encrypted = EncryptionEngine.pgp_encrypt_multi(inner_ct, all_pems)
                 self._last_note = default_note(
-                    algorithm=inner_algo, key_type=key_type, mode="simple",
+                    algorithm=inner_algo, key_type=key_type, mode="layered",
                     iterations=1, original_filename=None, original_size=len(data),
                     pgp_mode=algo, pgp_escrow=(algo == "PGP-Escrow"),
                     pgp_recipient_count=len(pub_pems),
@@ -307,7 +322,7 @@ class TextTab(ttk.Frame):
             else:
                 encrypted = EncryptionEngine.encrypt(data, key_bytes, algo)
                 self._last_note = default_note(
-                    algorithm=algo, key_type=key_type, mode="simple",
+                    algorithm=algo, key_type=key_type, mode="layered",
                     iterations=1, original_filename=None, original_size=len(data),
                 )
 
@@ -356,10 +371,13 @@ class TextTab(ttk.Frame):
             key_bytes = derive_key_bytes(pw_source, key_type) if pw_source else b""
 
             if algo in PGP_ALGORITHMS:
-                priv_pem = self._pgp_dec_panel.get_priv_pem()
-                inner_ct = EncryptionEngine.pgp_decrypt(encrypted, priv_pem)
-                inner_algo = self._pgp_enc_panel.get_inner_algo()  # must match what was used
-                decrypted = EncryptionEngine.decrypt(inner_ct, key_bytes, inner_algo)
+                priv_pem   = self._pgp_dec_panel.get_priv_pem()
+                inner_ct   = EncryptionEngine.pgp_decrypt(encrypted, priv_pem)
+                inner_algo = self._pgp_enc_panel.get_inner_algo()
+                if inner_algo == "None":
+                    decrypted = inner_ct  # no inner cipher was applied
+                else:
+                    decrypted = EncryptionEngine.decrypt(inner_ct, key_bytes, inner_algo)
             else:
                 decrypted = EncryptionEngine.decrypt(encrypted, key_bytes, algo)
             text = decrypted.decode("utf-8")

@@ -168,11 +168,11 @@ class MixtureTab(ttk.Frame):
 
         mode_frame = ttk.Labelframe(top, text="Mode", padding=8)
         mode_frame.pack(side=LEFT, padx=(0, 12))
-        self.mode_var = tk.StringVar(value="simple")
-        ttk.Radiobutton(mode_frame, text=f"Simple  (multi-encrypt → 1 {BYTEFILE_EXT})",
-                        variable=self.mode_var, value="simple").pack(anchor=W)
-        ttk.Radiobutton(mode_frame, text=f"Node  (layer-by-layer {BYTEFILE_EXT} wrapping)",
-                        variable=self.mode_var, value="node").pack(anchor=W)
+        self.mode_var = tk.StringVar(value="layered")
+        ttk.Radiobutton(mode_frame, text=f"Layered  (多階段融合 → 1 {BYTEFILE_EXT})",
+                        variable=self.mode_var, value="layered").pack(anchor=W)
+        ttk.Radiobutton(mode_frame, text=f"Nested  (每階段各自一個 {BYTEFILE_EXT})",
+                        variable=self.mode_var, value="nested").pack(anchor=W)
 
         input_frame = ttk.Labelframe(top, text="Input type", padding=8)
         input_frame.pack(side=LEFT, fill=X, expand=True)
@@ -309,7 +309,7 @@ class MixtureTab(ttk.Frame):
             mode = self.mode_var.get()
             chain_meta = [{"algorithm": s["algorithm"], "key_type": s["key_type"]} for s in chain]
 
-            if mode == "node":
+            if mode == "nested":
                 payload = data
                 for i, step in enumerate(chain):
                     if step["algorithm"] == "PGP":
@@ -319,7 +319,7 @@ class MixtureTab(ttk.Frame):
                         encrypted = EncryptionEngine.encrypt(payload, step["key_bytes"], step["algorithm"])
                     note = default_note(
                         algorithm=step["algorithm"], key_type=step["key_type"],
-                        mode="node", iterations=len(chain),
+                        mode="nested", iterations=len(chain),
                         original_filename=orig_name if i == 0 else None,
                         original_size=len(data) if i == 0 else None,
                     )
@@ -343,7 +343,7 @@ class MixtureTab(ttk.Frame):
                     encrypted = EncryptionEngine.encrypt_chain(data, chain)
                 note = default_note(
                     algorithm=chain[0]["algorithm"], key_type=chain[0]["key_type"],
-                    mode="simple", iterations=len(chain),
+                    mode="layered", iterations=len(chain),
                     original_filename=orig_name,
                     original_size=len(data),
                     mixture_chain=chain_meta,
@@ -360,11 +360,22 @@ class MixtureTab(ttk.Frame):
     # ── Decrypt ───────────────────────────────────────────────────────
 
     def _do_decrypt(self):
-        src = filedialog.askopenfilename(
-            filetypes=[("ByteFile", f"*{BYTEFILE_EXT}"), ("All", "*.*")]
-        )
-        if not src:
-            return
+        # Use the input area as source (file selector or text box) instead of
+        # opening a new file dialog. This makes MixtureTab decrypt inline with
+        # the configured pipeline. Destination still requested for saving.
+        if self.input_type_var.get() == "file":
+            src = self.file_sel.get()
+            if not src:
+                messagebox.showwarning("Input", "Select a file in the Input area.")
+                return
+            src_is_path = True
+        else:
+            raw = self.input_text.get("1.0", END).rstrip("\n")
+            if not raw:
+                messagebox.showwarning("Input", "Enter text in the Input area.")
+                return
+            src = raw
+            src_is_path = False
 
         try:
             chain = self._get_chain()
@@ -381,18 +392,25 @@ class MixtureTab(ttk.Frame):
         self._status.set("Decrypting (mixture)...")
         threading.Thread(
             target=self._decrypt_worker,
-            args=(src, chain, dest),
+            args=(src, src_is_path, chain, dest),
             daemon=True,
         ).start()
 
-    def _decrypt_worker(self, src: str, chain: list[dict], dest: str):
+    def _decrypt_worker(self, src: str, src_is_path: bool, chain: list[dict], dest: str):
         try:
-            text = Path(src).read_text(encoding="utf-8")
+            # Load ByteFile from either a path or raw text
+            if src_is_path:
+                text = Path(src).read_text(encoding="utf-8")
+            else:
+                text = src
+
             bf = ByteFile.parse(text)
             mode = bf.mode
 
-            if mode == "node":
+            # Nested: each layer is a packed .isd; peel layers using the provided chain
+            if mode == "nested":
                 payload = text
+                decrypted = b""
                 for step in reversed(chain):
                     bf = ByteFile.parse(payload)
                     if step["algorithm"] == "PGP":
@@ -400,12 +418,16 @@ class MixtureTab(ttk.Frame):
                         decrypted = EncryptionEngine.decrypt(bf.content, priv_pem, "PGP")
                     else:
                         decrypted = EncryptionEngine.decrypt(bf.content, step["key_bytes"], step["algorithm"])
+                    # If result is another packed .isd, continue peeling, otherwise stop
                     try:
                         payload = decrypted.decode("utf-8")
+                        # If parse succeeds, continue loop to peel next
                         ByteFile.parse(payload)
                     except Exception:
                         break
                 result = decrypted
+
+            # Layered: the ByteFile contains a payload that was produced by encrypt_chain
             else:
                 has_pgp = any(s["algorithm"] == "PGP" for s in chain)
                 if has_pgp:
@@ -423,5 +445,6 @@ class MixtureTab(ttk.Frame):
             self.after(0, lambda: self._status.set(f"✅ Decrypted → {Path(dest).name}"))
             self.after(0, lambda: messagebox.showinfo("Done", f"Decrypted!\n{dest}"))
         except Exception as exc:
+            # bubble up the error to the UI
             self.after(0, lambda: self._status.set(f"❌ {exc}"))
             self.after(0, lambda: messagebox.showerror("Error", str(exc)))

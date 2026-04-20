@@ -504,13 +504,14 @@ class PGPEncryptPanel(ttk.Labelframe):
         inner_row = ttk.Frame(self)
         inner_row.pack(fill=X, pady=(0, 6))
         ttk.Label(inner_row, text="Inner cipher:", font=FONT_BODY).pack(side=LEFT)
-        self.inner_algo_var = tk.StringVar(value="AES-256-CBC")
+        # allow 'None' to indicate no inner symmetric encryption
+        self.inner_algo_var = tk.StringVar(value="None")
         _ic = ttk.Combobox(
             inner_row, textvariable=self.inner_algo_var,
-            values=NON_PGP_ALGORITHMS, state="readonly", width=20, font=FONT_BODY,
+            values=["None"] + list(NON_PGP_ALGORITHMS), state="readonly", width=20, font=FONT_BODY,
         )
         _ic.pack(side=LEFT, padx=(8, 0))
-        Tooltip(_ic, "資料先用此演算法 + 密碼加密，再封入 PGP 信封包")
+        Tooltip(_ic, "\"None\" = 原始資料直接封入 PGP 信封（無對稱加密）；其他選項先用對稱加密再封入 PGP")
 
         # ── Recipient title ───────────────────────────────────────────
         self._recip_title = ttk.Label(self, text="Recipient public key:", font=FONT_BODY)
