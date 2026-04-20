@@ -28,6 +28,7 @@ ALGORITHMS: list[str] = [
     "Blowfish-CBC",
     "3DES-CBC",
     "XOR",
+    "XOR-FOLD",
     "Base64",
 ]
 
@@ -191,6 +192,41 @@ class XORCipher(CipherBase):
 
 
 # ---------------------------------------------------------------------------
+# XOR-FOLD (fold full key over the data buffer so every key byte is used)
+# ---------------------------------------------------------------------------
+
+class XORFoldCipher(CipherBase):
+    name = "XOR-FOLD"
+
+    def encrypt(self, data: bytes, key_bytes: bytes) -> bytes:
+        """XOR-FOLD: derive a key from the password and XOR each key byte
+        sequentially into the data buffer, wrapping the data index as needed.
+        This ensures every derived key byte is applied at least once even when
+        the key is longer than the data.
+        """
+        salt = get_random_bytes(16)
+        key = self._derive(key_bytes, salt, 32)
+        # operate on mutable buffer so we can fold the full key over it
+        buf = bytearray(data)
+        if len(buf) == 0:
+            return salt + bytes(buf)
+        for i, kb in enumerate(key):
+            buf[i % len(buf)] ^= kb
+        return salt + bytes(buf)
+
+    def decrypt(self, data: bytes, key_bytes: bytes) -> bytes:
+        # symmetric: same operation reverses itself
+        salt, ct = data[:16], data[16:]
+        key = self._derive(key_bytes, salt, 32)
+        buf = bytearray(ct)
+        if len(buf) == 0:
+            return bytes(buf)
+        for i, kb in enumerate(key):
+            buf[i % len(buf)] ^= kb
+        return bytes(buf)
+
+
+# ---------------------------------------------------------------------------
 # Base64 (encoding only — no password)
 # ---------------------------------------------------------------------------
 
@@ -215,6 +251,7 @@ _CIPHER_MAP: dict[str, CipherBase] = {
     "Blowfish-CBC": BlowfishCBC(),
     "3DES-CBC": TripleDES_CBC(),
     "XOR": XORCipher(),
+    "XOR-FOLD": XORFoldCipher(),
     "Base64": Base64Cipher(),
 }
 

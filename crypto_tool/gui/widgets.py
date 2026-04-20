@@ -23,7 +23,7 @@ from .theme import (
 
 _ALGO_ROWS: list[list[str]] = [
     ["AES-256-CBC", "AES-256-GCM", "ChaCha20-Poly1305", "Blowfish-CBC"],
-    ["3DES-CBC",    "XOR",          "Base64"],
+    ["3DES-CBC",    "XOR",          "XOR-FOLD",    "Base64"],
 ]
 
 _SHORT_NAMES: dict[str, str] = {
@@ -33,6 +33,7 @@ _SHORT_NAMES: dict[str, str] = {
     "Blowfish-CBC":      "Blowfish",
     "3DES-CBC":          "3DES",
     "XOR":               "XOR",
+    "XOR-FOLD":          "XOR · Fold",
     "Base64":            "Base64",
 }
 

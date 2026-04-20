@@ -77,7 +77,11 @@ class TextTab(ttk.Frame):
             state="readonly", width=18, font=FONT_BODY,
         )
         _algo_cb.pack(anchor=W, pady=(2, 6))
-        Tooltip(_algo_cb, "AES-256-CBC：預設區塊加密 | AES-256-GCM：帶完整性驗證 | ChaCha20：現代高效演算法")
+        Tooltip(
+            _algo_cb,
+            "AES-256-CBC：預設區塊加密 | AES-256-GCM：帶完整性驗證 | ChaCha20：現代高效演算法 | "
+            "XOR：輕量 | XOR-FOLD：折疊金鑰的 XOR（強化）",
+        )
 
         self.b64_var = tk.BooleanVar(value=True)
         _b64_cb = ttk.Checkbutton(

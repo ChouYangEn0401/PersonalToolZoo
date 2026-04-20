@@ -96,7 +96,7 @@ class FileTab(ttk.Frame):
             self._enc_algo_bar,
             "AES·CBC：業界預設 | AES·GCM：附完整性驗證 | "
             "ChaCha20：現代串流 | Blowfish：經典 | "
-            "3DES：相容舊系統 | XOR：輕量 | Base64：僅編碼",
+            "3DES：相容舊系統 | XOR：輕量 | XOR-FOLD：折疊金鑰的 XOR（強化） | Base64：僅編碼",
         )
 
         # ── Reveal-algorithm toggle ───────────────────────────────────
