@@ -283,6 +283,16 @@ class FileTab(ttk.Frame):
             self._info_algo_badge.configure(text="⚠ select below", foreground=AMBER)
             self._detected_algo = None
             self._manual_inner.pack(fill=X)
+        # Auto-select key type if present in metadata (reveal_key_type)
+        key_type = bf.note.get("key_type")
+        if key_type:
+            try:
+                self.dec_pw.key_type_var.set(key_type)
+                # update PasswordFrame UI to match the selected key type
+                self.dec_pw._on_type_change()
+            except Exception:
+                # ignore any unexpected issues updating UI
+                pass
         # show original filename/size only if present
         orig_name = bf.note.get("original_filename")
         orig_size = bf.note.get("original_size")
