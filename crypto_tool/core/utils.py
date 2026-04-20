@@ -53,6 +53,28 @@ def derive_key_bytes(
             )
         return source.encode("utf-8")
 
+    # Text-file keys: read as text, strip a trailing newline (common EOF newline)
+    # and hash the resulting text. This avoids accidental extra '\n' at EOF
+    # changing the derived key.
+    if key_type == "txtfile":
+        p = Path(source)
+        if not p.is_file():
+            raise FileNotFoundError(f"Key file not found: {source}")
+        file_size = p.stat().st_size
+        limit = KEY_FILE_LIMITS.get(key_type)
+        if limit and file_size > limit:
+            raise ValueError(
+                f"Key file too large ({file_size / 1024 / 1024:.1f} MB). "
+                f"Limit for '{key_type}' is {limit / 1024 / 1024:.0f} MB."
+            )
+        try:
+            txt = p.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            txt = p.read_text(encoding="latin-1")
+        # remove only trailing CR/LF characters at EOF
+        txt = txt.rstrip("\r\n")
+        return hashlib.sha256(txt.encode("utf-8")).digest()
+
     # File-based key types
     limit = KEY_FILE_LIMITS.get(key_type)
     p = Path(source)
