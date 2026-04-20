@@ -13,8 +13,103 @@ from tkinterdnd2 import DND_FILES
 from .theme import (
     FONT_BODY, FONT_SMALL, FONT_SUBTITLE, PAD,
     ACCENT_ENCRYPT, ACCENT_DECRYPT, FG_MUTED,
-    GOLD_MID, GOLD_DARK, BG_CARD, DND_ACTIVE,
+    GOLD_MID, GOLD_DARK, GOLD_BRIGHT, BG_CARD, DND_ACTIVE,
 )
+
+
+# ── Algorithm bar layout & short names ───────────────────────────────────
+
+_ALGO_ROWS: list[list[str]] = [
+    ["AES-256-CBC", "AES-256-GCM", "ChaCha20-Poly1305", "Blowfish-CBC"],
+    ["3DES-CBC",    "XOR",          "Base64"],
+]
+
+_SHORT_NAMES: dict[str, str] = {
+    "AES-256-CBC":       "AES · CBC",
+    "AES-256-GCM":       "AES · GCM",
+    "ChaCha20-Poly1305": "ChaCha20",
+    "Blowfish-CBC":      "Blowfish",
+    "3DES-CBC":          "3DES",
+    "XOR":               "XOR",
+    "Base64":            "Base64",
+}
+
+
+class AlgoBar(ttk.Frame):
+    """Segmented algorithm selector — gold-highlighted active button, hover glow."""
+
+    _BG_ACT = "#C9A84C"   # GOLD_MID — active selection
+    _FG_ACT = "#141210"   # near-black text on gold
+    _BG_OFF = "#252015"   # dark warm — inactive
+    _FG_OFF = "#9A8866"   # FG_MUTED
+    _BG_HOV = "#3D3519"   # DND_ACTIVE — hover glow
+
+    def __init__(
+        self,
+        parent,
+        variable: tk.StringVar,
+        algorithms: list[str] | None = None,
+        **kw,
+    ):
+        super().__init__(parent, **kw)
+        self._var = variable
+        _allowed = set(algorithms) if algorithms else set(_SHORT_NAMES.keys())
+        self._btns: dict[str, tk.Button] = {}
+
+        for row_algos in _ALGO_ROWS:
+            row_items = [a for a in row_algos if a in _allowed]
+            if not row_items:
+                continue
+            row_frame = ttk.Frame(self)
+            row_frame.pack(fill=X, pady=1)
+            for algo in row_items:
+                short = _SHORT_NAMES.get(algo, algo)
+                btn = tk.Button(
+                    row_frame,
+                    text=short,
+                    bg=self._BG_OFF,
+                    fg=self._FG_OFF,
+                    activebackground=self._BG_HOV,
+                    activeforeground=self._FG_OFF,
+                    relief=FLAT,
+                    bd=0,
+                    font=FONT_SMALL,
+                    padx=10,
+                    pady=5,
+                    cursor="hand2",
+                    command=lambda a=algo: self._select(a),
+                )
+                btn.pack(side=LEFT, padx=(0, 2))
+                btn.bind("<Enter>", lambda e, b=btn, a=algo: self._on_enter(b, a))
+                btn.bind("<Leave>", lambda e, b=btn, a=algo: self._on_leave(b, a))
+                self._btns[algo] = btn
+
+        variable.trace_add("write", lambda *_: self._sync())
+        self._sync()
+
+    def _select(self, algo: str):
+        self._var.set(algo)
+
+    def _sync(self, *_):
+        current = self._var.get()
+        for algo, btn in self._btns.items():
+            if algo == current:
+                btn.config(bg=self._BG_ACT, fg=self._FG_ACT)
+            else:
+                btn.config(bg=self._BG_OFF, fg=self._FG_OFF)
+
+    def _on_enter(self, btn: tk.Button, algo: str):
+        if self._var.get() != algo:
+            btn.config(bg=self._BG_HOV)
+
+    def _on_leave(self, btn: tk.Button, algo: str):
+        if self._var.get() != algo:
+            btn.config(bg=self._BG_OFF)
+
+    def set(self, algo: str):
+        """Programmatically set the selected algorithm."""
+        if algo in self._btns:
+            self._var.set(algo)
 
 
 # ── Drag-and-drop path cleaner ────────────────────────────────────────────

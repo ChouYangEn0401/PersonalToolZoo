@@ -2,7 +2,7 @@
 
 一款功能強大的加密/解密桌面工具，支援多種加密演算法、專屬 `.bytefile` 格式、多階段混合加密，以及大檔案分段處理。
 
-> **v1.1.0** 新增：拖拉支援、暖金色主題、懸浮提示 (Tooltip)、Unicode 路徑安全
+> **v1.2.0** 新增：AlgoBar 演算法選擇器、Advanced Settings 移入加密卡片、演算法可見性開關、解密側自動顯示 hint + 演算法
 
 ---
 
@@ -69,6 +69,14 @@ python main.py
 
 ## 更新紀錄
 
+### v1.2.0
+- **AlgoBar（演算法選擇器）**：Tab 1 Advanced Settings 的演算法選擇改為分段式按鈕 Bar，金色高亮已選、hover 時有暖金光暈效果
+- **Advanced Settings 移入加密卡片**：現在位於 Encrypt 方框內的可折疊面板，不再佔用頁面底部空間
+- **演算法可見性開關**：新增 "Reveal algorithm in .bytefile metadata" 切換鈕（預設開啟）；關閉時演算法不寫入 NOTE，解密需手動選擇
+- **解密卡片 — File Metadata 面板**：拖入 .bytefile 後自動解析並顯示演算法（附 auto-detected 標籤）、密碼提示、作者資訊
+- **解密側 — 密碼提示自動顯示**：加密時設定的 hint 在解密側自動顯示，金色突出
+- **解密側 — 演算法隱藏警示**：若演算法被隱藏，顯示琥珀色警示並展開手動演算法選擇 Bar
+
 ### v1.1.0
 - **拖拉支援**：Tab 1–4 中所有檔案/目錄輸入欄均可拖放檔案；含中文、空格的 Unicode 路徑均支援
 - **Text Tab 拖拉**：可將 `.bytefile` 或文字檔直接拖放到輸入文字框自動載入
@@ -87,22 +95,23 @@ python main.py
 ### Tab 1 — 檔案加密 / 解密
 
 **加密檔案：**
-1. 在左側「Encrypt」區塊點選 **Browse** 選擇檔案
+1. 在左側「Encrypt」區塊點選 **Browse**（或拖拉檔案）選擇來源檔案
 2. 輸入密碼（或切換密碼類型選擇檔案作為金鑰）
-3. 點選 **🔒 Encrypt & Save**
-4. 選擇輸出路徑，產出 `.bytefile`
+3. 展開 **Advanced Settings** 進行進階設定：
+   - **Algorithm Bar**：點選欲使用的演算法按鈕（金色 = 已選取）
+   - **Reveal algorithm**：開啟（預設）→ 演算法存入 .bytefile 元資料，解密時自動辨識；關閉 → 演算法隱藏，解密方需手動選擇
+   - **Author / Password hint**：可設定作者名稱與密碼提示（解密時自動顯示）
+   - **Mode / Iterations**：Simple 或 Node 包法，迭代加密次數
+4. 點選 **🔒 Encrypt & Save**，選擇輸出路徑
 
 **解密檔案：**
-1. 在右側「Decrypt」區塊點選 **Browse** 選擇 `.bytefile`
-2. 輸入加密時使用的密碼
-3. 點選 **🔓 Decrypt & Save**
-4. 還原原始檔案
-
-**進階設定（展開 Advanced Settings）：**
-- 更換加密演算法
-- 設定作者名稱、密碼提示
-- 選擇 Simple 或 Node 模式
-- 設定加密迭代次數
+1. 在右側「Decrypt」區塊點選 **Browse**（或拖拉 .bytefile）
+2. **File Metadata** 區塊自動顯示：
+   - 演算法（若已儲存，標示「✓ auto-detected」）
+   - 密碼提示（加密時設定的 hint）
+   - 作者名稱
+3. 若演算法被隱藏，會出現手動演算法選擇 Bar（⚠ 警示）
+4. 輸入密碼後點選 **🔓 Decrypt & Save**
 
 ### Tab 2 — 文字加密
 

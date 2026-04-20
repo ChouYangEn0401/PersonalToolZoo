@@ -14,34 +14,42 @@ from core.bytefile import ByteFile, BYTEFILE_EXT, default_note
 from core.engine import ALGORITHMS, EncryptionEngine
 from core.utils import derive_key_bytes, human_size
 
-from .theme import FONT_TITLE, FONT_BODY, FONT_SUBTITLE, PAD
-from .widgets import FileSelector, PasswordFrame, CollapsiblePanel, Tooltip
+from .theme import (
+    FONT_TITLE, FONT_BODY, FONT_SUBTITLE, FONT_SMALL, PAD,
+    GOLD_MID, GOLD_BRIGHT, AMBER, FG_MUTED, FG_LIGHT,
+)
+from .widgets import FileSelector, PasswordFrame, CollapsiblePanel, Tooltip, AlgoBar
 
 
 class FileTab(ttk.Frame):
     def __init__(self, parent, status_var: tk.StringVar, **kw):
         super().__init__(parent, padding=PAD, **kw)
         self._status = status_var
+
+        # ── Shared state ─────────────────────────────────────────────
+        self.algo_var         = tk.StringVar(value="AES-256-CBC")   # encrypt algo
+        self.dec_algo_var     = tk.StringVar(value="AES-256-CBC")   # manual decrypt algo
+        self.algo_visible_var = tk.BooleanVar(value=True)           # store algo in metadata
+        self.author_var       = tk.StringVar(value="@anonymous")
+        self.hint_var         = tk.StringVar()
+        self.mode_var         = tk.StringVar(value="simple")
+        self.iter_var         = tk.IntVar(value=1)
+        self._detected_algo: str | None = None  # read from loaded .bytefile
+
         self._build_ui()
 
-    # ── UI construction ───────────────────────────────────────────────
+    # ── Top-level layout ──────────────────────────────────────────────
 
     def _build_ui(self):
-        # Header
-        hdr = ttk.Label(self, text="🔐  File Encryption", font=FONT_TITLE)
-        hdr.pack(anchor=W, pady=(0, PAD))
-
-        # Main — two‑column card
+        ttk.Label(self, text="🔐  File Encryption", font=FONT_TITLE).pack(
+            anchor=W, pady=(0, PAD)
+        )
         cols = ttk.Frame(self)
         cols.pack(fill=BOTH, expand=True)
         cols.columnconfigure(0, weight=1)
         cols.columnconfigure(1, weight=1)
-
         self._build_encrypt_card(cols)
         self._build_decrypt_card(cols)
-
-        # Advanced settings (collapsed)
-        self._build_advanced()
 
     # ── Encrypt card (left) ───────────────────────────────────────────
 
@@ -49,22 +57,104 @@ class FileTab(ttk.Frame):
         card = ttk.Labelframe(parent, text="🔒  Encrypt", padding=PAD)
         card.grid(row=0, column=0, sticky=NSEW, padx=(0, PAD // 2), pady=(0, PAD))
 
-        self.enc_file = FileSelector(card, label="Select file to encrypt")
+        # ── Source file ───────────────────────────────────────────────
+        self.enc_file = FileSelector(card, label="Source file")
         self.enc_file.pack(fill=X, pady=(0, 8))
-        Tooltip(self.enc_file._entry,
-                "選擇要加密的檔案，或直接拖拉檔案到此欄位")
+        Tooltip(self.enc_file._entry, "選擇要加密的檔案，或直接拖拉進此欄位")
 
+        # ── Password ──────────────────────────────────────────────────
         self.enc_pw = PasswordFrame(card, title="Encryption password")
-        self.enc_pw.pack(fill=X, pady=(0, 10))
-        Tooltip(self.enc_pw._pw_entry,
-                "輸入加密密碼。Key type 可切換為檔案/圖片作為金鑰")
+        self.enc_pw.pack(fill=X, pady=(0, 8))
+        Tooltip(self.enc_pw._pw_entry, "輸入加密密碼。Key type 可切換為檔案/圖片作為金鑰")
 
+        # ── Advanced Settings (collapsible, INSIDE this card) ─────────
+        adv = CollapsiblePanel(card, title="Advanced Settings")
+        adv.pack(fill=X, pady=(0, 8))
+        self._build_adv_content(adv.content)
+
+        # ── Action button ─────────────────────────────────────────────
         btn = ttk.Button(
             card, text="🔒  Encrypt & Save",
             bootstyle="warning", command=self._do_encrypt,
         )
         btn.pack(fill=X, ipady=6)
-        Tooltip(btn, "加密檔案並儲存為 .bytefile 格式")
+        Tooltip(btn, "加密選取的檔案並儲存為 .bytefile 格式")
+
+    def _build_adv_content(self, c: ttk.Frame):
+        """Build contents of the Advanced Settings panel."""
+
+        # ── Algorithm bar ─────────────────────────────────────────────
+        tk.Label(
+            c, text="Algorithm",
+            font=("Segoe UI", 9, "bold"),
+            fg=GOLD_MID, bg=_bg(c),
+        ).pack(anchor=W, pady=(2, 4))
+
+        self._enc_algo_bar = AlgoBar(c, self.algo_var, ALGORITHMS)
+        self._enc_algo_bar.pack(fill=X, pady=(0, 6))
+        Tooltip(
+            self._enc_algo_bar,
+            "AES·CBC：業界預設 | AES·GCM：附完整性驗證 | "
+            "ChaCha20：現代串流 | Blowfish：經典 | "
+            "3DES：相容舊系統 | XOR：輕量 | Base64：僅編碼",
+        )
+
+        # ── Reveal-algorithm toggle ───────────────────────────────────
+        vis_row = ttk.Frame(c)
+        vis_row.pack(fill=X, pady=(0, 8))
+        _vis = ttk.Checkbutton(
+            vis_row,
+            text="Reveal algorithm in .bytefile metadata",
+            variable=self.algo_visible_var,
+            bootstyle="round-toggle",
+        )
+        _vis.pack(side=LEFT)
+        Tooltip(
+            _vis,
+            "開啟（預設）：演算法名稱存入 .bytefile，解密時自動辨識並填入\n"
+            "關閉：演算法隱藏，解密方必須手動選擇正確演算法",
+        )
+
+        ttk.Separator(c).pack(fill=X, pady=(0, 8))
+
+        # ── Author + Hint (2-col grid) ────────────────────────────────
+        g = ttk.Frame(c)
+        g.pack(fill=X, pady=(0, 4))
+        g.columnconfigure(1, weight=1)
+
+        ttk.Label(g, text="Author:", font=FONT_BODY, width=14).grid(
+            row=0, column=0, sticky=W, pady=2
+        )
+        ttk.Entry(g, textvariable=self.author_var, font=FONT_BODY).grid(
+            row=0, column=1, sticky=EW, padx=(4, 0), pady=2
+        )
+
+        ttk.Label(g, text="Password hint:", font=FONT_BODY, width=14).grid(
+            row=1, column=0, sticky=W, pady=2
+        )
+        _hint_e = ttk.Entry(g, textvariable=self.hint_var, font=FONT_BODY)
+        _hint_e.grid(row=1, column=1, sticky=EW, padx=(4, 0), pady=2)
+        Tooltip(_hint_e, "儲存在 .bytefile 中的明文提示，解密時會自動顯示給使用者（非必填）")
+
+        # ── Mode + Iterations ─────────────────────────────────────────
+        bot = ttk.Frame(c)
+        bot.pack(fill=X, pady=(6, 2))
+
+        ttk.Label(bot, text="Mode:", font=FONT_BODY).pack(side=LEFT)
+        _sr = ttk.Radiobutton(bot, text="Simple", variable=self.mode_var, value="simple")
+        _sr.pack(side=LEFT, padx=(6, 8))
+        Tooltip(_sr, "連續加密 N 次後整體包成一個 .bytefile")
+        _nr = ttk.Radiobutton(bot, text="Node", variable=self.mode_var, value="node")
+        _nr.pack(side=LEFT, padx=(0, 16))
+        Tooltip(_nr, "每次加密都各自包成一個 .bytefile，層層包裝")
+
+        ttk.Label(bot, text="Iter:", font=FONT_BODY).pack(side=LEFT)
+        _iter = ttk.Spinbox(
+            bot, from_=1, to=20, textvariable=self.iter_var,
+            width=4, font=FONT_BODY,
+        )
+        _iter.pack(side=LEFT, padx=(4, 0))
+        Tooltip(_iter, "加密重複次數（1–20）。一般使用 1 即可")
 
     # ── Decrypt card (right) ──────────────────────────────────────────
 
@@ -72,19 +162,57 @@ class FileTab(ttk.Frame):
         card = ttk.Labelframe(parent, text="🔓  Decrypt", padding=PAD)
         card.grid(row=0, column=1, sticky=NSEW, padx=(PAD // 2, 0), pady=(0, PAD))
 
+        # ── .bytefile selector ────────────────────────────────────────
         self.dec_file = FileSelector(
             card, label="Select .bytefile",
             filetypes=[("ByteFile", f"*{BYTEFILE_EXT}"), ("All files", "*.*")],
         )
         self.dec_file.pack(fill=X, pady=(0, 8))
-        Tooltip(self.dec_file._entry,
-                "選擇要解密的 .bytefile，或直接拖拉進來")
+        Tooltip(self.dec_file._entry, "選擇要解密的 .bytefile，或直接拖拉進此欄位")
 
+        # ── File Metadata panel ───────────────────────────────────────
+        info = ttk.Labelframe(card, text="File Metadata", padding=(8, 6))
+        info.pack(fill=X, pady=(0, 8))
+        info.columnconfigure(1, weight=1)
+
+        def _mrow(label: str, row: int) -> ttk.Label:
+            ttk.Label(
+                info, text=label, font=FONT_SMALL,
+                foreground=FG_MUTED, width=11,
+            ).grid(row=row, column=0, sticky=W, padx=(0, 4), pady=2)
+            val = ttk.Label(info, text="—", font=FONT_SMALL)
+            val.grid(row=row, column=1, sticky=W, pady=2)
+            return val
+
+        self._info_algo_lbl   = _mrow("Algorithm:", 0)
+        self._info_hint_lbl   = _mrow("Hint:", 1)
+        self._info_author_lbl = _mrow("Author:", 2)
+
+        # Status badge next to algorithm
+        self._info_algo_badge = ttk.Label(info, text="", font=FONT_SMALL)
+        self._info_algo_badge.grid(row=0, column=2, sticky=W, padx=(6, 0))
+
+        # ── Manual algo selector slot (shown only when algo is hidden) ─
+        self._manual_slot = ttk.Frame(card)
+        self._manual_slot.pack(fill=X)   # always occupies vertical space
+        self._manual_inner = ttk.Frame(self._manual_slot)
+        # NOT packed yet — shown on demand by _on_dec_file_change
+        tk.Label(
+            self._manual_inner,
+            text="⚠  Algorithm hidden — please select manually:",
+            font=FONT_SMALL,
+            fg=AMBER,
+            bg=_bg(self._manual_inner),
+        ).pack(anchor=W, pady=(4, 4))
+        self._dec_algo_bar = AlgoBar(self._manual_inner, self.dec_algo_var, ALGORITHMS)
+        self._dec_algo_bar.pack(fill=X, pady=(0, 4))
+
+        # ── Password ──────────────────────────────────────────────────
         self.dec_pw = PasswordFrame(card, title="Decryption password")
-        self.dec_pw.pack(fill=X, pady=(0, 10))
-        Tooltip(self.dec_pw._pw_entry,
-                "輸入加密時使用的密碼（類型需與加密時相同）")
+        self.dec_pw.pack(fill=X, pady=(8, 10))
+        Tooltip(self.dec_pw._pw_entry, "輸入加密時使用的密碼（類型需與加密時相同）")
 
+        # ── Action button ─────────────────────────────────────────────
         btn = ttk.Button(
             card, text="🔓  Decrypt & Save",
             bootstyle="success", command=self._do_decrypt,
@@ -92,57 +220,54 @@ class FileTab(ttk.Frame):
         btn.pack(fill=X, ipady=6)
         Tooltip(btn, "解密 .bytefile 並還原原始檔案")
 
-    # ── Advanced settings panel ───────────────────────────────────────
-
-    def _build_advanced(self):
-        panel = CollapsiblePanel(self, title="Advanced Settings")
-        panel.pack(fill=X, pady=(0, 4))
-        c = panel.content
-
-        # Algorithm
-        r1 = ttk.Frame(c)
-        r1.pack(fill=X, pady=2)
-        ttk.Label(r1, text="Algorithm:", font=FONT_BODY, width=14).pack(side=LEFT)
-        self.algo_var = tk.StringVar(value="AES-256-CBC")
-        _algo_cb = ttk.Combobox(
-            r1, textvariable=self.algo_var, values=ALGORITHMS,
-            state="readonly", width=20, font=FONT_BODY,
+        # Auto-load metadata when file path changes
+        self.dec_file.path_var.trace_add(
+            "write", lambda *_: self.after(80, self._on_dec_file_change)
         )
-        _algo_cb.pack(side=LEFT, padx=(4, 0))
-        Tooltip(_algo_cb, "AES-256-CBC：最常用區塊加密 | AES-256-GCM：帶完整性驗證 | ChaCha20：現代串流加密 | Base64：僅編碼非加密")
+
+    # ── Decrypt metadata auto-fill ────────────────────────────────────
+
+    def _on_dec_file_change(self):
+        path = self.dec_file.get()
+        if not path or not Path(path).is_file():
+            self._reset_dec_info()
+            return
+        try:
+            bf = ByteFile.load(path)
+        except Exception:
+            self._reset_dec_info()
+            return
+
+        # Hint
+        hint = bf.note.get("password_hint") or None
+        if hint:
+            self._info_hint_lbl.configure(text=hint, foreground=GOLD_MID)
+        else:
+            self._info_hint_lbl.configure(text="(no hint set)", foreground=FG_MUTED)
 
         # Author
-        r2 = ttk.Frame(c)
-        r2.pack(fill=X, pady=2)
-        ttk.Label(r2, text="Author:", font=FONT_BODY, width=14).pack(side=LEFT)
-        self.author_var = tk.StringVar(value="@anonymous")
-        ttk.Entry(r2, textvariable=self.author_var, font=FONT_BODY, width=22).pack(side=LEFT, padx=(4, 0))
+        author = bf.note.get("author") or "—"
+        self._info_author_lbl.configure(text=author, foreground=FG_LIGHT)
 
-        # Password hint
-        r3 = ttk.Frame(c)
-        r3.pack(fill=X, pady=2)
-        ttk.Label(r3, text="Password hint:", font=FONT_BODY, width=14).pack(side=LEFT)
-        self.hint_var = tk.StringVar()
-        _hint_e = ttk.Entry(r3, textvariable=self.hint_var, font=FONT_BODY, width=22)
-        _hint_e.pack(side=LEFT, padx=(4, 0))
-        Tooltip(_hint_e, "儲存在 .bytefile 的明文提示，用來提醒自己密碼（非必填）")
+        # Algorithm — None means hidden
+        algo = bf.note.get("algorithm")
+        if algo:
+            self._info_algo_lbl.configure(text=algo, foreground=GOLD_BRIGHT)
+            self._info_algo_badge.configure(text="✓ auto-detected", foreground="#4CAF50")
+            self._detected_algo = algo
+            self._manual_inner.pack_forget()
+        else:
+            self._info_algo_lbl.configure(text="hidden", foreground=AMBER)
+            self._info_algo_badge.configure(text="⚠ select below", foreground=AMBER)
+            self._detected_algo = None
+            self._manual_inner.pack(fill=X)
 
-        # Encryption mode
-        r4 = ttk.Frame(c)
-        r4.pack(fill=X, pady=2)
-        ttk.Label(r4, text="Mode:", font=FONT_BODY, width=14).pack(side=LEFT)
-        self.mode_var = tk.StringVar(value="simple")
-        ttk.Radiobutton(r4, text="Simple", variable=self.mode_var, value="simple").pack(side=LEFT, padx=(4, 8))
-        ttk.Radiobutton(r4, text="Node", variable=self.mode_var, value="node").pack(side=LEFT)
-
-        # Iterations
-        r5 = ttk.Frame(c)
-        r5.pack(fill=X, pady=2)
-        ttk.Label(r5, text="Iterations:", font=FONT_BODY, width=14).pack(side=LEFT)
-        self.iter_var = tk.IntVar(value=1)
-        _iter_sb = ttk.Spinbox(r5, from_=1, to=20, textvariable=self.iter_var, width=5, font=FONT_BODY)
-        _iter_sb.pack(side=LEFT, padx=(4, 0))
-        Tooltip(_iter_sb, "加密重複次數。次數越多理論越強，但速度也越慢。一般使用 1 即可")
+    def _reset_dec_info(self):
+        for lbl in (self._info_algo_lbl, self._info_hint_lbl, self._info_author_lbl):
+            lbl.configure(text="—", foreground=FG_MUTED)
+        self._info_algo_badge.configure(text="")
+        self._detected_algo = None
+        self._manual_inner.pack_forget()
 
     # ── Actions ───────────────────────────────────────────────────────
 
@@ -161,7 +286,6 @@ class FileTab(ttk.Frame):
             messagebox.showwarning("Missing password", "Please enter a password.")
             return
 
-        # Ask where to save
         default_name = Path(src).name + BYTEFILE_EXT
         dest = filedialog.asksaveasfilename(
             defaultextension=BYTEFILE_EXT,
@@ -185,9 +309,10 @@ class FileTab(ttk.Frame):
             algo = self.algo_var.get()
             iterations = self.iter_var.get()
             mode = self.mode_var.get()
+            # None → algorithm hidden from metadata
+            stored_algo = algo if self.algo_visible_var.get() else None
 
             if mode == "node":
-                # Each iteration wraps into a full bytefile
                 payload = data
                 for i in range(iterations):
                     encrypted = EncryptionEngine.encrypt(payload, key_bytes, algo)
@@ -199,13 +324,13 @@ class FileTab(ttk.Frame):
                         original_filename=Path(src).name if i == 0 else None,
                         original_size=len(data) if i == 0 else None,
                     )
+                    note["algorithm"] = stored_algo
                     note["layer"] = i + 1
                     note["total_layers"] = iterations
                     bf = ByteFile(encrypted, note)
                     payload = bf.pack().encode("utf-8")
                 Path(dest).write_bytes(payload)
             else:
-                # Simple: encrypt N times then wrap once
                 encrypted = data
                 for _ in range(iterations):
                     encrypted = EncryptionEngine.encrypt(encrypted, key_bytes, algo)
@@ -217,14 +342,15 @@ class FileTab(ttk.Frame):
                     original_filename=Path(src).name,
                     original_size=len(data),
                 )
+                note["algorithm"] = stored_algo
                 bf = ByteFile(encrypted, note)
                 bf.save(dest)
 
             self.after(0, lambda: self._set_status(f"✅ Encrypted → {Path(dest).name}"))
             self.after(0, lambda: messagebox.showinfo("Done", f"File encrypted successfully.\n{dest}"))
         except Exception as exc:
-            self.after(0, lambda: self._set_status(f"❌ Error: {exc}"))
-            self.after(0, lambda: messagebox.showerror("Encryption Error", str(exc)))
+            self.after(0, lambda exc=exc: self._set_status(f"❌ Error: {exc}"))
+            self.after(0, lambda exc=exc: messagebox.showerror("Encryption Error", str(exc)))
 
     def _do_decrypt(self):
         src = self.dec_file.get()
@@ -238,33 +364,35 @@ class FileTab(ttk.Frame):
             messagebox.showwarning("Missing password", "Please enter a password.")
             return
 
+        # Use auto-detected algo, or fall back to manual selection
+        fallback = self._detected_algo or self.dec_algo_var.get()
         self._set_status("Decrypting...")
         threading.Thread(
             target=self._decrypt_worker,
-            args=(src, pw_source, key_type),
+            args=(src, pw_source, key_type, fallback),
             daemon=True,
         ).start()
 
-    def _decrypt_worker(self, src: str, pw_source: str, key_type: str):
+    def _decrypt_worker(self, src: str, pw_source: str, key_type: str, fallback_algo: str):
         try:
             key_bytes = derive_key_bytes(pw_source, key_type)
-
             text = Path(src).read_text(encoding="utf-8")
             bf = ByteFile.parse(text)
-            algo = bf.algorithm
+
+            # Use stored algo OR fallback (manual or auto-detected)
+            algo = bf.note.get("algorithm") or fallback_algo
             mode = bf.mode
 
             if mode == "node":
-                # Peel layers until raw data
                 payload = text
                 while True:
                     bf = ByteFile.parse(payload)
-                    decrypted = EncryptionEngine.decrypt(bf.content, key_bytes, bf.algorithm)
+                    node_algo = bf.note.get("algorithm") or fallback_algo
+                    decrypted = EncryptionEngine.decrypt(bf.content, key_bytes, node_algo)
                     try:
                         payload = decrypted.decode("utf-8")
                         ByteFile.parse(payload)
                     except Exception:
-                        # Not a valid bytefile → we reached the original data
                         break
                 result = decrypted
                 orig_name = bf.original_filename
@@ -275,7 +403,6 @@ class FileTab(ttk.Frame):
                     result = EncryptionEngine.decrypt(result, key_bytes, algo)
                 orig_name = bf.original_filename
 
-            # Ask where to save
             default_name = orig_name or "decrypted_file"
             dest = filedialog.asksaveasfilename(
                 initialfile=default_name,
@@ -289,5 +416,17 @@ class FileTab(ttk.Frame):
             self.after(0, lambda: self._set_status(f"✅ Decrypted → {Path(dest).name}"))
             self.after(0, lambda: messagebox.showinfo("Done", f"File decrypted successfully.\n{dest}"))
         except Exception as exc:
-            self.after(0, lambda: self._set_status(f"❌ Error: {exc}"))
-            self.after(0, lambda: messagebox.showerror("Decryption Error", str(exc)))
+            self.after(0, lambda exc=exc: self._set_status(f"❌ Error: {exc}"))
+            self.after(0, lambda exc=exc: messagebox.showerror("Decryption Error", str(exc)))
+
+
+# ── Helper ────────────────────────────────────────────────────────────────
+
+def _bg(widget) -> str:
+    """Resolve background colour for plain tk.Label embedded in ttkbootstrap."""
+    try:
+        import ttkbootstrap as _ttk
+        return _ttk.Style().colors.bg
+    except Exception:
+        return "#212529"
+
