@@ -195,8 +195,8 @@ class TextTab(ttk.Frame):
             self.after(0, lambda: self._set_output(display))
             self.after(0, lambda: self._status.set("✅ Text encrypted"))
         except Exception as exc:
-            self.after(0, lambda: self._status.set(f"❌ {exc}"))
-            self.after(0, lambda: messagebox.showerror("Error", str(exc)))
+            self.after(0, lambda exc=exc: self._status.set(f"❌ {exc}"))
+            self.after(0, lambda exc=exc: messagebox.showerror("Error", str(exc)))
 
     # ── Decrypt ───────────────────────────────────────────────────────
 
@@ -234,8 +234,18 @@ class TextTab(ttk.Frame):
             self.after(0, lambda: self._set_output(text))
             self.after(0, lambda: self._status.set("✅ Text decrypted"))
         except Exception as exc:
-            self.after(0, lambda: self._status.set(f"❌ {exc}"))
-            self.after(0, lambda: messagebox.showerror("Error", str(exc)))
+            # Bind exc into the callbacks to avoid referencing cleared
+            # exception variables after the except block ends.
+            self.after(0, lambda exc=exc: self._status.set(f"❌ {exc}"))
+            # If the error looks like an authentication/tag/padding failure,
+            # report it as a likely wrong password / corrupted data.
+            if isinstance(exc, ValueError):
+                self.after(0, lambda exc=exc: messagebox.showerror(
+                    "Wrong password",
+                    "Decryption failed — wrong password or corrupted data.",
+                ))
+            else:
+                self.after(0, lambda exc=exc: messagebox.showerror("Error", str(exc)))
 
     # ── Output actions ────────────────────────────────────────────────
 
