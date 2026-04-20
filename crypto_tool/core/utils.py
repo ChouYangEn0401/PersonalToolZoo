@@ -11,6 +11,7 @@ KEY_FILE_LIMITS: dict[str, int] = {
     "image": 50 * 1024 * 1024,      # 50 MB
     "video": 200 * 1024 * 1024,     # 200 MB
     "bytefile": 50 * 1024 * 1024,   # 50 MB
+    "txtfile": 50 * 1024 * 1024,    # 50 MB (text file used as key)
 }
 
 MAX_TEXT_PASSWORD_LEN = 1024

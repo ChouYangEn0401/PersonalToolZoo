@@ -38,6 +38,7 @@
 | **image** | 圖片檔的 SHA-256 雜湊 | ≤ 50 MB |
 | **video** | 影片檔的 SHA-256 雜湊 | ≤ 200 MB |
 | **bytefile** | `.bytefile` 內容的 SHA-256 雜湊 | ≤ 50 MB |
+| **txtfile** | 純文字檔（整篇或段落）內容的 SHA-256 雜湊 | ≤ 50 MB |
 
 ---
 

@@ -233,14 +233,19 @@ class DirSelector(ttk.Frame):
 
 # ── Password frame (text entry OR file selector) ─────────────────────────
 
-KEY_TYPES = ["text", "file", "image", "video", "bytefile"]
-
 _FILE_FILTERS: dict[str, list[tuple[str, str]]] = {
     "file":     [("All files", "*.*")],
     "image":    [("Images", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"), ("All files", "*.*")],
     "video":    [("Videos", "*.mp4 *.mkv *.avi *.mov *.wmv *.flv"), ("All files", "*.*")],
     "bytefile": [("ByteFile", "*.bytefile"), ("All files", "*.*")],
 }
+
+# Accept plain text files as a key source (one line or full document)
+KEY_TYPES = ["text", "file", "image", "video", "bytefile", "txtfile"]
+
+_FILE_FILTERS.update({
+    "txtfile": [("Text files", "*.txt *.md *.text"), ("All files", "*.*")],
+})
 
 
 class PasswordFrame(ttk.Labelframe):

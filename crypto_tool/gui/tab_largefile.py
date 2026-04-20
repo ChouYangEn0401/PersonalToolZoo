@@ -39,7 +39,7 @@ class _ChunkStageRow(ttk.Frame):
         self.key_type_var = tk.StringVar(value="text")
         ttk.Combobox(
             self, textvariable=self.key_type_var,
-            values=["text", "file", "image", "video", "bytefile"],
+            values=["text", "file", "image", "video", "bytefile", "txtfile"],
             state="readonly", width=8, font=FONT_SMALL,
         ).grid(row=0, column=2, padx=(0, 6))
 
