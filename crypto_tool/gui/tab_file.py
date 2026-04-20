@@ -156,6 +156,28 @@ class FileTab(ttk.Frame):
         _iter.pack(side=LEFT, padx=(4, 0))
         Tooltip(_iter, "加密重複次數（1–20）。一般使用 1 即可")
 
+        # ── Original file info reveal toggles ─────────────────────────
+        info_row = ttk.Frame(c)
+        info_row.pack(fill=X, pady=(6, 2))
+        self.reveal_orig_name_var = tk.BooleanVar(value=True)
+        self.reveal_orig_size_var = tk.BooleanVar(value=True)
+        self.reveal_keytype_var = tk.BooleanVar(value=True)
+
+        ttk.Checkbutton(
+            info_row, text="Reveal original filename", variable=self.reveal_orig_name_var,
+            bootstyle="round-toggle"
+        ).pack(side=LEFT, padx=(0, 8))
+        Tooltip(info_row, "When enabled, the original filename is stored in the .bytefile NOTE")
+        ttk.Checkbutton(
+            info_row, text="Reveal original size", variable=self.reveal_orig_size_var,
+            bootstyle="round-toggle"
+        ).pack(side=LEFT, padx=(0, 8))
+        ttk.Checkbutton(
+            info_row, text="Reveal key type", variable=self.reveal_keytype_var,
+            bootstyle="round-toggle"
+        ).pack(side=LEFT)
+        Tooltip(info_row, "Control whether the key_type is recorded inside the .bytefile NOTE")
+
     # ── Decrypt card (right) ──────────────────────────────────────────
 
     def _build_decrypt_card(self, parent):
@@ -261,6 +283,16 @@ class FileTab(ttk.Frame):
             self._info_algo_badge.configure(text="⚠ select below", foreground=AMBER)
             self._detected_algo = None
             self._manual_inner.pack(fill=X)
+        # show original filename/size only if present
+        orig_name = bf.note.get("original_filename")
+        orig_size = bf.note.get("original_size")
+        if orig_name:
+            self._info_author_lbl.configure(text=self._info_author_lbl.cget("text"))
+            self._info_algo_lbl.configure(text=self._info_algo_lbl.cget("text"))
+        # update hint and author already handled above
+        # store for save dialog behavior
+        self._bf_orig_name = orig_name
+        self._bf_orig_size = orig_size
 
     def _reset_dec_info(self):
         for lbl in (self._info_algo_lbl, self._info_hint_lbl, self._info_author_lbl):
@@ -321,9 +353,23 @@ class FileTab(ttk.Frame):
                         iterations=iterations,
                         author=self.author_var.get(),
                         password_hint=self.hint_var.get() or None,
-                        original_filename=Path(src).name if i == 0 else None,
-                        original_size=len(data) if i == 0 else None,
+                        original_filename=None,
+                        original_size=None,
                     )
+                    # reveal flags
+                    note["reveal_original_filename"] = bool(self.reveal_orig_name_var.get())
+                    note["reveal_original_size"] = bool(self.reveal_orig_size_var.get())
+                    note["reveal_key_type"] = bool(self.reveal_keytype_var.get())
+                    note["keep_original_file_info"] = (
+                        bool(self.reveal_orig_name_var.get()) or bool(self.reveal_orig_size_var.get())
+                    )
+                    # set visible fields only when reveal toggles enabled (only for first layer)
+                    if i == 0 and self.reveal_orig_name_var.get():
+                        note["original_filename"] = Path(src).name
+                    if i == 0 and self.reveal_orig_size_var.get():
+                        note["original_size"] = len(data)
+                    # key_type reveal
+                    note["key_type"] = key_type if self.reveal_keytype_var.get() else None
                     note["algorithm"] = stored_algo
                     note["layer"] = i + 1
                     note["total_layers"] = iterations
@@ -339,9 +385,20 @@ class FileTab(ttk.Frame):
                     iterations=iterations,
                     author=self.author_var.get(),
                     password_hint=self.hint_var.get() or None,
-                    original_filename=Path(src).name,
-                    original_size=len(data),
+                    original_filename=None,
+                    original_size=None,
                 )
+                note["reveal_original_filename"] = bool(self.reveal_orig_name_var.get())
+                note["reveal_original_size"] = bool(self.reveal_orig_size_var.get())
+                note["reveal_key_type"] = bool(self.reveal_keytype_var.get())
+                note["keep_original_file_info"] = (
+                    bool(self.reveal_orig_name_var.get()) or bool(self.reveal_orig_size_var.get())
+                )
+                if self.reveal_orig_name_var.get():
+                    note["original_filename"] = Path(src).name
+                if self.reveal_orig_size_var.get():
+                    note["original_size"] = len(data)
+                note["key_type"] = key_type if self.reveal_keytype_var.get() else None
                 note["algorithm"] = stored_algo
                 bf = ByteFile(encrypted, note)
                 bf.save(dest)
@@ -404,8 +461,16 @@ class FileTab(ttk.Frame):
                 orig_name = bf.original_filename
 
             default_name = orig_name or "decrypted_file"
+            # if original filename has an extension, use it as the default extension
+            default_ext = None
+            try:
+                default_ext = Path(default_name).suffix or None
+            except Exception:
+                default_ext = None
+
             dest = filedialog.asksaveasfilename(
                 initialfile=default_name,
+                defaultextension=default_ext,
                 filetypes=[("All files", "*.*")],
             )
             if not dest:
