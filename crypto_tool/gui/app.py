@@ -93,8 +93,8 @@ class CryptoToolApp:
 
         nb.add(tab1, text="  📁  File  ")
         nb.add(tab2, text="  📝  Text  ")
-        nb.add(tab3, text="  🔗  Mixture  ")
-        nb.add(tab4, text="  📦  Large File  ")
+        nb.add(tab3, text="  🔗  Mixture  --UNTESTED")
+        nb.add(tab4, text="  📦  Large File  --UNTESTED")
 
         # ── Status bar ────────────────────────────────────────────────
         status = ttk.Frame(self.root, padding=(PAD, 4))
