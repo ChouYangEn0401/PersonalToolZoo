@@ -10,6 +10,8 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinterdnd2 import DND_FILES
 
+from core.bytefile import BYTEFILE_EXT
+
 from .theme import (
     FONT_BODY, FONT_SMALL, FONT_SUBTITLE, PAD,
     ACCENT_ENCRYPT, ACCENT_DECRYPT, FG_MUTED,
@@ -237,7 +239,7 @@ _FILE_FILTERS: dict[str, list[tuple[str, str]]] = {
     "file":     [("All files", "*.*")],
     "image":    [("Images", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"), ("All files", "*.*")],
     "video":    [("Videos", "*.mp4 *.mkv *.avi *.mov *.wmv *.flv"), ("All files", "*.*")],
-    "bytefile": [("ByteFile", "*.bytefile"), ("All files", "*.*")],
+    "bytefile": [("ByteFile", f"*{BYTEFILE_EXT}"), ("All files", "*.*")],
 }
 
 # Accept plain text files as a key source (one line or full document)

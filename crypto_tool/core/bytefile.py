@@ -1,9 +1,14 @@
 """
-.bytefile custom format — pack / parse encrypted data with metadata.
+.isd custom format — pack / parse encrypted data with metadata.
 
 Format:
     CONTENT=\"\"\"<base64 encoded encrypted payload>\"\"\"
     NOTE=\"\"\"<JSON metadata>\"\"\"
+
+This module historically used the ".bytefile" extension. The project
+now uses the ".isd" extension for exported encrypted files. The
+`ByteFile` class and helpers remain the canonical in-memory/on-disk
+representation for this format.
 """
 
 from __future__ import annotations
@@ -18,7 +23,7 @@ from typing import Any
 _CONTENT_RE = re.compile(r'CONTENT="""(.*?)"""', re.DOTALL)
 _NOTE_RE = re.compile(r'NOTE="""(.*?)"""', re.DOTALL)
 
-BYTEFILE_EXT = ".bytefile"
+BYTEFILE_EXT = ".isd"
 
 
 def default_note(
@@ -49,7 +54,12 @@ def default_note(
 
 
 class ByteFile:
-    """Represent a .bytefile on disk or in memory."""
+    """Represent a `.isd` package on disk or in memory.
+
+    Note: the class historically referred to the filetype as "bytefile"; the
+    on-disk extension is now `.isd` and the class handles packing/parsing that
+    format.
+    """
 
     def __init__(self, content: bytes, note: dict[str, Any]):
         self.content = content  # raw encrypted bytes
@@ -74,7 +84,7 @@ class ByteFile:
         cm = _CONTENT_RE.search(text)
         nm = _NOTE_RE.search(text)
         if not cm or not nm:
-            raise ValueError("Invalid .bytefile format")
+            raise ValueError("Invalid .isd format")
         content = base64.b64decode(cm.group(1))
         note = json.loads(nm.group(1))
         return cls(content, note)

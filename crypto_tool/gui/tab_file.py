@@ -34,7 +34,7 @@ class FileTab(ttk.Frame):
         self.hint_var         = tk.StringVar()
         self.mode_var         = tk.StringVar(value="simple")
         self.iter_var         = tk.IntVar(value=1)
-        self._detected_algo: str | None = None  # read from loaded .bytefile
+        self._detected_algo: str | None = None  # read from loaded .isd
 
         self._build_ui()
 
@@ -78,7 +78,7 @@ class FileTab(ttk.Frame):
             bootstyle="warning", command=self._do_encrypt,
         )
         btn.pack(fill=X, ipady=6)
-        Tooltip(btn, "加密選取的檔案並儲存為 .bytefile 格式")
+        Tooltip(btn, f"加密選取的檔案並儲存為 {BYTEFILE_EXT} 格式")
 
     def _build_adv_content(self, c: ttk.Frame):
         """Build contents of the Advanced Settings panel."""
@@ -104,14 +104,14 @@ class FileTab(ttk.Frame):
         vis_row.pack(fill=X, pady=(0, 8))
         _vis = ttk.Checkbutton(
             vis_row,
-            text="Reveal algorithm in .bytefile metadata",
+            text="Reveal algorithm in metadata",
             variable=self.algo_visible_var,
             bootstyle="round-toggle",
         )
         _vis.pack(side=LEFT)
         Tooltip(
             _vis,
-            "開啟（預設）：演算法名稱存入 .bytefile，解密時自動辨識並填入\n"
+            "開啟（預設）：演算法名稱存入 metadata，解密時自動辨識並填入\n"
             "關閉：演算法隱藏，解密方必須手動選擇正確演算法",
         )
 
@@ -134,7 +134,7 @@ class FileTab(ttk.Frame):
         )
         _hint_e = ttk.Entry(g, textvariable=self.hint_var, font=FONT_BODY)
         _hint_e.grid(row=1, column=1, sticky=EW, padx=(4, 0), pady=2)
-        Tooltip(_hint_e, "儲存在 .bytefile 中的明文提示，解密時會自動顯示給使用者（非必填）")
+        Tooltip(_hint_e, f"儲存在 {BYTEFILE_EXT} 中的明文提示，解密時會自動顯示給使用者（非必填）")
 
         # ── Mode + Iterations ─────────────────────────────────────────
         bot = ttk.Frame(c)
@@ -143,10 +143,10 @@ class FileTab(ttk.Frame):
         ttk.Label(bot, text="Mode:", font=FONT_BODY).pack(side=LEFT)
         _sr = ttk.Radiobutton(bot, text="Simple", variable=self.mode_var, value="simple")
         _sr.pack(side=LEFT, padx=(6, 8))
-        Tooltip(_sr, "連續加密 N 次後整體包成一個 .bytefile")
+        Tooltip(_sr, f"連續加密 N 次後整體包成一個 {BYTEFILE_EXT}")
         _nr = ttk.Radiobutton(bot, text="Node", variable=self.mode_var, value="node")
         _nr.pack(side=LEFT, padx=(0, 16))
-        Tooltip(_nr, "每次加密都各自包成一個 .bytefile，層層包裝")
+        Tooltip(_nr, f"每次加密都各自包成一個 {BYTEFILE_EXT}，層層包裝")
 
         ttk.Label(bot, text="Iter:", font=FONT_BODY).pack(side=LEFT)
         _iter = ttk.Spinbox(
@@ -167,7 +167,7 @@ class FileTab(ttk.Frame):
             info_row, text="Reveal original filename", variable=self.reveal_orig_name_var,
             bootstyle="round-toggle"
         ).pack(side=LEFT, padx=(0, 8))
-        Tooltip(info_row, "When enabled, the original filename is stored in the .bytefile NOTE")
+        Tooltip(info_row, f"When enabled, the original filename is stored in the {BYTEFILE_EXT} NOTE")
         ttk.Checkbutton(
             info_row, text="Reveal original size", variable=self.reveal_orig_size_var,
             bootstyle="round-toggle"
@@ -176,7 +176,7 @@ class FileTab(ttk.Frame):
             info_row, text="Reveal key type", variable=self.reveal_keytype_var,
             bootstyle="round-toggle"
         ).pack(side=LEFT)
-        Tooltip(info_row, "Control whether the key_type is recorded inside the .bytefile NOTE")
+        Tooltip(info_row, f"Control whether the key_type is recorded inside the {BYTEFILE_EXT} NOTE")
 
     # ── Decrypt card (right) ──────────────────────────────────────────
 
@@ -184,13 +184,13 @@ class FileTab(ttk.Frame):
         card = ttk.Labelframe(parent, text="🔓  Decrypt", padding=PAD)
         card.grid(row=0, column=1, sticky=NSEW, padx=(PAD // 2, 0), pady=(0, PAD))
 
-        # ── .bytefile selector ────────────────────────────────────────
+        # ── .isd selector ────────────────────────────────────────
         self.dec_file = FileSelector(
-            card, label="Select .bytefile",
+            card, label=f"Select {BYTEFILE_EXT}",
             filetypes=[("ByteFile", f"*{BYTEFILE_EXT}"), ("All files", "*.*")],
         )
         self.dec_file.pack(fill=X, pady=(0, 8))
-        Tooltip(self.dec_file._entry, "選擇要解密的 .bytefile，或直接拖拉進此欄位")
+        Tooltip(self.dec_file._entry, f"選擇要解密的 {BYTEFILE_EXT}，或直接拖拉進此欄位")
 
         # ── File Metadata panel ───────────────────────────────────────
         info = ttk.Labelframe(card, text="File Metadata", padding=(8, 6))
@@ -240,7 +240,7 @@ class FileTab(ttk.Frame):
             bootstyle="success", command=self._do_decrypt,
         )
         btn.pack(fill=X, ipady=6)
-        Tooltip(btn, "解密 .bytefile 並還原原始檔案")
+        Tooltip(btn, f"解密 {BYTEFILE_EXT} 並還原原始檔案")
 
         # Auto-load metadata when file path changes
         self.dec_file.path_var.trace_add(
@@ -415,7 +415,7 @@ class FileTab(ttk.Frame):
         key_type = self.dec_pw.get_key_type()
 
         if not src:
-            messagebox.showwarning("Missing input", "Please select a .bytefile.")
+            messagebox.showwarning("Missing input", f"Please select a {BYTEFILE_EXT}.")
             return
         if not pw_source:
             messagebox.showwarning("Missing password", "Please enter a password.")

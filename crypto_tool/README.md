@@ -1,6 +1,6 @@
 # 🔐 CryptoTool Pro
 
-一款功能強大的加密/解密桌面工具，支援多種加密演算法、專屬 `.bytefile` 格式、多階段混合加密，以及大檔案分段處理。
+一款功能強大的加密/解密桌面工具，支援多種加密演算法、專屬 `.isd` 格式（輸出副檔名）、多階段混合加密，以及大檔案分段處理。
 
 > **v1.2.0** 新增：AlgoBar 演算法選擇器、Advanced Settings 移入加密卡片、演算法可見性開關、解密側自動顯示 hint + 演算法
 
@@ -10,7 +10,7 @@
 
 | 功能 | 說明 |
 |------|------|
-| **檔案加密 (Tab 1)** | 加密任意檔案為 `.bytefile` 專屬格式，只有本工具能解開 |
+| **檔案加密 (Tab 1)** | 加密任意檔案為 `.isd`（專屬格式），只有本工具能解開 |
 | **文字加密 (Tab 2)** | 快速加密一段文字，支援 Base64 顯示、剪貼簿複製、存檔 |
 | **混合加密 (Tab 3)** | 進階多階段加密管線，每階段可選不同演算法與密碼 |
 | **大檔案模式 (Tab 4)** | 分段切割大檔案，逐段加密，產出 manifest + chunk 檔案 |
@@ -37,7 +37,7 @@
 | **file** | 任意檔案的 SHA-256 雜湊 | ≤ 100 MB |
 | **image** | 圖片檔的 SHA-256 雜湊 | ≤ 50 MB |
 | **video** | 影片檔的 SHA-256 雜湊 | ≤ 200 MB |
-| **bytefile** | `.bytefile` 內容的 SHA-256 雜湊 | ≤ 50 MB |
+| **bytefile** | `.isd` 內容的 SHA-256 雜湊（key-type: 以已匯出的 .isd/.bytefile 內容做為金鑰來源） | ≤ 50 MB |
 | **txtfile** | 純文字檔（整篇或段落）內容的 SHA-256 雜湊 | ≤ 50 MB |
 
 ---
@@ -73,14 +73,14 @@ python main.py
 ### v1.2.0
 - **AlgoBar（演算法選擇器）**：Tab 1 Advanced Settings 的演算法選擇改為分段式按鈕 Bar，金色高亮已選、hover 時有暖金光暈效果
 - **Advanced Settings 移入加密卡片**：現在位於 Encrypt 方框內的可折疊面板，不再佔用頁面底部空間
-- **演算法可見性開關**：新增 "Reveal algorithm in .bytefile metadata" 切換鈕（預設開啟）；關閉時演算法不寫入 NOTE，解密需手動選擇
-- **解密卡片 — File Metadata 面板**：拖入 .bytefile 後自動解析並顯示演算法（附 auto-detected 標籤）、密碼提示、作者資訊
+- **演算法可見性開關**：新增 "Reveal algorithm in metadata" 切換鈕（預設開啟）；關閉時演算法不寫入 NOTE，解密需手動選擇
+- **解密卡片 — File Metadata 面板**：拖入 `.isd` 後自動解析並顯示演算法（附 auto-detected 標籤）、密碼提示、作者資訊
 - **解密側 — 密碼提示自動顯示**：加密時設定的 hint 在解密側自動顯示，金色突出
 - **解密側 — 演算法隱藏警示**：若演算法被隱藏，顯示琥珀色警示並展開手動演算法選擇 Bar
 
 ### v1.1.0
 - **拖拉支援**：Tab 1–4 中所有檔案/目錄輸入欄均可拖放檔案；含中文、空格的 Unicode 路徑均支援
-- **Text Tab 拖拉**：可將 `.bytefile` 或文字檔直接拖放到輸入文字框自動載入
+- **Text Tab 拖拉**：可將 `.isd`（或舊有 `.bytefile`）或文字檔直接拖放到輸入文字框自動載入
 - **Mixture Tab 拖拉**：可將金鑰檔案拖放到密碼欄，自動切換 Key type 為 `file`
 - **暖金色主題**：視窗主題改為暗底金色點綴，Labelframe 標題金色、加密按鈕改為琥珀色
 - **Tooltip 提示**：所有關鍵元件（演算法選擇、密碼欄、迭代次數、拖拉提示等）加入懸浮說明
@@ -100,13 +100,13 @@ python main.py
 2. 輸入密碼（或切換密碼類型選擇檔案作為金鑰）
 3. 展開 **Advanced Settings** 進行進階設定：
    - **Algorithm Bar**：點選欲使用的演算法按鈕（金色 = 已選取）
-   - **Reveal algorithm**：開啟（預設）→ 演算法存入 .bytefile 元資料，解密時自動辨識；關閉 → 演算法隱藏，解密方需手動選擇
+   - **Reveal algorithm**：開啟（預設）→ 演算法存入 metadata，解密時自動辨識；關閉 → 演算法隱藏，解密方需手動選擇
    - **Author / Password hint**：可設定作者名稱與密碼提示（解密時自動顯示）
    - **Mode / Iterations**：Simple 或 Node 包法，迭代加密次數
 4. 點選 **🔒 Encrypt & Save**，選擇輸出路徑
 
 **解密檔案：**
-1. 在右側「Decrypt」區塊點選 **Browse**（或拖拉 .bytefile）
+1. 在右側「Decrypt」區塊點選 **Browse**（或拖拉 .isd）
 2. **File Metadata** 區塊自動顯示：
    - 演算法（若已儲存，標示「✓ auto-detected」）
    - 密碼提示（加密時設定的 hint）
@@ -116,11 +116,11 @@ python main.py
 
 ### Tab 2 — 文字加密
 
-1. 在輸入框輸入文字（或載入 `.bytefile` / `.txt`）
+1. 在輸入框輸入文字（或載入 `.isd` / `.txt`）
 2. 輸入密碼、選擇演算法
 3. 點選 **🔒 Encrypt**
 4. 加密結果顯示在下方輸出框
-5. 可選：**複製到剪貼簿** / **存成 .txt** / **存成 .bytefile**
+5. 可選：**複製到剪貼簿** / **存成 .txt** / **存成 .isd**
 
 解密：將加密文字貼入輸入框，輸入密碼後點 **🔓 Decrypt**。
 
@@ -131,8 +131,8 @@ python main.py
 1. 點選 **＋ Add Stage** 新增加密階段
 2. 每個階段獨立設定演算法與密碼
 3. 選擇模式：
-   - **Simple**：連續加密 N 次，最後包成一個 `.bytefile`
-   - **Node**：每一層都包成 `.bytefile`，層層包裝
+   - **Simple**：連續加密 N 次，最後包成一個 `.isd`
+   - **Node**：每一層都包成 `.isd`，層層包裝
 4. 選擇輸入為檔案或文字
 5. 點選 **🔒 Encrypt** 執行
 
@@ -148,7 +148,7 @@ python main.py
 3. 建構加密管線（同 Tab 3）
 4. 選擇輸出目錄
 5. 點選 **🔒 Start Chunked Encryption**
-6. 產出：多個 `chunk_XXXX.bytefile` + `manifest.json`
+6. 產出：多個 `chunk_XXXX.isd` + `manifest.json`
 
 **解密（還原）：**
 1. 切換到 Decrypt 操作
@@ -159,9 +159,9 @@ python main.py
 
 ---
 
-## 專屬格式 `.bytefile`
+## 專屬格式 `.isd`
 
-所有加密輸出均使用此格式，確保只有 CryptoTool Pro 能正確解讀：
+所有加密輸出均使用此格式（副檔名 `.isd`），確保只有 CryptoTool Pro 能正確解讀：
 
 ```
 CONTENT="""<Base64 編碼的加密資料>"""
@@ -176,15 +176,24 @@ NOTE 包含加密日期、作者、演算法、密碼提示等完整資訊，方
 
 ### Simple 模式（預設）
 ```
-原始資料 → 加密₁ → 加密₂ → ... → 加密ₙ → .bytefile
+原始資料 → 加密₁ → 加密₂ → ... → 加密ₙ → .isd
 ```
-多次加密疊加後，整體打包為一個 `.bytefile`。
+多次加密疊加後，整體打包為一個 `.isd`。
 
 ### Node 模式
 ```
-原始資料 → .bytefile₁ → .bytefile₂ → ... → .bytefileₙ
+原始資料 → .isd₁ → .isd₂ → ... → .isdₙ
 ```
-每一次加密都完整包裝為 `.bytefile`，解密時一層一層剝開。
+每一次加密都完整包裝為 `.isd`，解密時一層一層剝開。
+
+---
+
+注意：`bytefile` 這個詞在專案中有兩個含義：
+
+1. 作為「金鑰類型 (`bytefile`)」時，代表使用某個已存在檔案（現在通常是 `.isd`）的原始內容或其 hash 作為密鑰來源。
+2. 作為檔案格式/副檔名，專案輸出檔案現在使用副檔名 `.isd`（歷史上曾使用 `.bytefile`，現已改名）。
+
+程式內部的 `ByteFile` 類別仍維持處理此封裝格式的責任，輸出副檔會使用 `.isd`。
 
 ---
 

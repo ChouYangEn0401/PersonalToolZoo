@@ -2,7 +2,7 @@
 
 ## 專案概述
 一款專業的加密/解密 GUI 工具，基於 Python + tkinter (ttkbootstrap)，支援多種加密演算法，
-具備專屬 `.bytefile` 格式，確保只有本程式能解開加密內容。
+具備專屬 `.isd` 格式（輸出副檔名），確保只有本程式能解開加密內容。
 
 ---
 
@@ -15,7 +15,7 @@ crypto_tool/
 ├── core/
 │   ├── __init__.py
 │   ├── engine.py            # 加密引擎（所有演算法）
-│   ├── bytefile.py          # .bytefile 專屬格式處理
+│   ├── bytefile.py          # 專屬格式處理（輸出副檔名 .isd；處理封裝格式）
 │   └── utils.py             # 工具函式
 ├── gui/
 │   ├── __init__.py
@@ -35,32 +35,32 @@ crypto_tool/
 ### Tab 1 — 檔案模式
 | 區塊 | 說明 |
 |------|------|
-| 左半 — 加密 | 選擇任意檔案 → 輸入密碼 → 產出 `.bytefile` |
-| 右半 — 解密 | 選擇 `.bytefile` → 輸入密碼 → 還原原始檔案 |
+| 左半 — 加密 | 選擇任意檔案 → 輸入密碼 → 產出 `.isd` |
+| 右半 — 解密 | 選擇 `.isd` → 輸入密碼 → 還原原始檔案 |
 | 進階設定（預設隱藏） | 演算法選擇、作者、密碼提示、加密模式、迭代次數 |
 
 ### Tab 2 — 文字模式
-- 文字輸入框支援：手動輸入、貼上、載入 `.bytefile`
+-- 文字輸入框支援：手動輸入、貼上、載入 `.isd`
 - 加密後可選 base64 收尾（預設開啟）
 - 輸出方式：
   1. 複製到剪貼簿
   2. 顯示在下方 Textbox
-  3. 存成 `.txt` 或 `.bytefile`
+  3. 存成 `.txt` 或 `.isd`
 
 ### Tab 3 — 混合加密模式（進階玩家）
 - 可新增多個加密階段，每階段獨立設定演算法 + 密碼
-- **Simple 模式**：資料連續加密 N 次 → 最後包成一個 `.bytefile`
-- **Node 模式**：每次加密都包成 `.bytefile`，層層包裝
+-- **Simple 模式**：資料連續加密 N 次 → 最後包成一個 `.isd`
+-- **Node 模式**：每次加密都包成 `.isd`，層層包裝
 - 支援檔案 & 文字輸入
 
 ### Tab 4 — 大檔案模式
 - 設定分段大小（chunk size）
-- 分段讀取 → 分段加密 → 輸出多個 `.bytefile` + manifest.json
+-- 分段讀取 → 分段加密 → 輸出多個 `.isd` + manifest.json
 - 解密時讀取 manifest → 逐段解密 → 組裝還原
 
 ---
 
-## 專屬格式 `.bytefile`
+## 專屬格式 `.isd`
 
 ```
 CONTENT="""<base64 編碼之加密資料>"""
@@ -108,7 +108,7 @@ NOTE="""<JSON 元資料>"""
 | file | 任意檔案 hash 作為金鑰 | ≤ 100 MB |
 | image | 圖片檔 hash 作為金鑰 | ≤ 50 MB |
 | video | 影片檔 hash 作為金鑰 | ≤ 200 MB |
-| bytefile | .bytefile 內容 hash 作為金鑰 | ≤ 50 MB |
+| bytefile | `.isd` 內容 hash 作為金鑰（key-type: 使用已輸出檔案內容或其 hash 作為金鑰來源） | ≤ 50 MB |
 
 金鑰推導：PBKDF2-SHA256，100,000 次迭代，16-byte 隨機 salt。
 
@@ -118,15 +118,22 @@ NOTE="""<JSON 元資料>"""
 
 ### 1. Simple（簡單暴力）— 預設
 ```
-原始資料 → encrypt₁ → encrypt₂ → ... → encryptₙ → 包成 .bytefile
+原始資料 → encrypt₁ → encrypt₂ → ... → encryptₙ → 包成 .isd
 ```
 所有加密連續套用，最後整體包一次專屬格式。NOTE 記錄 mixture_chain。
 
 ### 2. Node（多次保護節點）
 ```
-原始資料 → .bytefile₁ → .bytefile₂ → ... → .bytefileₙ
+原始資料 → .isd₁ → .isd₂ → ... → .isdₙ
 ```
-每一層都是完整的 `.bytefile`，解密時一層一層剝開。
+每一層都是完整的 `.isd`，解密時一層一層剝開。
+
+---
+
+註記：專案內的 `bytefile` 一詞有兩種用途：
+
+1. 在 `core`/金鑰類型中，`bytefile` 作為 key-type，表示使用某個檔案（通常為 `.isd`）的內容或其 hash 作為金鑰來源。
+2. 作為檔案格式時，輸出副檔名現為 `.isd`（歷史上曾為 `.bytefile`）。
 
 ---
 
@@ -137,7 +144,7 @@ NOTE="""<JSON 元資料>"""
 | GUI | ttkbootstrap（darkly 主題） |
 | 加密 | PyCryptodome |
 | 金鑰推導 | PBKDF2-HMAC-SHA256 |
-| 格式 | 自訂 `.bytefile` |
+| 格式 | 自訂 `.isd` |
 | 執行緒 | threading（防止 GUI 凍結） |
 
 ---

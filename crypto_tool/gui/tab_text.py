@@ -37,10 +37,10 @@ class TextTab(ttk.Frame):
 
         btn_row = ttk.Frame(inp_frame)
         btn_row.pack(fill=X, pady=(0, 4))
-        _load_bf_btn = ttk.Button(btn_row, text="Load .bytefile", bootstyle="outline-info",
-                   command=self._load_bytefile)
+        _load_bf_btn = ttk.Button(btn_row, text=f"Load {BYTEFILE_EXT}", bootstyle="outline-info",
+               command=self._load_bytefile)
         _load_bf_btn.pack(side=LEFT, padx=(0, 6))
-        Tooltip(_load_bf_btn, "載入 .bytefile 並將內容顯示在輸入框中")
+        Tooltip(_load_bf_btn, f"載入 {BYTEFILE_EXT} 並將內容顯示在輸入框中")
         _load_txt_btn = ttk.Button(btn_row, text="Load text file", bootstyle="outline-secondary",
                    command=self._load_textfile)
         _load_txt_btn.pack(side=LEFT, padx=(0, 6))
@@ -112,9 +112,9 @@ class TextTab(ttk.Frame):
         ttk.Button(out_btn_row, text="📋 Copy to clipboard",
                    bootstyle="info", command=self._copy_clipboard).pack(side=LEFT, padx=(0, 6))
         ttk.Button(out_btn_row, text="💾 Save as .txt",
-                   bootstyle="outline-secondary", command=self._save_txt).pack(side=LEFT, padx=(0, 6))
-        ttk.Button(out_btn_row, text="💾 Save as .bytefile",
-                   bootstyle="outline-warning", command=self._save_bytefile).pack(side=LEFT)
+               bootstyle="outline-secondary", command=self._save_txt).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(out_btn_row, text=f"💾 Save as {BYTEFILE_EXT}",
+               bootstyle="outline-warning", command=self._save_bytefile).pack(side=LEFT)
 
         self.output_text = tk.Text(out_frame, height=6, font=FONT_MONO, wrap=WORD, state=DISABLED)
         out_scroll = ttk.Scrollbar(out_frame, command=self.output_text.yview)
@@ -122,7 +122,7 @@ class TextTab(ttk.Frame):
         out_scroll.pack(side=RIGHT, fill=Y)
         self.output_text.pack(fill=BOTH, expand=True)
 
-        # internal storage of last encrypted bytes (for .bytefile save)
+        # internal storage of last encrypted bytes (for .isd save)
         self._last_encrypted_bytes: bytes | None = None
         self._last_note: dict | None = None
 

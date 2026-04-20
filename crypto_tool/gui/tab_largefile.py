@@ -68,8 +68,8 @@ class LargeFileTab(ttk.Frame):
 
     def _build_ui(self):
         ttk.Label(self, text="📦  Large File Mode", font=FONT_TITLE).pack(anchor=W, pady=(0, 4))
-        ttk.Label(self, text="Split large files into encrypted chunks. Each chunk is a .bytefile with a manifest for reassembly.",
-                  font=FONT_SMALL, wraplength=700).pack(anchor=W, pady=(0, PAD))
+        ttk.Label(self, text=f"Split large files into encrypted chunks. Each chunk is a {BYTEFILE_EXT} with a manifest for reassembly.",
+              font=FONT_SMALL, wraplength=700).pack(anchor=W, pady=(0, PAD))
 
         # ── Operation toggle ──────────────────────────────────────────
         op_frame = ttk.Frame(self)
@@ -122,12 +122,12 @@ class LargeFileTab(ttk.Frame):
         self.enc_out_dir = DirSelector(self._enc_panel, label="Output directory")
         self.enc_out_dir.pack(fill=X, pady=(0, 8))
         Tooltip(self.enc_out_dir._entry,
-                "加密輸出目錄，會儲存所有 chunk .bytefile 及 manifest.json。可拖拉資料夾進來")
+            f"加密輸出目錄，會儲存所有 chunk {BYTEFILE_EXT} 及 manifest.json。可拖拉資料夾進來")
 
         _enc_go_btn = ttk.Button(self._enc_panel, text="🔒  Start Chunked Encryption",
                    bootstyle="warning", command=self._do_encrypt)
         _enc_go_btn.pack(fill=X, ipady=6)
-        Tooltip(_enc_go_btn, "開始分段加密，完成後會產出 manifest.json + 各個 chunk .bytefile")
+        Tooltip(_enc_go_btn, f"開始分段加密，完成後會產出 manifest.json + 各個 chunk {BYTEFILE_EXT}")
 
         # ── Decrypt panel (hidden initially) ──────────────────────────
         self._dec_panel = ttk.Labelframe(self, text="Decrypt (Reassemble)", padding=PAD)

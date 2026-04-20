@@ -124,9 +124,9 @@ class MixtureTab(ttk.Frame):
         mode_frame = ttk.Labelframe(top, text="Mode", padding=8)
         mode_frame.pack(side=LEFT, padx=(0, 12))
         self.mode_var = tk.StringVar(value="simple")
-        ttk.Radiobutton(mode_frame, text="Simple  (multi-encrypt → 1 bytefile)",
+        ttk.Radiobutton(mode_frame, text=f"Simple  (multi-encrypt → 1 {BYTEFILE_EXT})",
                         variable=self.mode_var, value="simple").pack(anchor=W)
-        ttk.Radiobutton(mode_frame, text="Node  (layer-by-layer bytefile wrapping)",
+        ttk.Radiobutton(mode_frame, text=f"Node  (layer-by-layer {BYTEFILE_EXT} wrapping)",
                         variable=self.mode_var, value="node").pack(anchor=W)
 
         input_frame = ttk.Labelframe(top, text="Input type", padding=8)
