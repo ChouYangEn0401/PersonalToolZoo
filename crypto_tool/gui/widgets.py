@@ -8,17 +8,40 @@ from tkinter import filedialog
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
+from tkinterdnd2 import DND_FILES
 
 from .theme import (
     FONT_BODY, FONT_SMALL, FONT_SUBTITLE, PAD,
     ACCENT_ENCRYPT, ACCENT_DECRYPT, FG_MUTED,
+    GOLD_MID, GOLD_DARK, BG_CARD, DND_ACTIVE,
 )
+
+
+# ── Drag-and-drop path cleaner ────────────────────────────────────────────
+
+def _clean_dnd_path(raw: str) -> str:
+    """Normalise a path string returned by tkinterdnd2 on Windows.
+
+    Handles:
+    - Curly-brace wrapping for paths with spaces: ``{C:/my path/file}``
+    - Multiple-file drops (only the first path is returned)
+    - Surrounding whitespace
+    """
+    raw = raw.strip()
+    if raw.startswith("{"):
+        # Extract first group
+        end = raw.find("}")
+        raw = raw[1:end] if end != -1 else raw[1:]
+    elif " " in raw:
+        # Multiple space-separated paths: take the first one
+        raw = raw.split()[0]
+    return raw
 
 
 # ── File selector with browse button ─────────────────────────────────────
 
 class FileSelector(ttk.Frame):
-    """A labelled file-path entry with a Browse button."""
+    """A labelled file-path entry with a Browse button and drag-and-drop support."""
 
     def __init__(
         self,
@@ -43,6 +66,24 @@ class FileSelector(ttk.Frame):
             command=self._browse, width=8,
         ).pack(side=RIGHT)
 
+        # ── Drag-and-drop ─────────────────────────────────────────────
+        self._entry.drop_target_register(DND_FILES)
+        self._entry.dnd_bind("<<Drop>>", self._on_drop)
+        self._entry.dnd_bind("<<DragEnter>>", self._on_drag_enter)
+        self._entry.dnd_bind("<<DragLeave>>", self._on_drag_leave)
+
+    def _on_drop(self, event):
+        path = _clean_dnd_path(event.data)
+        if path:
+            self.path_var.set(path)
+        self._entry.config(foreground="")
+
+    def _on_drag_enter(self, event):
+        self._entry.config(foreground=GOLD_MID)
+
+    def _on_drag_leave(self, event):
+        self._entry.config(foreground="")
+
     def _browse(self):
         if self._save:
             p = filedialog.asksaveasfilename(filetypes=self._filetypes)
@@ -56,7 +97,7 @@ class FileSelector(ttk.Frame):
 
 
 class DirSelector(ttk.Frame):
-    """Directory selector with browse button."""
+    """Directory selector with browse button and drag-and-drop support."""
 
     def __init__(self, parent, label: str = "Directory", **kw):
         super().__init__(parent, **kw)
@@ -71,6 +112,20 @@ class DirSelector(ttk.Frame):
             row, text="Browse", bootstyle="outline",
             command=self._browse, width=8,
         ).pack(side=RIGHT)
+
+        # ── Drag-and-drop ─────────────────────────────────────────────
+        self._entry.drop_target_register(DND_FILES)
+        self._entry.dnd_bind("<<Drop>>", self._on_drop)
+        self._entry.dnd_bind("<<DragEnter>>", lambda e: self._entry.config(foreground=GOLD_MID))
+        self._entry.dnd_bind("<<DragLeave>>", lambda e: self._entry.config(foreground=""))
+
+    def _on_drop(self, event):
+        path = _clean_dnd_path(event.data)
+        if path:
+            p = Path(path)
+            # Accept both a folder drop and a file drop (use its parent dir)
+            self.path_var.set(str(p if p.is_dir() else p.parent))
+        self._entry.config(foreground="")
 
     def _browse(self):
         p = filedialog.askdirectory()
@@ -142,6 +197,18 @@ class PasswordFrame(ttk.Labelframe):
         )
         self._file_btn.pack(side=RIGHT)
 
+        # ── Drag-and-drop for file key entry ──────────────────────────
+        self._file_entry.drop_target_register(DND_FILES)
+        self._file_entry.dnd_bind("<<Drop>>", self._on_file_drop)
+        self._file_entry.dnd_bind(
+            "<<DragEnter>>", lambda e: self._file_entry.config(state=NORMAL) or
+            self._file_entry.config(foreground=GOLD_MID) or
+            self._file_entry.config(state="readonly")
+        )
+        self._file_entry.dnd_bind(
+            "<<DragLeave>>", lambda e: None
+        )
+
     def _on_type_change(self, _event=None):
         kt = self.key_type_var.get()
         if kt == "text":
@@ -162,6 +229,11 @@ class PasswordFrame(ttk.Labelframe):
         p = filedialog.askopenfilename(filetypes=ft)
         if p:
             self.file_path_var.set(p)
+
+    def _on_file_drop(self, event):
+        path = _clean_dnd_path(event.data)
+        if path:
+            self.file_path_var.set(path)
 
     def get_source(self) -> str:
         """Return password text or file path."""
@@ -201,7 +273,71 @@ class CollapsiblePanel(ttk.Frame):
             self._toggle_btn.config(text=f"▸  {self._title}")
 
 
-# ── Status bar ────────────────────────────────────────────────────────────
+# ── Tooltip ───────────────────────────────────────────────────────────────
+
+class Tooltip:
+    """Lightweight tooltip that pops up near a widget on hover.
+
+    Usage::
+
+        Tooltip(widget, "Helpful description here")
+    """
+
+    _DELAY = 500       # ms before appearing
+    _BG    = "#2A2010"
+    _FG    = "#FFD580"
+    _BORDER = "#7A5C1E"
+
+    def __init__(self, widget: tk.Widget, text: str):
+        self._widget = widget
+        self._text   = text
+        self._win: tk.Toplevel | None = None
+        self._after_id: str | None = None
+        widget.bind("<Enter>",   self._schedule,  add="+")
+        widget.bind("<Leave>",   self._cancel,    add="+")
+        widget.bind("<Button>",  self._cancel,    add="+")
+
+    def _schedule(self, _event=None):
+        self._cancel()
+        self._after_id = self._widget.after(self._DELAY, self._show)
+
+    def _cancel(self, _event=None):
+        if self._after_id:
+            self._widget.after_cancel(self._after_id)
+            self._after_id = None
+        if self._win:
+            self._win.destroy()
+            self._win = None
+
+    def _show(self):
+        if self._win:
+            return
+        w = self._widget
+        x = w.winfo_rootx() + w.winfo_width() // 2
+        y = w.winfo_rooty() + w.winfo_height() + 6
+        self._win = tw = tk.Toplevel(w)
+        tw.wm_overrideredirect(True)
+        tw.wm_attributes("-topmost", True)
+        tw.wm_geometry(f"+{x}+{y}")
+        lbl = tk.Label(
+            tw,
+            text=self._text,
+            wraplength=340,
+            justify=LEFT,
+            background=self._BG,
+            foreground=self._FG,
+            relief="solid",
+            borderwidth=1,
+            highlightbackground=self._BORDER,
+            highlightthickness=1,
+            font=FONT_SMALL,
+            padx=8,
+            pady=5,
+        )
+        lbl.pack()
+
+
+# ── Status bar ────────────────────────────────────────────────────────────────────
 
 class StatusBar(ttk.Frame):
     def __init__(self, parent, **kw):

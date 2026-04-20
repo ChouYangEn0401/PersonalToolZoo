@@ -10,13 +10,14 @@ from tkinter import filedialog, messagebox
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
+from tkinterdnd2 import DND_FILES
 
 from core.bytefile import ByteFile, BYTEFILE_EXT, default_note
 from core.engine import ALGORITHMS, EncryptionEngine
 from core.utils import derive_key_bytes
 
 from .theme import FONT_TITLE, FONT_BODY, FONT_MONO, FONT_SUBTITLE, PAD
-from .widgets import PasswordFrame, CollapsiblePanel
+from .widgets import PasswordFrame, CollapsiblePanel, Tooltip, _clean_dnd_path
 
 
 class TextTab(ttk.Frame):
@@ -36,10 +37,14 @@ class TextTab(ttk.Frame):
 
         btn_row = ttk.Frame(inp_frame)
         btn_row.pack(fill=X, pady=(0, 4))
-        ttk.Button(btn_row, text="Load .bytefile", bootstyle="outline-info",
-                   command=self._load_bytefile).pack(side=LEFT, padx=(0, 6))
-        ttk.Button(btn_row, text="Load text file", bootstyle="outline-secondary",
-                   command=self._load_textfile).pack(side=LEFT, padx=(0, 6))
+        _load_bf_btn = ttk.Button(btn_row, text="Load .bytefile", bootstyle="outline-info",
+                   command=self._load_bytefile)
+        _load_bf_btn.pack(side=LEFT, padx=(0, 6))
+        Tooltip(_load_bf_btn, "載入 .bytefile 並將內容顯示在輸入框中")
+        _load_txt_btn = ttk.Button(btn_row, text="Load text file", bootstyle="outline-secondary",
+                   command=self._load_textfile)
+        _load_txt_btn.pack(side=LEFT, padx=(0, 6))
+        Tooltip(_load_txt_btn, "載入文字檔案（自動嘗試 UTF-8 / latin-1 編碼）")
         ttk.Button(btn_row, text="Clear", bootstyle="outline-danger",
                    command=self._clear_input).pack(side=RIGHT)
 
@@ -48,6 +53,10 @@ class TextTab(ttk.Frame):
         self.input_text.config(yscrollcommand=inp_scroll.set)
         inp_scroll.pack(side=RIGHT, fill=Y)
         self.input_text.pack(fill=BOTH, expand=True)
+
+        # ── Drag-and-drop onto input text area ────────────────────────
+        self.input_text.drop_target_register(DND_FILES)
+        self.input_text.dnd_bind("<<Drop>>", self._on_text_drop)
 
         # --- Password & settings row ---
         mid = ttk.Frame(self)
@@ -63,28 +72,36 @@ class TextTab(ttk.Frame):
 
         ttk.Label(settings, text="Algorithm:", font=FONT_BODY).pack(anchor=W)
         self.algo_var = tk.StringVar(value="AES-256-CBC")
-        ttk.Combobox(
+        _algo_cb = ttk.Combobox(
             settings, textvariable=self.algo_var, values=ALGORITHMS,
             state="readonly", width=18, font=FONT_BODY,
-        ).pack(anchor=W, pady=(2, 6))
+        )
+        _algo_cb.pack(anchor=W, pady=(2, 6))
+        Tooltip(_algo_cb, "AES-256-CBC：預設區塊加密 | AES-256-GCM：帶完整性驗證 | ChaCha20：現代高效演算法")
 
         self.b64_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
+        _b64_cb = ttk.Checkbutton(
             settings, text="Base64 output (display-safe)",
             variable=self.b64_var, bootstyle="round-toggle",
-        ).pack(anchor=W)
+        )
+        _b64_cb.pack(anchor=W)
+        Tooltip(_b64_cb, "開啟：輸出 Base64 可列印字元 |關閉：輸出原始 Hex 字串")
 
         # --- Action buttons ---
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill=X, pady=6)
-        ttk.Button(
-            btn_frame, text="🔒  Encrypt", bootstyle="primary",
+        _enc_btn = ttk.Button(
+            btn_frame, text="🔒  Encrypt", bootstyle="warning",
             command=self._do_encrypt,
-        ).pack(side=LEFT, expand=True, fill=X, padx=(0, 4), ipady=6)
-        ttk.Button(
+        )
+        _enc_btn.pack(side=LEFT, expand=True, fill=X, padx=(0, 4), ipady=6)
+        Tooltip(_enc_btn, "加密輸入框中的文字，結果顯示於下方輸出框")
+        _dec_btn = ttk.Button(
             btn_frame, text="🔓  Decrypt", bootstyle="success",
             command=self._do_decrypt,
-        ).pack(side=LEFT, expand=True, fill=X, padx=(4, 0), ipady=6)
+        )
+        _dec_btn.pack(side=LEFT, expand=True, fill=X, padx=(4, 0), ipady=6)
+        Tooltip(_dec_btn, "解密輸入框中的內容，需輸入加密時相同的密碼")
 
         # --- Output area ---
         out_frame = ttk.Labelframe(self, text="Output", padding=PAD)
@@ -126,15 +143,7 @@ class TextTab(ttk.Frame):
         )
         if not p:
             return
-        try:
-            bf = ByteFile.load(p)
-            # Show the base64 encoded content in the input box
-            b64 = base64.b64encode(bf.content).decode("ascii")
-            self.input_text.delete("1.0", END)
-            self.input_text.insert("1.0", b64)
-            self._status.set(f"Loaded bytefile: {Path(p).name}")
-        except Exception as exc:
-            messagebox.showerror("Load Error", str(exc))
+        self._load_bytefile_from_path(p)
 
     def _load_textfile(self):
         p = filedialog.askopenfilename(
@@ -142,11 +151,44 @@ class TextTab(ttk.Frame):
         )
         if not p:
             return
+        self._load_text_from_path(p)
+
+    def _load_text_from_path(self, p: str):
+        """Load a text file into the input box, trying UTF-8 then latin-1."""
         try:
             content = Path(p).read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            try:
+                content = Path(p).read_text(encoding="latin-1")
+            except Exception as exc:
+                messagebox.showerror("Load Error", str(exc))
+                return
+        except Exception as exc:
+            messagebox.showerror("Load Error", str(exc))
+            return
+        self.input_text.delete("1.0", END)
+        self.input_text.insert("1.0", content)
+        self._status.set(f"Loaded text: {Path(p).name}")
+
+    def _on_text_drop(self, event):
+        """Handle a file dropped onto the text input area."""
+        path = _clean_dnd_path(event.data)
+        if not path:
+            return
+        p = Path(path)
+        if p.suffix.lower() == BYTEFILE_EXT:
+            self._load_bytefile_from_path(str(p))
+        else:
+            self._load_text_from_path(str(p))
+
+    def _load_bytefile_from_path(self, p: str):
+        try:
+            import base64 as _b64
+            bf = ByteFile.load(p)
+            b64 = _b64.b64encode(bf.content).decode("ascii")
             self.input_text.delete("1.0", END)
-            self.input_text.insert("1.0", content)
-            self._status.set(f"Loaded text: {Path(p).name}")
+            self.input_text.insert("1.0", b64)
+            self._status.set(f"Loaded bytefile: {Path(p).name}")
         except Exception as exc:
             messagebox.showerror("Load Error", str(exc))
 

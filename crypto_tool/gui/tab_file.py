@@ -15,7 +15,7 @@ from core.engine import ALGORITHMS, EncryptionEngine
 from core.utils import derive_key_bytes, human_size
 
 from .theme import FONT_TITLE, FONT_BODY, FONT_SUBTITLE, PAD
-from .widgets import FileSelector, PasswordFrame, CollapsiblePanel
+from .widgets import FileSelector, PasswordFrame, CollapsiblePanel, Tooltip
 
 
 class FileTab(ttk.Frame):
@@ -51,15 +51,20 @@ class FileTab(ttk.Frame):
 
         self.enc_file = FileSelector(card, label="Select file to encrypt")
         self.enc_file.pack(fill=X, pady=(0, 8))
+        Tooltip(self.enc_file._entry,
+                "選擇要加密的檔案，或直接拖拉檔案到此欄位")
 
         self.enc_pw = PasswordFrame(card, title="Encryption password")
         self.enc_pw.pack(fill=X, pady=(0, 10))
+        Tooltip(self.enc_pw._pw_entry,
+                "輸入加密密碼。Key type 可切換為檔案/圖片作為金鑰")
 
         btn = ttk.Button(
             card, text="🔒  Encrypt & Save",
-            bootstyle="primary", command=self._do_encrypt,
+            bootstyle="warning", command=self._do_encrypt,
         )
         btn.pack(fill=X, ipady=6)
+        Tooltip(btn, "加密檔案並儲存為 .bytefile 格式")
 
     # ── Decrypt card (right) ──────────────────────────────────────────
 
@@ -72,15 +77,20 @@ class FileTab(ttk.Frame):
             filetypes=[("ByteFile", f"*{BYTEFILE_EXT}"), ("All files", "*.*")],
         )
         self.dec_file.pack(fill=X, pady=(0, 8))
+        Tooltip(self.dec_file._entry,
+                "選擇要解密的 .bytefile，或直接拖拉進來")
 
         self.dec_pw = PasswordFrame(card, title="Decryption password")
         self.dec_pw.pack(fill=X, pady=(0, 10))
+        Tooltip(self.dec_pw._pw_entry,
+                "輸入加密時使用的密碼（類型需與加密時相同）")
 
         btn = ttk.Button(
             card, text="🔓  Decrypt & Save",
             bootstyle="success", command=self._do_decrypt,
         )
         btn.pack(fill=X, ipady=6)
+        Tooltip(btn, "解密 .bytefile 並還原原始檔案")
 
     # ── Advanced settings panel ───────────────────────────────────────
 
@@ -94,10 +104,12 @@ class FileTab(ttk.Frame):
         r1.pack(fill=X, pady=2)
         ttk.Label(r1, text="Algorithm:", font=FONT_BODY, width=14).pack(side=LEFT)
         self.algo_var = tk.StringVar(value="AES-256-CBC")
-        ttk.Combobox(
+        _algo_cb = ttk.Combobox(
             r1, textvariable=self.algo_var, values=ALGORITHMS,
             state="readonly", width=20, font=FONT_BODY,
-        ).pack(side=LEFT, padx=(4, 0))
+        )
+        _algo_cb.pack(side=LEFT, padx=(4, 0))
+        Tooltip(_algo_cb, "AES-256-CBC：最常用區塊加密 | AES-256-GCM：帶完整性驗證 | ChaCha20：現代串流加密 | Base64：僅編碼非加密")
 
         # Author
         r2 = ttk.Frame(c)
@@ -111,7 +123,9 @@ class FileTab(ttk.Frame):
         r3.pack(fill=X, pady=2)
         ttk.Label(r3, text="Password hint:", font=FONT_BODY, width=14).pack(side=LEFT)
         self.hint_var = tk.StringVar()
-        ttk.Entry(r3, textvariable=self.hint_var, font=FONT_BODY, width=22).pack(side=LEFT, padx=(4, 0))
+        _hint_e = ttk.Entry(r3, textvariable=self.hint_var, font=FONT_BODY, width=22)
+        _hint_e.pack(side=LEFT, padx=(4, 0))
+        Tooltip(_hint_e, "儲存在 .bytefile 的明文提示，用來提醒自己密碼（非必填）")
 
         # Encryption mode
         r4 = ttk.Frame(c)
@@ -126,7 +140,9 @@ class FileTab(ttk.Frame):
         r5.pack(fill=X, pady=2)
         ttk.Label(r5, text="Iterations:", font=FONT_BODY, width=14).pack(side=LEFT)
         self.iter_var = tk.IntVar(value=1)
-        ttk.Spinbox(r5, from_=1, to=20, textvariable=self.iter_var, width=5, font=FONT_BODY).pack(side=LEFT, padx=(4, 0))
+        _iter_sb = ttk.Spinbox(r5, from_=1, to=20, textvariable=self.iter_var, width=5, font=FONT_BODY)
+        _iter_sb.pack(side=LEFT, padx=(4, 0))
+        Tooltip(_iter_sb, "加密重複次數。次數越多理論越強，但速度也越慢。一般使用 1 即可")
 
     # ── Actions ───────────────────────────────────────────────────────
 

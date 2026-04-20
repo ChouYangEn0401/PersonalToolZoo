@@ -145,9 +145,16 @@ NOTE="""<JSON 元資料>"""
 ## 開發順序
 
 1. ✅ 撰寫開發計畫 (dev_plan.md)
-2. 🔧 實作 core/engine.py — 所有加密演算法
-3. 🔧 實作 core/bytefile.py — 專屬格式
-4. 🔧 實作 core/utils.py — 工具函式
-5. 🔧 實作 gui/ — 四個分頁 + 主視窗
-6. 🔧 實作 main.py — 進入點
-7. 📖 撰寫 README.md
+2. ✅ 實作 core/engine.py — 所有加密演算法
+3. ✅ 實作 core/bytefile.py — 專屬格式
+4. ✅ 實作 core/utils.py — 工具函式
+5. ✅ 實作 gui/ — 四個分頁 + 主視窗
+6. ✅ 實作 main.py — 進入點
+7. ✅ 撰寫 README.md
+
+## 後續改善 (v1.1.0)
+
+8. ✅ 拖拉支援 — 所有檔案輸入欄位均支援 drag-and-drop (tkinterdnd2)
+9. ✅ Unicode/編碼路徑安全 — 文字載入加入 UTF-8 → latin-1 fallback，DnD 路徑自動清理 `{}` 包裝
+10. ✅ 暖金色主題 — 改為暖金/琥珀色配色，Labelframe 標題金色，加密按鈕改為 warning (amber)
+11. ✅ Tooltip 說明 — 所有關鍵元件加入懸浮提示（演算法、密碼輸入、迭代次數、拖拉提示等）

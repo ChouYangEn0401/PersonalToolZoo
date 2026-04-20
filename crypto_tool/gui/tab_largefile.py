@@ -16,7 +16,7 @@ from core.engine import ALGORITHMS, EncryptionEngine
 from core.utils import derive_key_bytes, human_size
 
 from .theme import FONT_TITLE, FONT_BODY, FONT_MONO, FONT_SMALL, PAD
-from .widgets import FileSelector, DirSelector, PasswordFrame
+from .widgets import FileSelector, DirSelector, PasswordFrame, Tooltip
 
 
 class _ChunkStageRow(ttk.Frame):
@@ -88,13 +88,16 @@ class LargeFileTab(ttk.Frame):
 
         self.enc_file = FileSelector(self._enc_panel, label="Source file")
         self.enc_file.pack(fill=X, pady=(0, 6))
+        Tooltip(self.enc_file._entry, "選擇要分段加密的大檔案，或直接拖拉進來")
 
         chunk_row = ttk.Frame(self._enc_panel)
         chunk_row.pack(fill=X, pady=(0, 6))
         ttk.Label(chunk_row, text="Chunk size (MB):", font=FONT_BODY).pack(side=LEFT)
         self.chunk_mb_var = tk.IntVar(value=64)
-        ttk.Spinbox(chunk_row, from_=1, to=1024, textvariable=self.chunk_mb_var,
-                     width=6, font=FONT_BODY).pack(side=LEFT, padx=(6, 12))
+        _chunk_sb = ttk.Spinbox(chunk_row, from_=1, to=1024, textvariable=self.chunk_mb_var,
+                     width=6, font=FONT_BODY)
+        _chunk_sb.pack(side=LEFT, padx=(6, 12))
+        Tooltip(_chunk_sb, "每個 chunk 的大小。檔案越大建議設為 64–256 MB")
 
         mode_frame = ttk.Frame(self._enc_panel)
         mode_frame.pack(fill=X, pady=(0, 6))
@@ -118,9 +121,13 @@ class LargeFileTab(ttk.Frame):
 
         self.enc_out_dir = DirSelector(self._enc_panel, label="Output directory")
         self.enc_out_dir.pack(fill=X, pady=(0, 8))
+        Tooltip(self.enc_out_dir._entry,
+                "加密輸出目錄，會儲存所有 chunk .bytefile 及 manifest.json。可拖拉資料夾進來")
 
-        ttk.Button(self._enc_panel, text="🔒  Start Chunked Encryption",
-                   bootstyle="primary", command=self._do_encrypt).pack(fill=X, ipady=6)
+        _enc_go_btn = ttk.Button(self._enc_panel, text="🔒  Start Chunked Encryption",
+                   bootstyle="warning", command=self._do_encrypt)
+        _enc_go_btn.pack(fill=X, ipady=6)
+        Tooltip(_enc_go_btn, "開始分段加密，完成後會產出 manifest.json + 各個 chunk .bytefile")
 
         # ── Decrypt panel (hidden initially) ──────────────────────────
         self._dec_panel = ttk.Labelframe(self, text="Decrypt (Reassemble)", padding=PAD)
@@ -130,6 +137,8 @@ class LargeFileTab(ttk.Frame):
             filetypes=[("JSON", "*.json"), ("All", "*.*")],
         )
         self.manifest_file.pack(fill=X, pady=(0, 6))
+        Tooltip(self.manifest_file._entry,
+                "分段加密產出的 manifest.json，包含每個 chunk 的資訊。可拖拉進來")
 
         self.dec_pw = PasswordFrame(self._dec_panel, title="Password (same as encryption)")
         self.dec_pw.pack(fill=X, pady=(0, 6))

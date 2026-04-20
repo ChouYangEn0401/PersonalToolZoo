@@ -10,13 +10,14 @@ from tkinter import filedialog, messagebox
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
+from tkinterdnd2 import DND_FILES
 
 from core.bytefile import ByteFile, BYTEFILE_EXT, default_note
 from core.engine import ALGORITHMS, EncryptionEngine
 from core.utils import derive_key_bytes
 
 from .theme import FONT_TITLE, FONT_BODY, FONT_MONO, FONT_SUBTITLE, FONT_SMALL, PAD
-from .widgets import PasswordFrame, FileSelector
+from .widgets import PasswordFrame, FileSelector, Tooltip, _clean_dnd_path
 
 
 class _StageRow(ttk.Frame):
@@ -60,6 +61,10 @@ class _StageRow(ttk.Frame):
         self._browse_btn.pack(side=LEFT, padx=(0, 4))
         self.key_type_var.trace_add("write", self._on_type_change)
 
+        # ── DnD on password entry (for file-based key drops) ─────────────
+        self._pw_entry.drop_target_register(DND_FILES)
+        self._pw_entry.dnd_bind("<<Drop>>", self._on_pw_drop)
+
         # Delete
         ttk.Button(self, text="✕", width=3, bootstyle="outline-danger",
                    command=lambda: self._on_delete(self)).grid(row=0, column=2, rowspan=2, padx=(6, 0))
@@ -81,6 +86,15 @@ class _StageRow(ttk.Frame):
         p = filedialog.askopenfilename()
         if p:
             self.pw_var.set(p)
+
+    def _on_pw_drop(self, event):
+        """Accept a dropped file path as the key-file path."""
+        path = _clean_dnd_path(event.data)
+        if path:
+            # Auto-switch key type to 'file' if text is currently selected
+            if self.key_type_var.get() == "text":
+                self.key_type_var.set("file")
+            self.pw_var.set(path)
 
     def get_config(self) -> dict:
         return {
@@ -161,7 +175,7 @@ class MixtureTab(ttk.Frame):
         # ── Action buttons ────────────────────────────────────────────
         act = ttk.Frame(self)
         act.pack(fill=X, pady=(0, 4))
-        ttk.Button(act, text="🔒  Encrypt", bootstyle="primary",
+        ttk.Button(act, text="🔒  Encrypt", bootstyle="warning",
                    command=self._do_encrypt).pack(side=LEFT, expand=True, fill=X, padx=(0, 4), ipady=6)
         ttk.Button(act, text="🔓  Decrypt", bootstyle="success",
                    command=self._do_decrypt).pack(side=LEFT, expand=True, fill=X, padx=(4, 0), ipady=6)
