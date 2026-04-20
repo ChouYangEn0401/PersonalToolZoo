@@ -1,0 +1,1 @@
+.venv\Scripts\python.exe -m PyInstaller HashMyFile.py --onefile
