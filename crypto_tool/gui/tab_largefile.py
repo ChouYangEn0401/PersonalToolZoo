@@ -12,11 +12,11 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
 from core.bytefile import ByteFile, BYTEFILE_EXT, default_note
-from core.engine import ALGORITHMS, EncryptionEngine
+from core.engine import ALGORITHMS, PGP_ALGORITHMS, STAGE_ALGORITHMS, EncryptionEngine
 from core.utils import derive_key_bytes, human_size
 
 from .theme import FONT_TITLE, FONT_BODY, FONT_MONO, FONT_SMALL, PAD
-from .widgets import FileSelector, DirSelector, PasswordFrame, Tooltip
+from .widgets import FileSelector, DirSelector, PasswordFrame, Tooltip, _PGPKeyRow
 
 
 class _ChunkStageRow(ttk.Frame):
@@ -32,7 +32,7 @@ class _ChunkStageRow(ttk.Frame):
 
         self.algo_var = tk.StringVar(value="AES-256-CBC")
         ttk.Combobox(
-            self, textvariable=self.algo_var, values=ALGORITHMS,
+            self, textvariable=self.algo_var, values=STAGE_ALGORITHMS,
             state="readonly", width=16, font=FONT_BODY,
         ).grid(row=0, column=1, sticky=W, padx=(0, 6))
 
@@ -50,9 +50,50 @@ class _ChunkStageRow(ttk.Frame):
         ttk.Button(self, text="✕", width=3, bootstyle="outline-danger",
                    command=lambda: self._on_delete(self)).grid(row=0, column=4)
 
+        # PGP key fields (shown instead of password when PGP selected)
+        self._pgp_pub_var = tk.StringVar()
+        self._pgp_priv_var = tk.StringVar()
+        self._pgp_widget = ttk.Frame(self)
+        _gi = ttk.Frame(self._pgp_widget)
+        _gi.pack(fill=X)
+        ttk.Label(_gi, text="Pub:", font=FONT_SMALL, width=5).pack(side=LEFT)
+        ttk.Entry(_gi, textvariable=self._pgp_pub_var, font=FONT_SMALL).pack(
+            side=LEFT, fill=X, expand=True, padx=(0, 2))
+        ttk.Button(_gi, text="📁", width=3, bootstyle="outline",
+                   command=lambda: self._browse_pgp(self._pgp_pub_var)).pack(side=LEFT, padx=(0, 6))
+        ttk.Label(_gi, text="Priv:", font=FONT_SMALL, width=5).pack(side=LEFT)
+        ttk.Entry(_gi, textvariable=self._pgp_priv_var, font=FONT_SMALL).pack(
+            side=LEFT, fill=X, expand=True, padx=(0, 2))
+        ttk.Button(_gi, text="📁", width=3, bootstyle="outline",
+                   command=lambda: self._browse_pgp(self._pgp_priv_var)).pack(side=LEFT)
+        self.algo_var.trace_add("write", self._on_algo_change)
+
+    def _on_algo_change(self, *_):
+        if self.algo_var.get() == "PGP":
+            # hide pw entry, show pgp row below
+            self._pgp_widget.grid(row=1, column=1, columnspan=3, sticky=EW, pady=(0, 2))
+        else:
+            self._pgp_widget.grid_remove()
+
+    def _browse_pgp(self, var: tk.StringVar):
+        p = filedialog.askopenfilename(
+            filetypes=[("PEM / Key files", "*.pem *.key *.pub *.txt"), ("All files", "*.*")]
+        )
+        if p:
+            var.set(p)
+
     def get_config(self) -> dict:
+        algo = self.algo_var.get()
+        if algo == "PGP":
+            return {
+                "algorithm": "PGP",
+                "pub_pem_path": self._pgp_pub_var.get().strip(),
+                "priv_pem_path": self._pgp_priv_var.get().strip(),
+                "key_bytes": b"",
+                "key_type": "pgp",
+            }
         return {
-            "algorithm": self.algo_var.get(),
+            "algorithm": algo,
             "key_bytes": derive_key_bytes(self.pw_var.get(), self.key_type_var.get()),
             "key_type": self.key_type_var.get(),
         }
@@ -140,6 +181,13 @@ class LargeFileTab(ttk.Frame):
         Tooltip(self.manifest_file._entry,
                 "分段加密產出的 manifest.json，包含每個 chunk 的資訊。可拖拉進來")
 
+        # PGP private key row (shown when manifest reports a PGP stage)
+        self._pgp_dec_row = _PGPKeyRow(self._dec_panel, "PGP Priv key:", on_remove=None)
+        # not packed initially; shown by _on_manifest_change
+        self.manifest_file.path_var.trace_add(
+            "write", lambda *_: self.after(80, self._on_manifest_change)
+        )
+
         self.dec_pw = PasswordFrame(self._dec_panel, title="Password (same as encryption)")
         self.dec_pw.pack(fill=X, pady=(0, 6))
 
@@ -166,6 +214,26 @@ class LargeFileTab(ttk.Frame):
             self._enc_panel.pack_forget()
             self._dec_panel.pack(fill=BOTH, expand=True, pady=(0, 8))
         self.progress.pack(fill=X, pady=(4, 0))
+
+    # ── Manifest auto-detect ──────────────────────────────────────────
+
+    def _on_manifest_change(self) -> None:
+        path = self.manifest_file.get()
+        if not path or not Path(path).is_file():
+            self._pgp_dec_row.pack_forget()
+            return
+        try:
+            manifest = json.loads(Path(path).read_text(encoding="utf-8"))
+            has_pgp = any(
+                s.get("algorithm", "").startswith("PGP")
+                for s in manifest.get("encryption_chain", [])
+            )
+            if has_pgp:
+                self._pgp_dec_row.pack(fill=X, pady=(0, 6), before=self.dec_pw)
+            else:
+                self._pgp_dec_row.pack_forget()
+        except Exception:
+            self._pgp_dec_row.pack_forget()
 
     # ── Stage management ──────────────────────────────────────────────
 
@@ -237,19 +305,34 @@ class LargeFileTab(ttk.Frame):
                     if mode == "node":
                         payload = chunk_data
                         for i, step in enumerate(chain):
-                            encrypted = EncryptionEngine.encrypt(payload, step["key_bytes"], step["algorithm"])
+                            if step["algorithm"] == "PGP":
+                                pub_pem = Path(step["pub_pem_path"]).read_bytes()
+                                enc = EncryptionEngine.encrypt(payload, pub_pem, "PGP")
+                            else:
+                                enc = EncryptionEngine.encrypt(payload, step["key_bytes"], step["algorithm"])
                             note = default_note(
                                 algorithm=step["algorithm"], key_type=step["key_type"],
                                 mode="node", iterations=len(chain),
                             )
                             note["layer"] = i + 1
                             note["total_layers"] = len(chain)
-                            bf = ByteFile(encrypted, note)
+                            bf = ByteFile(enc, note)
                             payload = bf.pack().encode("utf-8")
                         chunk_filename = f"chunk_{chunk_idx:04d}{BYTEFILE_EXT}"
                         (out_path / chunk_filename).write_bytes(payload)
                     else:
-                        encrypted = EncryptionEngine.encrypt_chain(chunk_data, chain)
+                        has_pgp = any(s["algorithm"] == "PGP" for s in chain)
+                        if has_pgp:
+                            result = chunk_data
+                            for step in chain:
+                                if step["algorithm"] == "PGP":
+                                    pub_pem = Path(step["pub_pem_path"]).read_bytes()
+                                    result = EncryptionEngine.encrypt(result, pub_pem, "PGP")
+                                else:
+                                    result = EncryptionEngine.encrypt(result, step["key_bytes"], step["algorithm"])
+                            encrypted = result
+                        else:
+                            encrypted = EncryptionEngine.encrypt_chain(chunk_data, chain)
                         note = default_note(
                             algorithm=chain[0]["algorithm"], key_type=chain[0]["key_type"],
                             mode="simple", iterations=len(chain),
@@ -316,13 +399,15 @@ class LargeFileTab(ttk.Frame):
 
         self._status.set("Reassembling & decrypting...")
         self.progress_var.set(0)
+        pgp_priv_path = self._pgp_dec_row.path_var.get().strip()
         threading.Thread(
             target=self._decrypt_worker,
-            args=(manifest_src, dest, pw_source, key_type),
+            args=(manifest_src, dest, pw_source, key_type, pgp_priv_path),
             daemon=True,
         ).start()
 
-    def _decrypt_worker(self, manifest_src: str, dest: str, pw_source: str, key_type: str):
+    def _decrypt_worker(self, manifest_src: str, dest: str, pw_source: str,
+                        key_type: str, pgp_priv_path: str = ""):
         try:
             manifest_path = Path(manifest_src)
             chunk_dir = manifest_path.parent
@@ -334,17 +419,24 @@ class LargeFileTab(ttk.Frame):
             total = len(chunks)
 
             key_bytes = derive_key_bytes(pw_source, key_type)
-            # Rebuild the chain with the same key for all stages
-            chain = [{"algorithm": s["algorithm"], "key_bytes": key_bytes} for s in chain_meta]
+            has_pgp = any(s.get("algorithm") == "PGP" for s in chain_meta)
+            pgp_priv_pem: bytes | None = None
+            if has_pgp:
+                if not pgp_priv_path:
+                    raise ValueError("PGP private key required for decryption")
+                pgp_priv_pem = Path(pgp_priv_path).read_bytes()
 
             with open(dest, "wb") as out_f:
                 for ci, chunk_info in enumerate(chunks):
                     chunk_path = chunk_dir / chunk_info["filename"]
                     if mode == "node":
                         payload = chunk_path.read_text(encoding="utf-8")
-                        for step in reversed(chain):
+                        for step in reversed(chain_meta):
                             bf = ByteFile.parse(payload)
-                            decrypted = EncryptionEngine.decrypt(bf.content, step["key_bytes"], step["algorithm"])
+                            if step["algorithm"] == "PGP":
+                                decrypted = EncryptionEngine.decrypt(bf.content, pgp_priv_pem, "PGP")
+                            else:
+                                decrypted = EncryptionEngine.decrypt(bf.content, key_bytes, step["algorithm"])
                             try:
                                 payload = decrypted.decode("utf-8")
                                 ByteFile.parse(payload)
@@ -353,7 +445,17 @@ class LargeFileTab(ttk.Frame):
                         out_f.write(decrypted)
                     else:
                         bf = ByteFile.load(chunk_path)
-                        decrypted = EncryptionEngine.decrypt_chain(bf.content, chain)
+                        if has_pgp:
+                            result = bf.content
+                            for step in reversed(chain_meta):
+                                if step["algorithm"] == "PGP":
+                                    result = EncryptionEngine.decrypt(result, pgp_priv_pem, "PGP")
+                                else:
+                                    result = EncryptionEngine.decrypt(result, key_bytes, step["algorithm"])
+                            decrypted = result
+                        else:
+                            chain = [{"algorithm": s["algorithm"], "key_bytes": key_bytes} for s in chain_meta]
+                            decrypted = EncryptionEngine.decrypt_chain(bf.content, chain)
                         out_f.write(decrypted)
 
                     progress = ((ci + 1) / total) * 100

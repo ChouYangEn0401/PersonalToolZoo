@@ -11,14 +11,15 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 
 from core.bytefile import ByteFile, BYTEFILE_EXT, default_note
-from core.engine import ALGORITHMS, EncryptionEngine
+from core.engine import ALGORITHMS, PGP_ALGORITHMS, EncryptionEngine
 from core.utils import derive_key_bytes, human_size
+from core.pgp import encrypt as pgp_encrypt, encrypt_multi as pgp_encrypt_multi, decrypt as pgp_decrypt, fingerprint as pgp_fingerprint
 
 from .theme import (
     FONT_TITLE, FONT_BODY, FONT_SUBTITLE, FONT_SMALL, PAD,
     GOLD_MID, GOLD_BRIGHT, AMBER, FG_MUTED, FG_LIGHT,
 )
-from .widgets import FileSelector, PasswordFrame, CollapsiblePanel, Tooltip, AlgoBar
+from .widgets import FileSelector, PasswordFrame, CollapsiblePanel, Tooltip, AlgoBar, PGPEncryptPanel, PGPDecryptPanel
 
 
 class FileTab(ttk.Frame):
@@ -50,6 +51,8 @@ class FileTab(ttk.Frame):
         cols.columnconfigure(1, weight=1)
         self._build_encrypt_card(cols)
         self._build_decrypt_card(cols)
+        # show/hide PGP UI when algorithm changes
+        self.algo_var.trace_add("write", lambda *_: self._update_algo_dependent_ui())
 
     # ── Encrypt card (left) ───────────────────────────────────────────
 
@@ -71,6 +74,12 @@ class FileTab(ttk.Frame):
         adv = CollapsiblePanel(card, title="Advanced Settings")
         adv.pack(fill=X, pady=(0, 8))
         self._build_adv_content(adv.content)
+
+        # ── PGP wrap panel (shown only when a PGP algorithm is selected) ─
+        self._pgp_enc_container = ttk.Frame(card)
+        self._pgp_enc_container.pack(fill=X)
+        self._pgp_enc_panel = PGPEncryptPanel(self._pgp_enc_container)
+        self.algo_var.trace_add("write", lambda *_: self._on_enc_algo_change())
 
         # ── Action button ─────────────────────────────────────────────
         btn = ttk.Button(
@@ -98,6 +107,31 @@ class FileTab(ttk.Frame):
             "ChaCha20：現代串流 | Blowfish：經典 | "
             "3DES：相容舊系統 | XOR：輕量 | XOR-FOLD：折疊金鑰的 XOR（強化） | Base64：僅編碼",
         )
+
+        # ── PGP options (hidden unless PGP algo selected) ─────────────
+        self._pgp_opts = ttk.Frame(c)
+        # inner algorithm selector
+        pg_row = ttk.Frame(self._pgp_opts)
+        ttk.Label(pg_row, text="PGP inner algorithm:", font=FONT_BODY).pack(side=LEFT)
+        self.pgp_inner_var = tk.StringVar(value="AES-256-CBC")
+        inner_values = [a for a in ALGORITHMS if not a.startswith("PGP")]
+        ttk.Combobox(
+            pg_row, textvariable=self.pgp_inner_var, values=inner_values,
+            state="readonly", width=18, font=FONT_BODY,
+        ).pack(side=LEFT, padx=(6, 8))
+        pg_row.pack(fill=X, pady=(6, 4))
+
+        # recipient pubkey list (simple add/clear UI)
+        pk_row = ttk.Frame(self._pgp_opts)
+        self._pgp_pub_list: list[str] = []
+        self._pgp_pub_label = ttk.Label(pk_row, text="Recipients: 0")
+        self._pgp_pub_label.pack(side=LEFT)
+        ttk.Button(pk_row, text="Add pubkey", bootstyle="outline-primary", command=self._add_pgp_pubkey).pack(side=LEFT, padx=(6, 4))
+        ttk.Button(pk_row, text="Clear", bootstyle="outline-danger", command=self._clear_pgp_pubkeys).pack(side=LEFT)
+        pk_row.pack(fill=X)
+
+        # hide by default
+        self._pgp_opts.pack_forget()
 
         # ── Reveal-algorithm toggle ───────────────────────────────────
         vis_row = ttk.Frame(c)
@@ -229,6 +263,15 @@ class FileTab(ttk.Frame):
         self._dec_algo_bar = AlgoBar(self._manual_inner, self.dec_algo_var, ALGORITHMS)
         self._dec_algo_bar.pack(fill=X, pady=(0, 4))
 
+        # PGP private key selector for manual decrypt
+        self._dec_pgp_priv = FileSelector(self._manual_inner, label="PGP Private Key")
+        self._dec_pgp_priv.pack(fill=X, pady=(4, 0))
+        Tooltip(self._dec_pgp_priv._entry, "Select your PGP private key (PEM) for PGP-wrapped files")
+
+        # ── PGP Decrypt Panel (shown when .isd has pgp_mode in metadata) ─
+        self._pgp_dec_panel = PGPDecryptPanel(card)
+        # not packed yet — shown by _on_dec_file_change
+
         # ── Password ──────────────────────────────────────────────────
         self.dec_pw = PasswordFrame(card, title="Decryption password")
         self.dec_pw.pack(fill=X, pady=(8, 10))
@@ -283,6 +326,12 @@ class FileTab(ttk.Frame):
             self._info_algo_badge.configure(text="⚠ select below", foreground=AMBER)
             self._detected_algo = None
             self._manual_inner.pack(fill=X)
+        # update PGP UI visibility based on detected algorithm
+        pgp_mode = bf.note.get("pgp_mode")
+        if pgp_mode:
+            self._pgp_dec_panel.pack(fill=X, pady=(0, 8))
+        else:
+            self._pgp_dec_panel.pack_forget()
         # Auto-select key type if present in metadata (reveal_key_type)
         key_type = bf.note.get("key_type")
         if key_type:
@@ -310,6 +359,7 @@ class FileTab(ttk.Frame):
         self._info_algo_badge.configure(text="")
         self._detected_algo = None
         self._manual_inner.pack_forget()
+        self._pgp_dec_panel.pack_forget()
 
     # ── Actions ───────────────────────────────────────────────────────
 
@@ -324,7 +374,7 @@ class FileTab(ttk.Frame):
         if not src:
             messagebox.showwarning("Missing input", "Please select a file to encrypt.")
             return
-        if not pw_source and self.algo_var.get() != "Base64":
+        if not pw_source and self.algo_var.get() not in PGP_ALGORITHMS and self.algo_var.get() != "Base64":
             messagebox.showwarning("Missing password", "Please enter a password.")
             return
 
@@ -387,31 +437,48 @@ class FileTab(ttk.Frame):
                     payload = bf.pack().encode("utf-8")
                 Path(dest).write_bytes(payload)
             else:
-                encrypted = data
-                for _ in range(iterations):
-                    encrypted = EncryptionEngine.encrypt(encrypted, key_bytes, algo)
-                note = default_note(
-                    algorithm=algo, key_type=key_type, mode="simple",
-                    iterations=iterations,
-                    author=self.author_var.get(),
-                    password_hint=self.hint_var.get() or None,
-                    original_filename=None,
-                    original_size=None,
-                )
-                note["reveal_original_filename"] = bool(self.reveal_orig_name_var.get())
-                note["reveal_original_size"] = bool(self.reveal_orig_size_var.get())
-                note["reveal_key_type"] = bool(self.reveal_keytype_var.get())
-                note["keep_original_file_info"] = (
-                    bool(self.reveal_orig_name_var.get()) or bool(self.reveal_orig_size_var.get())
-                )
-                if self.reveal_orig_name_var.get():
-                    note["original_filename"] = Path(src).name
-                if self.reveal_orig_size_var.get():
-                    note["original_size"] = len(data)
-                note["key_type"] = key_type if self.reveal_keytype_var.get() else None
-                note["algorithm"] = stored_algo
-                bf = ByteFile(encrypted, note)
-                bf.save(dest)
+                # handle PGP-wrapped flows: inner symmetric encrypt then PGP envelope
+                if algo in PGP_ALGORITHMS:
+                    inner_algo = self._pgp_enc_panel.get_inner_algo()
+                    key_bytes = derive_key_bytes(pw_source, key_type) if pw_source else b""
+                    if not pw_source and inner_algo != "Base64":
+                        raise ValueError(f"Password required for inner cipher ‘{inner_algo}’")
+                    # inner symmetric encryption (respecting iterations)
+                    inner_ct = data
+                    for _ in range(iterations):
+                        inner_ct = EncryptionEngine.encrypt(inner_ct, key_bytes, inner_algo)
+                    # PGP envelope
+                    pub_pems = self._pgp_enc_panel.get_pub_pems()
+                    escrow_pem = self._pgp_enc_panel.get_escrow_pem()
+                    if algo == "PGP":
+                        encrypted = EncryptionEngine.pgp_encrypt(inner_ct, pub_pems[0])
+                    else:  # PGP-Multi or PGP-Escrow
+                        all_pems = list(pub_pems)
+                        if escrow_pem:
+                            all_pems.append(escrow_pem)
+                        encrypted = EncryptionEngine.pgp_encrypt_multi(inner_ct, all_pems)
+                    # Build note — algorithm stores the INNER cipher so decrypt auto-detects it
+                    stored_inner_algo = inner_algo if self.algo_visible_var.get() else None
+                    note = default_note(
+                        algorithm=stored_inner_algo, key_type=key_type, mode="simple",
+                        iterations=iterations,
+                        author=self.author_var.get(),
+                        password_hint=self.hint_var.get() or None,
+                        original_filename=None, original_size=None,
+                        pgp_mode=algo,
+                        pgp_escrow=(algo == "PGP-Escrow"),
+                        pgp_recipient_count=len(pub_pems),
+                    )
+                    note["reveal_original_filename"] = bool(self.reveal_orig_name_var.get())
+                    note["reveal_original_size"] = bool(self.reveal_orig_size_var.get())
+                    note["reveal_key_type"] = bool(self.reveal_keytype_var.get())
+                    if self.reveal_orig_name_var.get():
+                        note["original_filename"] = Path(src).name
+                    if self.reveal_orig_size_var.get():
+                        note["original_size"] = len(data)
+                    note["key_type"] = key_type if self.reveal_keytype_var.get() else None
+                    bf = ByteFile(encrypted, note)
+                    bf.save(dest)
 
             self.after(0, lambda: self._set_status(f"✅ Encrypted → {Path(dest).name}"))
             self.after(0, lambda: messagebox.showinfo("Done", f"File encrypted successfully.\n{dest}"))
@@ -465,9 +532,20 @@ class FileTab(ttk.Frame):
                 orig_name = bf.original_filename
             else:
                 iterations = bf.note.get("iterations", 1)
+                pgp_mode = bf.note.get("pgp_mode")
                 result = bf.content
-                for _ in range(iterations):
-                    result = EncryptionEngine.decrypt(result, key_bytes, algo)
+                if pgp_mode:
+                    # PGP two-stage: unwrap PGP envelope, then inner symmetric decrypt
+                    priv_pem = self._pgp_dec_panel.get_priv_pem()
+                    result = EncryptionEngine.pgp_decrypt(result, priv_pem)
+                    inner_algo = bf.note.get("algorithm") or fallback_algo
+                    if inner_algo in PGP_ALGORITHMS:
+                        inner_algo = "AES-256-CBC"  # safety fallback
+                    for _ in range(iterations):
+                        result = EncryptionEngine.decrypt(result, key_bytes, inner_algo)
+                else:
+                    for _ in range(iterations):
+                        result = EncryptionEngine.decrypt(result, key_bytes, algo)
                 orig_name = bf.original_filename
 
             default_name = orig_name or "decrypted_file"
@@ -493,6 +571,16 @@ class FileTab(ttk.Frame):
         except Exception as exc:
             self.after(0, lambda exc=exc: self._set_status(f"❌ Error: {exc}"))
             self.after(0, lambda exc=exc: messagebox.showerror("Decryption Error", str(exc)))
+
+    # ── PGP panel toggle ──────────────────────────────────────────────
+
+    def _on_enc_algo_change(self) -> None:
+        algo = self.algo_var.get()
+        if algo in PGP_ALGORITHMS:
+            self._pgp_enc_panel.set_mode(algo)
+            self._pgp_enc_panel.pack(fill=X, pady=(0, 8))
+        else:
+            self._pgp_enc_panel.pack_forget()
 
 
 # ── Helper ────────────────────────────────────────────────────────────────

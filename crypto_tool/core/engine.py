@@ -17,6 +17,7 @@ from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Hash import SHA256
 from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
+from . import pgp as _pgp
 
 
 PBKDF2_ITERATIONS = 100_000
@@ -30,7 +31,19 @@ ALGORITHMS: list[str] = [
     "XOR",
     "XOR-FOLD",
     "Base64",
+    "PGP",
+    "PGP-Multi",
+    "PGP-Escrow",
 ]
+
+# Algorithms that use RSA asymmetric keys instead of a symmetric password
+PGP_ALGORITHMS: frozenset[str] = frozenset({"PGP", "PGP-Multi", "PGP-Escrow"})
+
+# Algorithms safe for per-stage pipelines (single-key ops only)
+STAGE_ALGORITHMS: list[str] = [a for a in ALGORITHMS if a not in ("PGP-Multi", "PGP-Escrow")]
+
+# Algorithms valid as the inner cipher inside a PGP envelope
+NON_PGP_ALGORITHMS: list[str] = [a for a in ALGORITHMS if a not in PGP_ALGORITHMS]
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +240,23 @@ class XORFoldCipher(CipherBase):
 
 
 # ---------------------------------------------------------------------------
+# PGP — RSA+AES-GCM hybrid (single-recipient)
+# key_bytes must be PEM bytes of public key (encrypt) or private key (decrypt)
+# ---------------------------------------------------------------------------
+
+class PGPCipher(CipherBase):
+    name = "PGP"
+
+    def encrypt(self, data: bytes, key_bytes: bytes) -> bytes:
+        """Encrypt using recipient's RSA public key PEM."""
+        return _pgp.encrypt(key_bytes, data)
+
+    def decrypt(self, data: bytes, key_bytes: bytes) -> bytes:
+        """Decrypt using holder's RSA private key PEM."""
+        return _pgp.decrypt(key_bytes, data)
+
+
+# ---------------------------------------------------------------------------
 # Base64 (encoding only — no password)
 # ---------------------------------------------------------------------------
 
@@ -253,6 +283,10 @@ _CIPHER_MAP: dict[str, CipherBase] = {
     "XOR": XORCipher(),
     "XOR-FOLD": XORFoldCipher(),
     "Base64": Base64Cipher(),
+    # All three PGP variants share PGPCipher; multi-key encrypt uses pgp_encrypt_multi() helpers.
+    "PGP": PGPCipher(),
+    "PGP-Multi": PGPCipher(),
+    "PGP-Escrow": PGPCipher(),
 }
 
 
@@ -292,3 +326,25 @@ class EncryptionEngine:
         for step in reversed(chain):
             result = cls.decrypt(result, step["key_bytes"], step["algorithm"])
         return result
+
+    # ── PGP helpers ───────────────────────────────────────────────────
+
+    @staticmethod
+    def pgp_encrypt(data: bytes, pub_pem: bytes) -> bytes:
+        """Encrypt to a single RSA recipient (public key PEM)."""
+        return _pgp.encrypt(pub_pem, data)
+
+    @staticmethod
+    def pgp_encrypt_multi(data: bytes, pub_pems: list[bytes]) -> bytes:
+        """Encrypt to multiple RSA recipients (list of public key PEMs)."""
+        return _pgp.encrypt_multi(pub_pems, data)
+
+    @staticmethod
+    def pgp_decrypt(data: bytes, priv_pem: bytes) -> bytes:
+        """Decrypt an RSA+AES-GCM envelope using a private key PEM."""
+        return _pgp.decrypt(priv_pem, data)
+
+    @staticmethod
+    def pgp_generate_keypair(bits: int = 4096) -> tuple[bytes, bytes]:
+        """Generate an RSA keypair. Returns (private_pem, public_pem)."""
+        return _pgp.generate_rsa_keypair(bits)

@@ -13,11 +13,11 @@ from ttkbootstrap.constants import *
 from tkinterdnd2 import DND_FILES
 
 from core.bytefile import ByteFile, BYTEFILE_EXT, default_note
-from core.engine import ALGORITHMS, EncryptionEngine
+from core.engine import ALGORITHMS, PGP_ALGORITHMS, EncryptionEngine
 from core.utils import derive_key_bytes
 
 from .theme import FONT_TITLE, FONT_BODY, FONT_MONO, FONT_SUBTITLE, PAD
-from .widgets import PasswordFrame, CollapsiblePanel, Tooltip, _clean_dnd_path
+from .widgets import PasswordFrame, CollapsiblePanel, Tooltip, _clean_dnd_path, PGPEncryptPanel, PGPDecryptPanel
 
 
 class TextTab(ttk.Frame):
@@ -77,11 +77,53 @@ class TextTab(ttk.Frame):
             state="readonly", width=18, font=FONT_BODY,
         )
         _algo_cb.pack(anchor=W, pady=(2, 6))
-        Tooltip(
-            _algo_cb,
-            "AES-256-CBC：預設區塊加密 | AES-256-GCM：帶完整性驗證 | ChaCha20：現代高效演算法 | "
-            "XOR：輕量 | XOR-FOLD：折疊金鑰的 XOR（強化）",
+        Tooltip(_algo_cb, "AES-256-CBC：預設區塊加密 | AES-256-GCM：帶完整性驗證 | ChaCha20：現代高效演算法 | XOR/XOR-FOLD：輕量 | PGP：公開金鑰包覆")
+
+        # PGP options (hidden unless PGP selected)
+        self.pgp_inner_var = tk.StringVar(value="AES-256-CBC")
+        inner_values = [a for a in ALGORITHMS if not a.startswith("PGP")]
+        self._pgp_inner_cb = ttk.Combobox(
+            settings, textvariable=self.pgp_inner_var, values=inner_values,
+            state="readonly", width=18, font=FONT_BODY,
         )
+        self._pgp_inner_cb.pack(anchor=W, pady=(0, 4))
+        Tooltip(self._pgp_inner_cb, "Inner algorithm used before PGP wrapping")
+
+        self._pgp_pub_list: list[str] = []
+        row = ttk.Frame(settings)
+        row.pack(anchor=W)
+        self._pgp_pub_lbl = ttk.Label(row, text="Recipients: 0")
+        self._pgp_pub_lbl.pack(side=LEFT)
+        ttk.Button(row, text="Add pubkey", bootstyle="outline-primary", command=self._add_pgp_pubkey).pack(side=LEFT, padx=(6, 4))
+        ttk.Button(row, text="Clear", bootstyle="outline-danger", command=self._clear_pgp_pubkeys).pack(side=LEFT)
+        # hide until PGP selected
+        self._pgp_inner_cb.pack_forget()
+        row.pack_forget()
+        # show/hide controls when algo changes
+        self.algo_var.trace_add("write", lambda *_: self._update_pgp_ui())
+
+    def _add_pgp_pubkey(self):
+        p = filedialog.askopenfilename(filetypes=[("PEM", "*.pem"), ("All files", "*")])
+        if not p:
+            return
+        self._pgp_pub_list.append(p)
+        self._pgp_pub_lbl.configure(text=f"Recipients: {len(self._pgp_pub_list)}")
+
+    def _clear_pgp_pubkeys(self):
+        self._pgp_pub_list.clear()
+        self._pgp_pub_lbl.configure(text="Recipients: 0")
+
+    def _update_pgp_ui(self):
+        if self.algo_var.get().startswith("PGP"):
+            self._pgp_inner_cb.pack(anchor=W, pady=(0, 4))
+            self._pgp_pub_lbl.master.pack(anchor=W)
+        else:
+            try:
+                self._pgp_inner_cb.pack_forget()
+                self._pgp_pub_lbl.master.pack_forget()
+            except Exception:
+                pass
+        
 
         self.b64_var = tk.BooleanVar(value=True)
         _b64_cb = ttk.Checkbutton(
@@ -91,17 +133,27 @@ class TextTab(ttk.Frame):
         _b64_cb.pack(anchor=W)
         Tooltip(_b64_cb, "開啟：輸出 Base64 可列印字元 |關閉：輸出原始 Hex 字串")
 
-        # --- Action buttons ---
-        btn_frame = ttk.Frame(self)
+        # ── PGP panel (shown when a PGP algorithm is selected) ─────────
+        self._pgp_frame = ttk.Frame(self)
+        self._pgp_enc_panel = PGPEncryptPanel(self._pgp_frame)
+        self._pgp_enc_panel.pack(fill=X, pady=(0, 4))
+        ttk.Separator(self._pgp_frame).pack(fill=X, pady=(0, 4))
+        self._pgp_dec_panel = PGPDecryptPanel(self._pgp_frame)
+        self._pgp_dec_panel.pack(fill=X)
+        self.algo_var.trace_add("write", lambda *_: self._on_algo_change())
+
+        # ── Action buttons ─────────────────────────────────
+        self._btn_frame = ttk.Frame(self)
+        btn_frame = self._btn_frame
         btn_frame.pack(fill=X, pady=6)
         _enc_btn = ttk.Button(
-            btn_frame, text="🔒  Encrypt", bootstyle="warning",
+            self._btn_frame, text="🔒  Encrypt", bootstyle="warning",
             command=self._do_encrypt,
         )
         _enc_btn.pack(side=LEFT, expand=True, fill=X, padx=(0, 4), ipady=6)
         Tooltip(_enc_btn, "加密輸入框中的文字，結果顯示於下方輸出框")
         _dec_btn = ttk.Button(
-            btn_frame, text="🔓  Decrypt", bootstyle="success",
+            self._btn_frame, text="🔓  Decrypt", bootstyle="success",
             command=self._do_decrypt,
         )
         _dec_btn.pack(side=LEFT, expand=True, fill=X, padx=(4, 0), ipady=6)
@@ -129,6 +181,15 @@ class TextTab(ttk.Frame):
         # internal storage of last encrypted bytes (for .isd save)
         self._last_encrypted_bytes: bytes | None = None
         self._last_note: dict | None = None
+
+    # ── PGP panel toggle ────────────────────────────────────
+
+    def _on_algo_change(self) -> None:
+        if self.algo_var.get() in PGP_ALGORITHMS:
+            self._pgp_enc_panel.set_mode(self.algo_var.get())
+            self._pgp_frame.pack(fill=X, pady=(0, 6), before=self._btn_frame)
+        else:
+            self._pgp_frame.pack_forget()
 
     # ── Helpers ───────────────────────────────────────────────────────
 
@@ -209,7 +270,7 @@ class TextTab(ttk.Frame):
         pw_source = self.pw.get_source()
         key_type = self.pw.get_key_type()
         algo = self.algo_var.get()
-        if not pw_source and algo != "Base64":
+        if not pw_source and algo != "Base64" and algo not in PGP_ALGORITHMS:
             messagebox.showwarning("Password", "Enter a password.")
             return
 
@@ -223,15 +284,34 @@ class TextTab(ttk.Frame):
     def _encrypt_worker(self, raw: str, pw_source: str, key_type: str, algo: str):
         try:
             data = raw.encode("utf-8")
-            key_bytes = derive_key_bytes(pw_source, key_type)
-            encrypted = EncryptionEngine.encrypt(data, key_bytes, algo)
+            key_bytes = derive_key_bytes(pw_source, key_type) if pw_source else b""
+
+            if algo in PGP_ALGORITHMS:
+                inner_algo = self._pgp_enc_panel.get_inner_algo()
+                if not pw_source and inner_algo != "Base64":
+                    raise ValueError(f"Password required for inner cipher '{inner_algo}'")
+                inner_ct = EncryptionEngine.encrypt(data, key_bytes, inner_algo)
+                pub_pems = self._pgp_enc_panel.get_pub_pems()
+                escrow_pem = self._pgp_enc_panel.get_escrow_pem()
+                if algo == "PGP":
+                    encrypted = EncryptionEngine.pgp_encrypt(inner_ct, pub_pems[0])
+                else:
+                    all_pems = list(pub_pems) + ([escrow_pem] if escrow_pem else [])
+                    encrypted = EncryptionEngine.pgp_encrypt_multi(inner_ct, all_pems)
+                self._last_note = default_note(
+                    algorithm=inner_algo, key_type=key_type, mode="simple",
+                    iterations=1, original_filename=None, original_size=len(data),
+                    pgp_mode=algo, pgp_escrow=(algo == "PGP-Escrow"),
+                    pgp_recipient_count=len(pub_pems),
+                )
+            else:
+                encrypted = EncryptionEngine.encrypt(data, key_bytes, algo)
+                self._last_note = default_note(
+                    algorithm=algo, key_type=key_type, mode="simple",
+                    iterations=1, original_filename=None, original_size=len(data),
+                )
 
             self._last_encrypted_bytes = encrypted
-            self._last_note = default_note(
-                algorithm=algo, key_type=key_type, mode="simple",
-                iterations=1, original_filename=None,
-                original_size=len(data),
-            )
 
             if self.b64_var.get():
                 display = base64.b64encode(encrypted).decode("ascii")
@@ -254,7 +334,7 @@ class TextTab(ttk.Frame):
         pw_source = self.pw.get_source()
         key_type = self.pw.get_key_type()
         algo = self.algo_var.get()
-        if not pw_source and algo != "Base64":
+        if not pw_source and algo != "Base64" and algo not in PGP_ALGORITHMS:
             messagebox.showwarning("Password", "Enter a password.")
             return
 
@@ -273,8 +353,15 @@ class TextTab(ttk.Frame):
             except Exception:
                 encrypted = bytes.fromhex(raw)
 
-            key_bytes = derive_key_bytes(pw_source, key_type)
-            decrypted = EncryptionEngine.decrypt(encrypted, key_bytes, algo)
+            key_bytes = derive_key_bytes(pw_source, key_type) if pw_source else b""
+
+            if algo in PGP_ALGORITHMS:
+                priv_pem = self._pgp_dec_panel.get_priv_pem()
+                inner_ct = EncryptionEngine.pgp_decrypt(encrypted, priv_pem)
+                inner_algo = self._pgp_enc_panel.get_inner_algo()  # must match what was used
+                decrypted = EncryptionEngine.decrypt(inner_ct, key_bytes, inner_algo)
+            else:
+                decrypted = EncryptionEngine.decrypt(encrypted, key_bytes, algo)
             text = decrypted.decode("utf-8")
 
             self.after(0, lambda: self._set_output(text))

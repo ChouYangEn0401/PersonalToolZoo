@@ -11,11 +11,12 @@ from ttkbootstrap.constants import *
 from tkinterdnd2 import DND_FILES
 
 from core.bytefile import BYTEFILE_EXT
+from core.engine import NON_PGP_ALGORITHMS
 
 from .theme import (
     FONT_BODY, FONT_SMALL, FONT_SUBTITLE, PAD,
     ACCENT_ENCRYPT, ACCENT_DECRYPT, FG_MUTED,
-    GOLD_MID, GOLD_DARK, GOLD_BRIGHT, BG_CARD, DND_ACTIVE,
+    GOLD_MID, GOLD_DARK, GOLD_BRIGHT, BG_CARD, DND_ACTIVE, AMBER,
 )
 
 
@@ -24,6 +25,7 @@ from .theme import (
 _ALGO_ROWS: list[list[str]] = [
     ["AES-256-CBC", "AES-256-GCM", "ChaCha20-Poly1305", "Blowfish-CBC"],
     ["3DES-CBC",    "XOR",          "XOR-FOLD",    "Base64"],
+    ["PGP",         "PGP-Multi",    "PGP-Escrow"],
 ]
 
 _SHORT_NAMES: dict[str, str] = {
@@ -35,6 +37,9 @@ _SHORT_NAMES: dict[str, str] = {
     "XOR":               "XOR",
     "XOR-FOLD":          "XOR · Fold",
     "Base64":            "Base64",
+    "PGP":               "PGP",
+    "PGP-Multi":         "PGP · Multi",
+    "PGP-Escrow":        "PGP · Escrow",
 }
 
 
@@ -438,6 +443,194 @@ class Tooltip:
             pady=5,
         )
         lbl.pack()
+
+
+# ── PGP key selector row ─────────────────────────────────────────────────────────
+
+class _PGPKeyRow(ttk.Frame):
+    """Single PGP key file selector row (public or private key)."""
+
+    def __init__(self, parent, label: str, on_remove=None, **kw):
+        super().__init__(parent, **kw)
+        self.path_var = tk.StringVar()
+        ttk.Label(self, text=label, font=FONT_SMALL, width=11, anchor=W).pack(side=LEFT)
+        e = ttk.Entry(self, textvariable=self.path_var, font=FONT_SMALL)
+        e.pack(side=LEFT, fill=X, expand=True, padx=(0, 4))
+        ttk.Button(
+            self, text="Browse", bootstyle="outline", width=7,
+            command=self._browse,
+        ).pack(side=LEFT, padx=(0, 4))
+        if on_remove is not None:
+            ttk.Button(
+                self, text="✕", width=3, bootstyle="outline-danger",
+                command=on_remove,
+            ).pack(side=LEFT)
+        e.drop_target_register(DND_FILES)
+        e.dnd_bind("<<Drop>>", lambda ev: self.path_var.set(_clean_dnd_path(ev.data)))
+
+    def _browse(self):
+        p = filedialog.askopenfilename(
+            filetypes=[
+                ("PEM / Key files", "*.pem *.key *.pub *.txt"),
+                ("All files", "*.*"),
+            ]
+        )
+        if p:
+            self.path_var.set(p)
+
+    def get_pem(self) -> bytes:
+        """Read and return PEM file bytes. Raises ValueError if path is empty."""
+        path = self.path_var.get().strip()
+        if not path:
+            raise ValueError("No PGP key file selected")
+        return Path(path).read_bytes()
+
+
+# ── PGP encrypt panel ─────────────────────────────────────────────────────────────
+
+class PGPEncryptPanel(ttk.Labelframe):
+    """Encryption-side PGP panel.
+
+    Shows an inner-cipher selector plus a list of recipient public key entries.
+    Supports single / multi / escrow modes via ``set_mode(algo)``.
+    """
+
+    def __init__(self, parent, **kw):
+        super().__init__(parent, text="🔑  PGP — Asymmetric Wrap", padding=6, **kw)
+        self._mode: str = "PGP"
+        self._recip_rows: list[_PGPKeyRow] = []
+
+        # ── Inner cipher ──────────────────────────────────────────────
+        inner_row = ttk.Frame(self)
+        inner_row.pack(fill=X, pady=(0, 6))
+        ttk.Label(inner_row, text="Inner cipher:", font=FONT_BODY).pack(side=LEFT)
+        self.inner_algo_var = tk.StringVar(value="AES-256-CBC")
+        _ic = ttk.Combobox(
+            inner_row, textvariable=self.inner_algo_var,
+            values=NON_PGP_ALGORITHMS, state="readonly", width=20, font=FONT_BODY,
+        )
+        _ic.pack(side=LEFT, padx=(8, 0))
+        Tooltip(_ic, "資料先用此演算法 + 密碼加密，再封入 PGP 信封包")
+
+        # ── Recipient title ───────────────────────────────────────────
+        self._recip_title = ttk.Label(self, text="Recipient public key:", font=FONT_BODY)
+        self._recip_title.pack(anchor=W, pady=(0, 2))
+
+        self._recip_frame = ttk.Frame(self)
+        self._recip_frame.pack(fill=X)
+
+        # ── Add-recipient button (multi / escrow only) ─────────────────
+        self._add_btn = ttk.Button(
+            self, text="＋ Add recipient",
+            bootstyle="outline-primary",
+            command=self._add_recip,
+        )
+
+        # ── Escrow section widgets (hidden until PGP-Escrow selected) ──
+        self._escrow_sep = ttk.Separator(self)
+        self._escrow_title = ttk.Label(
+            self, text="⚠  Escrow key (third-party master key):",
+            font=FONT_BODY, foreground=AMBER,
+        )
+        self._escrow_key_row: _PGPKeyRow | None = None
+        self._escrow_desc = ttk.Label(
+            self,
+            text="The .isd will be tagged as third-party force-decryptable.",
+            font=FONT_SMALL, foreground=FG_MUTED,
+        )
+
+        # Seed with 1 non-removable recipient row
+        self._add_recip(removable=False)
+
+    # ── Mode switching ────────────────────────────────────────────────
+
+    def set_mode(self, algo: str) -> None:
+        """Switch panel UI between 'PGP', 'PGP-Multi', 'PGP-Escrow'."""
+        self._mode = algo
+        is_multi = algo in ("PGP-Multi", "PGP-Escrow")
+        is_escrow = algo == "PGP-Escrow"
+
+        self._recip_title.config(
+            text="Recipient public key:" if not is_multi else "Recipient public keys:"
+        )
+
+        if is_multi:
+            self._add_btn.pack(anchor=W, pady=(4, 0))
+        else:
+            self._add_btn.pack_forget()
+            while len(self._recip_rows) > 1:
+                r = self._recip_rows.pop()
+                r.destroy()
+
+        if is_escrow:
+            self._escrow_sep.pack(fill=X, pady=8)
+            self._escrow_title.pack(anchor=W)
+            if self._escrow_key_row is None:
+                self._escrow_key_row = _PGPKeyRow(self, "Escrow key:", on_remove=None)
+            self._escrow_key_row.pack(fill=X, pady=(4, 0))
+            self._escrow_desc.pack(anchor=W, pady=(2, 0))
+        else:
+            self._escrow_sep.pack_forget()
+            self._escrow_title.pack_forget()
+            if self._escrow_key_row:
+                self._escrow_key_row.pack_forget()
+            self._escrow_desc.pack_forget()
+
+    # ── Recipient management ──────────────────────────────────────────
+
+    def _add_recip(self, removable: bool = True) -> None:
+        placeholder: list[_PGPKeyRow | None] = [None]
+        row = _PGPKeyRow(
+            self._recip_frame,
+            f"Recip #{len(self._recip_rows) + 1}:",
+            on_remove=(lambda: self._do_remove(placeholder[0])) if removable else None,
+        )
+        placeholder[0] = row
+        row.pack(fill=X, pady=(0, 2))
+        self._recip_rows.append(row)
+
+    def _do_remove(self, row: _PGPKeyRow) -> None:
+        if len(self._recip_rows) <= 1:
+            return
+        row.destroy()
+        self._recip_rows.remove(row)
+        for i, r in enumerate(self._recip_rows):
+            try:
+                r.winfo_children()[0].config(text=f"Recip #{i + 1}:")
+            except Exception:
+                pass
+
+    # ── Data accessors ────────────────────────────────────────────────
+
+    def get_pub_pems(self) -> list[bytes]:
+        return [r.get_pem() for r in self._recip_rows]
+
+    def get_escrow_pem(self) -> bytes | None:
+        if self._escrow_key_row:
+            try:
+                p = self._escrow_key_row.path_var.get().strip()
+                return Path(p).read_bytes() if p else None
+            except Exception:
+                return None
+        return None
+
+    def get_inner_algo(self) -> str:
+        return self.inner_algo_var.get()
+
+
+# ── PGP decrypt panel ─────────────────────────────────────────────────────────────
+
+class PGPDecryptPanel(ttk.Labelframe):
+    """Decryption-side PGP panel: single private key file selector."""
+
+    def __init__(self, parent, **kw):
+        super().__init__(parent, text="🔑  PGP — Private Key", padding=6, **kw)
+        self._row = _PGPKeyRow(self, "Private key:", on_remove=None)
+        self._row.pack(fill=X)
+        Tooltip(self._row, "提供您的 RSA 私鑰（.pem），用來解開 PGP 信封")
+
+    def get_priv_pem(self) -> bytes:
+        return self._row.get_pem()
 
 
 # ── Status bar ────────────────────────────────────────────────────────────────────

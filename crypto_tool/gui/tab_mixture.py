@@ -13,7 +13,7 @@ from ttkbootstrap.constants import *
 from tkinterdnd2 import DND_FILES
 
 from core.bytefile import ByteFile, BYTEFILE_EXT, default_note
-from core.engine import ALGORITHMS, EncryptionEngine
+from core.engine import ALGORITHMS, PGP_ALGORITHMS, STAGE_ALGORITHMS, EncryptionEngine
 from core.utils import derive_key_bytes
 
 from .theme import FONT_TITLE, FONT_BODY, FONT_MONO, FONT_SUBTITLE, FONT_SMALL, PAD
@@ -36,12 +36,13 @@ class _StageRow(ttk.Frame):
         # Algorithm
         self.algo_var = tk.StringVar(value="AES-256-CBC")
         ttk.Combobox(
-            self, textvariable=self.algo_var, values=ALGORITHMS,
+            self, textvariable=self.algo_var, values=STAGE_ALGORITHMS,
             state="readonly", width=18, font=FONT_BODY,
         ).grid(row=0, column=1, sticky=W, pady=(0, 2))
 
         # Password
-        pw_row = ttk.Frame(self)
+        self._pw_row = ttk.Frame(self)
+        pw_row = self._pw_row
         pw_row.grid(row=1, column=1, sticky=EW, pady=(0, 2))
         self.key_type_var = tk.StringVar(value="text")
         ttk.Combobox(
@@ -61,9 +62,29 @@ class _StageRow(ttk.Frame):
         self._browse_btn.pack(side=LEFT, padx=(0, 4))
         self.key_type_var.trace_add("write", self._on_type_change)
 
-        # ── DnD on password entry (for file-based key drops) ─────────────
+        # ── DnD on password entry (for file-based key drops) ─────────
         self._pw_entry.drop_target_register(DND_FILES)
         self._pw_entry.dnd_bind("<<Drop>>", self._on_pw_drop)
+
+        # ── PGP key rows (shown instead of password when PGP selected) ─
+        self._pgp_row = ttk.Frame(self)
+        # not gridded initially
+        self._pgp_pub_var = tk.StringVar()
+        self._pgp_priv_var = tk.StringVar()
+        _pgp_inner = ttk.Frame(self._pgp_row)
+        _pgp_inner.pack(fill=X)
+        ttk.Label(_pgp_inner, text="Pub key:", font=FONT_SMALL, width=8).pack(side=LEFT)
+        ttk.Entry(_pgp_inner, textvariable=self._pgp_pub_var, font=FONT_SMALL).pack(
+            side=LEFT, fill=X, expand=True, padx=(0, 2))
+        ttk.Button(_pgp_inner, text="📁", width=3, bootstyle="outline",
+                   command=lambda: self._browse_pgp(self._pgp_pub_var)).pack(side=LEFT, padx=(0, 6))
+        ttk.Label(_pgp_inner, text="Priv:", font=FONT_SMALL, width=5).pack(side=LEFT)
+        ttk.Entry(_pgp_inner, textvariable=self._pgp_priv_var, font=FONT_SMALL).pack(
+            side=LEFT, fill=X, expand=True, padx=(0, 2))
+        ttk.Button(_pgp_inner, text="📁", width=3, bootstyle="outline",
+                   command=lambda: self._browse_pgp(self._pgp_priv_var)).pack(side=LEFT)
+
+        self.algo_var.trace_add("write", self._on_algo_change)
 
         # Delete
         ttk.Button(self, text="✕", width=3, bootstyle="outline-danger",
@@ -75,6 +96,21 @@ class _StageRow(ttk.Frame):
     def _toggle(self):
         self._show = not self._show
         self._pw_entry.config(show="" if self._show else "●")
+
+    def _on_algo_change(self, *_):
+        if self.algo_var.get() == "PGP":
+            self._pw_row.grid_remove()
+            self._pgp_row.grid(row=1, column=1, sticky=EW, pady=(0, 2))
+        else:
+            self._pgp_row.grid_remove()
+            self._pw_row.grid()
+
+    def _browse_pgp(self, var: tk.StringVar):
+        p = filedialog.askopenfilename(
+            filetypes=[("PEM / Key files", "*.pem *.key *.pub *.txt"), ("All files", "*.*")]
+        )
+        if p:
+            var.set(p)
 
     def _on_type_change(self, *_args):
         if self.key_type_var.get() == "text":
@@ -97,8 +133,17 @@ class _StageRow(ttk.Frame):
             self.pw_var.set(path)
 
     def get_config(self) -> dict:
+        algo = self.algo_var.get()
+        if algo == "PGP":
+            return {
+                "algorithm": "PGP",
+                "pub_pem_path": self._pgp_pub_var.get().strip(),
+                "priv_pem_path": self._pgp_priv_var.get().strip(),
+                "key_bytes": b"",
+                "key_type": "pgp",
+            }
         return {
-            "algorithm": self.algo_var.get(),
+            "algorithm": algo,
             "key_bytes": derive_key_bytes(self.pw_var.get(), self.key_type_var.get()),
             "key_type": self.key_type_var.get(),
         }
@@ -267,7 +312,11 @@ class MixtureTab(ttk.Frame):
             if mode == "node":
                 payload = data
                 for i, step in enumerate(chain):
-                    encrypted = EncryptionEngine.encrypt(payload, step["key_bytes"], step["algorithm"])
+                    if step["algorithm"] == "PGP":
+                        pub_pem = Path(step["pub_pem_path"]).read_bytes()
+                        encrypted = EncryptionEngine.encrypt(payload, pub_pem, "PGP")
+                    else:
+                        encrypted = EncryptionEngine.encrypt(payload, step["key_bytes"], step["algorithm"])
                     note = default_note(
                         algorithm=step["algorithm"], key_type=step["key_type"],
                         mode="node", iterations=len(chain),
@@ -280,7 +329,18 @@ class MixtureTab(ttk.Frame):
                     payload = bf.pack().encode("utf-8")
                 Path(dest).write_bytes(payload)
             else:
-                encrypted = EncryptionEngine.encrypt_chain(data, chain)
+                has_pgp = any(s["algorithm"] == "PGP" for s in chain)
+                if has_pgp:
+                    result = data
+                    for step in chain:
+                        if step["algorithm"] == "PGP":
+                            pub_pem = Path(step["pub_pem_path"]).read_bytes()
+                            result = EncryptionEngine.encrypt(result, pub_pem, "PGP")
+                        else:
+                            result = EncryptionEngine.encrypt(result, step["key_bytes"], step["algorithm"])
+                    encrypted = result
+                else:
+                    encrypted = EncryptionEngine.encrypt_chain(data, chain)
                 note = default_note(
                     algorithm=chain[0]["algorithm"], key_type=chain[0]["key_type"],
                     mode="simple", iterations=len(chain),
@@ -335,7 +395,11 @@ class MixtureTab(ttk.Frame):
                 payload = text
                 for step in reversed(chain):
                     bf = ByteFile.parse(payload)
-                    decrypted = EncryptionEngine.decrypt(bf.content, step["key_bytes"], step["algorithm"])
+                    if step["algorithm"] == "PGP":
+                        priv_pem = Path(step["priv_pem_path"]).read_bytes()
+                        decrypted = EncryptionEngine.decrypt(bf.content, priv_pem, "PGP")
+                    else:
+                        decrypted = EncryptionEngine.decrypt(bf.content, step["key_bytes"], step["algorithm"])
                     try:
                         payload = decrypted.decode("utf-8")
                         ByteFile.parse(payload)
@@ -343,7 +407,17 @@ class MixtureTab(ttk.Frame):
                         break
                 result = decrypted
             else:
-                result = EncryptionEngine.decrypt_chain(bf.content, chain)
+                has_pgp = any(s["algorithm"] == "PGP" for s in chain)
+                if has_pgp:
+                    result = bf.content
+                    for step in reversed(chain):
+                        if step["algorithm"] == "PGP":
+                            priv_pem = Path(step["priv_pem_path"]).read_bytes()
+                            result = EncryptionEngine.decrypt(result, priv_pem, "PGP")
+                        else:
+                            result = EncryptionEngine.decrypt(result, step["key_bytes"], step["algorithm"])
+                else:
+                    result = EncryptionEngine.decrypt_chain(bf.content, chain)
 
             Path(dest).write_bytes(result)
             self.after(0, lambda: self._status.set(f"✅ Decrypted → {Path(dest).name}"))

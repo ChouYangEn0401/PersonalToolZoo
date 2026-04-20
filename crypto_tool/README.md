@@ -2,7 +2,7 @@
 
 一款功能強大的加密/解密桌面工具，支援多種加密演算法、專屬 `.isd` 格式（輸出副檔名）、多階段混合加密，以及大檔案分段處理。
 
-> **v1.2.0** 新增：AlgoBar 演算法選擇器、Advanced Settings 移入加密卡片、演算法可見性開關、解密側自動顯示 hint + 演算法
+> **v1.3.0** 新增：XOR-FOLD 演算法、PGP / PGP-Multi / PGP-Escrow 非對稱加密支援、txtfile 金鑰尾端換行正規化
 
 ---
 
@@ -27,7 +27,11 @@
 | Blowfish-CBC | 區塊加密 | 經典對稱加密 |
 | 3DES-CBC | 區塊加密 | 三重 DES，向下相容 |
 | XOR | 串流 | 以 PBKDF2 衍生金鑰進行 XOR |
+| XOR-FOLD | 串流 | 折疊金鑰的 XOR — 確保金鑰每個位元都參與加密 |
 | Base64 | 編碼 | 僅編碼，非加密（無需密碼） |
+| **PGP** | 非對稱包裝 | RSA-4096 + AES-GCM hybrid，單一收件人 |
+| **PGP-Multi** | 非對稱包裝 | 多收件人 RSA，每位收件人都能獨立解密 |
+| **PGP-Escrow** | 非對稱包裝 | 多收件人 + 第三方強制解密金鑰，`.isd` 標記為可信任第三方解鎖 |
 
 ### 密碼類型
 
@@ -38,7 +42,7 @@
 | **image** | 圖片檔的 SHA-256 雜湊 | ≤ 50 MB |
 | **video** | 影片檔的 SHA-256 雜湊 | ≤ 200 MB |
 | **bytefile** | `.isd` 內容的 SHA-256 雜湊（key-type: 以已匯出的 .isd/.bytefile 內容做為金鑰來源） | ≤ 50 MB |
-| **txtfile** | 純文字檔（整篇或段落）內容的 SHA-256 雜湊 | ≤ 50 MB |
+| **txtfile** | 純文字檔內容的 SHA-256 雜湊（自動去除尾端換行，避免不同編輯器產生不同金鑰） | ≤ 50 MB |
 
 ---
 
@@ -69,6 +73,17 @@ python main.py
 ---
 
 ## 更新紀錄
+
+### v1.3.0
+- **XOR-FOLD 演算法**：折疊金鑰 XOR，確保整條金鑰都被使用；AlgoBar 與 tooltip 均已加入
+- **PGP / PGP-Multi / PGP-Escrow**：RSA-4096 + AES-GCM 非對稱包裝，所有 4 個分頁均支援
+  - **PGP**：單一公鑰收件人；選取後顯示內層演算法選擇器與公鑰匯入面板
+  - **PGP-Multi**：可加入多位收件人（＋ 按鈕），每人均可用自己的私鑰解密
+  - **PGP-Escrow**：在 Multi 基礎上額外加入一把 Escrow 主金鑰，`.isd` NOTE 標記 `pgp_escrow: true`
+  - 解密側：拖入 `.isd` 後若偵測到 `pgp_mode`，自動顯示私鑰匯入列
+  - 可透過 `EncryptionEngine.pgp_generate_keypair(bits=4096)` 取得 `(priv_pem, pub_pem)` 金鑰對
+- **txtfile 金鑰正規化**：讀取純文字金鑰檔案時自動 `rstrip("\r\n")`，解決不同編輯器儲存換行不一致導致的解密失敗
+- **解密側自動選金鑰類型**：`.isd` 內有 `reveal_key_type` 時，解密卡片自動切換對應的密碼類型
 
 ### v1.2.0
 - **AlgoBar（演算法選擇器）**：Tab 1 Advanced Settings 的演算法選擇改為分段式按鈕 Bar，金色高亮已選、hover 時有暖金光暈效果
@@ -123,6 +138,34 @@ python main.py
 5. 可選：**複製到剪貼簿** / **存成 .txt** / **存成 .isd**
 
 解密：將加密文字貼入輸入框，輸入密碼後點 **🔓 Decrypt**。
+
+### PGP 兩段式加密流程
+
+選擇 **PGP / PGP-Multi / PGP-Escrow** 演算法時，工具執行兩段式加密：
+
+```
+原始資料 → [內層加密 (對稱)] → [PGP 信封 (公鑰包裝)]
+             (e.g. AES-256-GCM + 密碼)    (RSA-4096 OAEP + AES-GCM)
+```
+
+**加密步驟：**
+1. 在 Advanced Settings 選擇 PGP / PGP-Multi / PGP-Escrow
+2. 在出現的 **PGP 面板**中：
+   - 選擇**內層演算法**（AES-256-GCM 等）與對應密碼
+   - 匯入一或多個**收件人公鑰**（`.pem`）
+   - （PGP-Escrow）額外匯入 Escrow 公鑰
+3. 點 **🔒 Encrypt & Save**
+
+**解密步驟：**
+1. 拖入 `.isd`，工具自動偵測 PGP 模式並顯示**私鑰匯入列**
+2. 匯入自己的私鑰 `.pem`
+3. 點 **🔓 Decrypt & Save**
+
+**生成 RSA 金鑰對（程式碼）：**
+```python
+from core.engine import EncryptionEngine
+priv_pem, pub_pem = EncryptionEngine.pgp_generate_keypair(bits=4096)
+```
 
 ### Tab 3 — 混合加密
 

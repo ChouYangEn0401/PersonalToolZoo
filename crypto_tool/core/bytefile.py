@@ -37,6 +37,9 @@ def default_note(
     original_size: int | None = None,
     mixture_chain: list[dict] | None = None,
     chunk_info: dict | None = None,
+    pgp_mode: str | None = None,
+    pgp_escrow: bool = False,
+    pgp_recipient_count: int = 0,
 ) -> dict[str, Any]:
     return {
         "encryption_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -50,6 +53,10 @@ def default_note(
         "original_filename": original_filename,
         "original_size": original_size,
         "chunk_info": chunk_info,
+        # PGP metadata — None means not PGP-wrapped
+        "pgp_mode": pgp_mode,
+        "pgp_escrow": pgp_escrow if pgp_escrow else None,
+        "pgp_recipient_count": pgp_recipient_count if pgp_recipient_count else None,
     }
 
 
