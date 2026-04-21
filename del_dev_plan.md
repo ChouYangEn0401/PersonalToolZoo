@@ -29,13 +29,13 @@
   - `core/bytefile.py`
     - 預設 `mode` 為 `layered`；解析時保留向下相容（`simple`->`layered`, `node`->`nested`）。
   - `gui/tab_mixture.py`
-    - Encrypt: 若 `mode==nested`，每階段加密後把該階段包成 `.isd` 並以該 `.isd` 的 bytes 作為下一階段的輸入（outer 包 inner）；輸出最外層 `.isd` 或在 Nested 情境下可選是否輸出最後一個外層檔名。
+    - Encrypt: 若 `mode==nested`，每階段加密後把該階段包成 `.isd` 並以該 `.isd` 的 bytes 作為下一階段的輸入（outer 包 inner）；輸出最外層 `.isd`。
     - Encrypt: 若 `mode==layered`，採用 `EncryptionEngine.encrypt_chain`（或等效）把多階段結果融合，最後包成單一 `.isd`。
-    - Decrypt: 改為使用 MixtureTab 的 input area（`file_sel` 或 `input_text`）讀入 source，然後依 `mode` 執行對應的反向邏輯。
-      - Nested 解法：逐層 parse `ByteFile` 並根據 chain reversed 用對應 key/PGP priv 解，若解一次得到的仍為 `.isd`（即 payload 為 ByteFile.pack()），則可以直接回傳那個 `.isd` 內容（以檔案形式保存）。
-      - Layered 解法：直接對 `ByteFile.content` 使用 `decrypt_chain`（或對 PGP 先 unwrap）還原原始 bytes。
+    - Decrypt: 使用 MixtureTab 的 input area（`file_sel` 或 `input_text`）讀入 source，然後依 `mode` 執行對應的反向邏輯：
+      - Nested：逐層 parse `ByteFile` 並依 chain reversed 解出；若解出仍為 `.isd`，可直接保存該 `.isd` bytes。
+      - Layered：對 `ByteFile.content` 使用 `decrypt_chain` 或針對 PGP 先 unwrap 還原原始 bytes。
   - `gui/tab_file.py`
-    - 保持 FileTab 的現有行為，但包含 `mode` 的判斷：對 `nested` 的最外層，可讓使用者在 Decrypt 時得到下一層的 `.isd`；對 `layered` 則解出融合內容（可能仍需完整 chain）。
+    - 保持 FileTab 的現有行為，但包含 `mode` 的判斷：對 `nested` 的最外層，可讓使用者在 Decrypt 時得到下一層的 `.isd`；對 `layered` 則解出融合內容（通常無法直接得到原始，需整個 chain）。
   - `gui/tab_largefile.py`, `gui/tab_text.py` 等相依檔案：更新標籤與 metadata 中的 `mode` 文字（已更新多處）。
 
 測試計畫（How to test / steps）
@@ -44,17 +44,31 @@
 
 1) 測試 `nested`（逐層）流程
    - MixtureTab：新增兩個 stage（Stage A 使用 AES keyA；Stage B 使用 AES keyB），模式選 `Nested`，輸入一個小檔案 `plain.bin`，點 Encrypt，存為 `outer.isd`。
-   - FileTab：把 `outer.isd` 拖入 Decrypt，輸入 keyB（注意：外層使用 keyB 解出內層 `inner.isd`），點 Decrypt & Save → 應會輸出 `inner.isd` 檔案（不是原始檔）。
+   - FileTab：把 `outer.isd` 拖入 Decrypt，輸入 keyB（外層使用 keyB 解出內層 `inner.isd`），點 Decrypt & Save → 應會輸出 `inner.isd` 檔案（不是原始檔）。
    - 再用 FileTab 解 `inner.isd`（輸入 keyA）→ 應還原 `plain.bin`。
 
 2) 測試 `layered`（融合）流程
    - MixtureTab：同上兩個 stage，但模式選 `Layered`，Encrypt 出 `fused.isd`。
-   - FileTab：嘗試 Decrypt `fused.isd`（輸入任一單一階段的密碼）→ 應該失敗或得到不可識別的亂碼（這是預期）；要還原必須使用 MixtureTab 並以完全相同的 stage chain 進行 Decrypt（或使用一個能對整個 chain 做 reverse 的 API）。
+   - FileTab：嘗試 Decrypt `fused.isd`（輸入任一單一階段的密碼）→ 應該失敗或得到不可識別的亂碼（預期）；要還原必須使用 MixtureTab 並以完全相同的 stage chain 進行 Decrypt（或使用 decrypt_chain API）。
 
 自動化測試建議（pytest）：
 - 新增 `tests/test_mixture_modes.py`，用小型 byte payload 做：
-  - 對 `nested`：呼叫 MixtureTab/engine 的加密函式，檢查第一層解密會產生一個可 parse 的 `.isd`，第二層解密還原原始
-  - 對 `layered`：呼叫 encrypt_chain，然後 decrypt_chain，檢查最終輸出等於原始
+  - 對 `nested`：使用 engine 或 MixtureTab 的邏輯建立兩層 `.isd`，檢查第一層解密會產生可 parse 的 `.isd`，第二層解密還原原始。
+  - 對 `layered`：呼叫 `EncryptionEngine.encrypt_chain` 與 `decrypt_chain`，檢查最終輸出等於原始。
+
+進度（Inventory & Next steps）
+
+- ✅ `core/bytefile.py`: `mode` property present, default `layered`, backward-compat mapping (`simple`→`layered`, `node`→`nested`).
+- ✅ `MixtureTab` (`gui/tab_mixture.py`): Encrypt/Decrypt for `layered` and `nested` implemented; Decrypt uses MixtureTab input area.
+- ✅ `FileTab` (`gui/tab_file.py`): Nested peeling and layered behavior implemented.
+- ⚠️ README/UI/tooltips: GUI labels appear updated in code, but README and help text need review and wording refinements.
+- ⚠️ Tests: automated pytest tests are not yet added — next immediate task.
+
+Planned changes (I'll implement next):
+1. Add `tests/test_mixture_modes.py` (pytest) and run locally.
+2. Add a concise manual-test checklist into this file (done above) and mark when verified.
+3. Update `README.md` with a clear `Layered` vs `Nested` section and quick run/test commands.
+4. Review & refine UI tooltips/labels if any phrasing needs change.
 
 快速指令（本地運行）：
 
@@ -72,16 +86,6 @@ pytest -q
 
 交付與回饋流程
 
-- 我先建立此 `del_dev_plan.md`（已完成）。
-- 你請檢視內容，回覆要修改的地方（語意、測試優先順序、或我是否直接 revert 某些檔案）。
-- 確認後我會把 TODO 標為 in-progress，並開始依優先順序：
-  1. 撰寫/修正核心行為（`MixtureTab` 的 decrypt flow 與 `EncryptionEngine` 的 chain 支援驗證）
-  2. 補充測試碼與手動驗證腳本
-  3. 最後提交（commit）並提供使用說明與驗證步驟
-
-備註
-
-- 我會保持 `.isd` 格式不變（CONTENT + NOTE JSON），只變更 NOTE 的 `mode` 命名與解讀邏輯。
-- 若你想要我先把剛才那些改動全部還原（`git restore .`），請明確回覆「還原全部」，我會執行並停止非必要變更。
-
-
+- 我已檢視程式碼並把已完成項目標示為完成。
+- 我將先新增自動化測試檔，執行確認後再更新 `README.md` 並回報結果。
+- 若您想要我先還原所有檔案到上游狀態（`git restore .`），請明確回覆「還原全部」。

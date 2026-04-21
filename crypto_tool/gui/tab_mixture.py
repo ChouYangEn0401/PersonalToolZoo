@@ -159,7 +159,7 @@ class MixtureTab(ttk.Frame):
 
     def _build_ui(self):
         ttk.Label(self, text="🔗  Mixture Encryption", font=FONT_TITLE).pack(anchor=W, pady=(0, 4))
-        ttk.Label(self, text="Build a multi-stage encryption pipeline with different algorithms & passwords per stage.",
+        ttk.Label(self, text="Build a pipeline of stages (algorithm + password). Encrypt runs all stages forward; Decrypt runs all stages in reverse.",
                   font=FONT_SMALL, wraplength=700).pack(anchor=W, pady=(0, PAD))
 
         # ── Mode & input ──────────────────────────────────────────────
@@ -194,7 +194,7 @@ class MixtureTab(ttk.Frame):
         self.input_text.pack(fill=X)
 
         # ── Pipeline stages (scrollable) ──────────────────────────────
-        stage_lf = ttk.Labelframe(self, text="Encryption Pipeline", padding=8)
+        stage_lf = ttk.Labelframe(self, text="Pipeline", padding=8)
         stage_lf.pack(fill=BOTH, expand=True, pady=(0, 8))
 
         stage_btn_row = ttk.Frame(stage_lf)
@@ -217,7 +217,7 @@ class MixtureTab(ttk.Frame):
         canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(-1 * (e.delta // 120), "units"))
         self._canvas = canvas
 
-        # ── Action buttons ────────────────────────────────────────────
+        # ── Action buttons ─────────────────────────────────────────────
         act = ttk.Frame(self)
         act.pack(fill=X, pady=(0, 4))
         ttk.Button(act, text="🔒  Encrypt", bootstyle="warning",
@@ -264,132 +264,85 @@ class MixtureTab(ttk.Frame):
     # ── Encrypt ───────────────────────────────────────────────────────
 
     def _do_encrypt(self):
-        if self.input_type_var.get() == "file":
-            src = self.file_sel.get()
-            if not src:
-                messagebox.showwarning("Input", "Select a file.")
-                return
-        else:
-            raw = self.input_text.get("1.0", END).rstrip("\n")
-            if not raw:
-                messagebox.showwarning("Input", "Enter text.")
-                return
-            src = None
-
-        try:
-            chain = self._get_chain()
-        except Exception as exc:
-            messagebox.showerror("Config Error", str(exc))
+        src, src_is_path = self._resolve_input()
+        if src is None:
             return
-
-        # Ask output
+        chain = self._resolve_chain()
+        if chain is None:
+            return
         dest = filedialog.asksaveasfilename(
             defaultextension=BYTEFILE_EXT,
-            filetypes=[("ByteFile", f"*{BYTEFILE_EXT}"), ("Text", "*.txt"), ("All", "*.*")],
+            filetypes=[("ByteFile", f"*{BYTEFILE_EXT}"), ("All files", "*.*")],
         )
         if not dest:
             return
-
-        self._status.set("Encrypting (mixture)...")
+        self._status.set("Encrypting...")
         threading.Thread(
             target=self._encrypt_worker,
-            args=(src, chain, dest),
+            args=(src, src_is_path, chain, dest),
             daemon=True,
         ).start()
 
-    def _encrypt_worker(self, src: str | None, chain: list[dict], dest: str):
+    def _encrypt_worker(self, src: str, src_is_path: bool, chain: list[dict], dest: str):
         try:
-            if src:
-                data = Path(src).read_bytes()
-                orig_name = Path(src).name
-            else:
-                data = self.input_text.get("1.0", END).rstrip("\n").encode("utf-8")
-                orig_name = None
-
+            raw_bytes, orig_name = self._load_input(src, src_is_path)
             mode = self.mode_var.get()
-            chain_meta = [{"algorithm": s["algorithm"], "key_type": s["key_type"]} for s in chain]
+            chain_meta = [{"algorithm": s["algorithm"], "key_type": s.get("key_type", "text")} for s in chain]
 
-            if mode == "nested":
-                payload = data
+            if mode == "layered":
+                # content → enc1 → enc2 → … → encN → wrap ONE .isd
+                result = raw_bytes
+                for step in chain:
+                    result = self._enc_step(result, step)
+                note = default_note(
+                    algorithm=chain[0]["algorithm"], key_type=chain[0].get("key_type", "text"),
+                    mode="layered", iterations=len(chain),
+                    original_filename=orig_name, original_size=len(raw_bytes),
+                    mixture_chain=chain_meta,
+                )
+                ByteFile(result, note).save(dest)
+            else:
+                # nested: each stage encrypts current bytes → wraps into a new .isd
+                # stage 1 input: raw content bytes
+                # stage 2 input: entire stage-1 .isd file as bytes (string representation)
+                # stage N output: saved as the final .isd
+                payload = raw_bytes
                 for i, step in enumerate(chain):
-                    if step["algorithm"] == "PGP":
-                        pub_pem = Path(step["pub_pem_path"]).read_bytes()
-                        encrypted = EncryptionEngine.encrypt(payload, pub_pem, "PGP")
-                    else:
-                        encrypted = EncryptionEngine.encrypt(payload, step["key_bytes"], step["algorithm"])
+                    encrypted = self._enc_step(payload, step)
                     note = default_note(
-                        algorithm=step["algorithm"], key_type=step["key_type"],
+                        algorithm=step["algorithm"], key_type=step.get("key_type", "text"),
                         mode="nested", iterations=len(chain),
                         original_filename=orig_name if i == 0 else None,
-                        original_size=len(data) if i == 0 else None,
+                        original_size=len(raw_bytes) if i == 0 else None,
                     )
                     note["layer"] = i + 1
                     note["total_layers"] = len(chain)
-                    bf = ByteFile(encrypted, note)
-                    payload = bf.pack().encode("utf-8")
+                    payload = ByteFile(encrypted, note).pack().encode("utf-8")
                 Path(dest).write_bytes(payload)
-            else:
-                has_pgp = any(s["algorithm"] == "PGP" for s in chain)
-                if has_pgp:
-                    result = data
-                    for step in chain:
-                        if step["algorithm"] == "PGP":
-                            pub_pem = Path(step["pub_pem_path"]).read_bytes()
-                            result = EncryptionEngine.encrypt(result, pub_pem, "PGP")
-                        else:
-                            result = EncryptionEngine.encrypt(result, step["key_bytes"], step["algorithm"])
-                    encrypted = result
-                else:
-                    encrypted = EncryptionEngine.encrypt_chain(data, chain)
-                note = default_note(
-                    algorithm=chain[0]["algorithm"], key_type=chain[0]["key_type"],
-                    mode="layered", iterations=len(chain),
-                    original_filename=orig_name,
-                    original_size=len(data),
-                    mixture_chain=chain_meta,
-                )
-                bf = ByteFile(encrypted, note)
-                bf.save(dest)
 
-            self.after(0, lambda: self._status.set(f"✅ Mixture encrypted → {Path(dest).name}"))
-            self.after(0, lambda: messagebox.showinfo("Done", f"Encrypted!\n{dest}"))
+            dest_name = Path(dest).name
+            self.after(0, lambda n=dest_name: self._status.set(f"✅ Encrypted → {n}"))
+            self.after(0, lambda d=dest: messagebox.showinfo("Done", f"Encrypted!\n{d}"))
         except Exception as exc:
-            self.after(0, lambda: self._status.set(f"❌ {exc}"))
-            self.after(0, lambda: messagebox.showerror("Error", str(exc)))
+            msg = str(exc)
+            self.after(0, lambda m=msg: self._status.set(f"❌ {m}"))
+            self.after(0, lambda m=msg: messagebox.showerror("Encrypt Error", m))
 
     # ── Decrypt ───────────────────────────────────────────────────────
 
     def _do_decrypt(self):
-        # Use the input area as source (file selector or text box) instead of
-        # opening a new file dialog. This makes MixtureTab decrypt inline with
-        # the configured pipeline. Destination still requested for saving.
-        if self.input_type_var.get() == "file":
-            src = self.file_sel.get()
-            if not src:
-                messagebox.showwarning("Input", "Select a file in the Input area.")
-                return
-            src_is_path = True
-        else:
-            raw = self.input_text.get("1.0", END).rstrip("\n")
-            if not raw:
-                messagebox.showwarning("Input", "Enter text in the Input area.")
-                return
-            src = raw
-            src_is_path = False
-
-        try:
-            chain = self._get_chain()
-        except Exception as exc:
-            messagebox.showerror("Config Error", str(exc))
+        src, src_is_path = self._resolve_input()
+        if src is None:
             return
-
+        chain = self._resolve_chain()
+        if chain is None:
+            return
         dest = filedialog.asksaveasfilename(
             filetypes=[("All files", "*.*")],
         )
         if not dest:
             return
-
-        self._status.set("Decrypting (mixture)...")
+        self._status.set("Decrypting...")
         threading.Thread(
             target=self._decrypt_worker,
             args=(src, src_is_path, chain, dest),
@@ -398,53 +351,117 @@ class MixtureTab(ttk.Frame):
 
     def _decrypt_worker(self, src: str, src_is_path: bool, chain: list[dict], dest: str):
         try:
-            # Load ByteFile from either a path or raw text
-            if src_is_path:
-                text = Path(src).read_text(encoding="utf-8")
-            else:
-                text = src
+            raw_bytes, _orig_name = self._load_input(src, src_is_path)
+            mode = self.mode_var.get()
 
-            bf = ByteFile.parse(text)
-            mode = bf.mode
-
-            # Nested: each layer is a packed .isd; peel layers using the provided chain
-            if mode == "nested":
-                payload = text
-                decrypted = b""
+            if mode == "layered":
+                # parse ONE .isd → decrypt chain in reverse → save raw bytes
+                bf = ByteFile.parse(raw_bytes.decode("utf-8"))
+                result = bf.content
                 for step in reversed(chain):
-                    bf = ByteFile.parse(payload)
-                    if step["algorithm"] == "PGP":
-                        priv_pem = Path(step["priv_pem_path"]).read_bytes()
-                        decrypted = EncryptionEngine.decrypt(bf.content, priv_pem, "PGP")
-                    else:
-                        decrypted = EncryptionEngine.decrypt(bf.content, step["key_bytes"], step["algorithm"])
-                    # If result is another packed .isd, continue peeling, otherwise stop
-                    try:
-                        payload = decrypted.decode("utf-8")
-                        # If parse succeeds, continue loop to peel next
-                        ByteFile.parse(payload)
-                    except Exception:
-                        break
-                result = decrypted
+                    result = self._dec_step(result, step)
+                Path(dest).write_bytes(result)
+                dest_name = Path(dest).name
+                self.after(0, lambda n=dest_name: self._status.set(f"✅ Decrypted → {n}"))
+                self.after(0, lambda d=dest: messagebox.showinfo("Done", f"Decrypted!\n{d}"))
 
-            # Layered: the ByteFile contains a payload that was produced by encrypt_chain
             else:
-                has_pgp = any(s["algorithm"] == "PGP" for s in chain)
-                if has_pgp:
-                    result = bf.content
-                    for step in reversed(chain):
-                        if step["algorithm"] == "PGP":
-                            priv_pem = Path(step["priv_pem_path"]).read_bytes()
-                            result = EncryptionEngine.decrypt(result, priv_pem, "PGP")
-                        else:
-                            result = EncryptionEngine.decrypt(result, step["key_bytes"], step["algorithm"])
-                else:
-                    result = EncryptionEngine.decrypt_chain(bf.content, chain)
+                # nested: peel layers in reverse (outermost first)
+                # each peel: parse current .isd → decrypt its content → current = result
+                # on failure: save the last valid .isd and warn the user (partial result)
+                current = raw_bytes
+                reversed_chain = list(reversed(chain))
+                completed = 0
+                for i, step in enumerate(reversed_chain):
+                    try:
+                        bf = ByteFile.parse(current.decode("utf-8"))
+                    except Exception as parse_err:
+                        err = str(parse_err)
+                        self.after(0, lambda m=err: messagebox.showerror(
+                            "Parse Error",
+                            f"Stage {i + 1} (reversed): could not parse as .isd — {m}"
+                        ))
+                        return
+                    try:
+                        current = self._dec_step(bf.content, step)
+                    except Exception as dec_err:
+                        # Save the last successfully-peeled .isd so user can continue
+                        Path(dest).write_bytes(current)
+                        stage_label = len(chain) - i
+                        err = str(dec_err)
+                        dest_name = Path(dest).name
+                        self.after(0, lambda n=dest_name, s=stage_label, m=err:
+                            self._status.set(f"⚠️ Partial decrypt at stage {s} → {n}"))
+                        self.after(0, lambda d=dest, s=stage_label, m=err:
+                            messagebox.showwarning(
+                                "Partial Decrypt",
+                                f"Stage {s} failed: {m}\n\n"
+                                f"The last valid .isd has been saved to:\n{d}\n\n"
+                                "You can open it in the File tab or fix the password and retry."
+                            ))
+                        return
+                    completed += 1
 
-            Path(dest).write_bytes(result)
-            self.after(0, lambda: self._status.set(f"✅ Decrypted → {Path(dest).name}"))
-            self.after(0, lambda: messagebox.showinfo("Done", f"Decrypted!\n{dest}"))
+                Path(dest).write_bytes(current)
+                dest_name = Path(dest).name
+                self.after(0, lambda n=dest_name: self._status.set(f"✅ Decrypted → {n}"))
+                self.after(0, lambda d=dest: messagebox.showinfo("Done", f"Decrypted!\n{d}"))
+
         except Exception as exc:
-            # bubble up the error to the UI
-            self.after(0, lambda: self._status.set(f"❌ {exc}"))
-            self.after(0, lambda: messagebox.showerror("Error", str(exc)))
+            msg = str(exc)
+            self.after(0, lambda m=msg: self._status.set(f"❌ {m}"))
+            self.after(0, lambda m=msg: messagebox.showerror("Decrypt Error", m))
+
+    # ── Shared helpers ────────────────────────────────────────────────
+
+    def _resolve_input(self) -> tuple[str | None, bool]:
+        """Return (src, src_is_path). Returns (None, False) and shows warning on bad input."""
+        if self.input_type_var.get() == "file":
+            src = self.file_sel.get()
+            if not src:
+                messagebox.showwarning("Input", "Select a file.")
+                return None, False
+            return src, True
+        else:
+            raw = self.input_text.get("1.0", END).rstrip("\n")
+            if not raw:
+                messagebox.showwarning("Input", "Enter text.")
+                return None, False
+            return raw, False
+
+    def _resolve_chain(self) -> list[dict] | None:
+        """Return chain list or None (and show error) on failure."""
+        try:
+            chain = self._get_chain()
+            if not chain:
+                messagebox.showwarning("Pipeline", "Add at least one stage.")
+                return None
+            return chain
+        except Exception as exc:
+            msg = str(exc)
+            messagebox.showerror("Config Error", msg)
+            return None
+
+    @staticmethod
+    def _load_input(src: str, src_is_path: bool) -> tuple[bytes, str | None]:
+        """Return (raw_bytes, original_filename)."""
+        if src_is_path:
+            p = Path(src)
+            return p.read_bytes(), p.name
+        return src.encode("utf-8"), None
+
+    @staticmethod
+    def _enc_step(data: bytes, step: dict) -> bytes:
+        algo = step["algorithm"]
+        if algo == "PGP":
+            pub_pem = Path(step["pub_pem_path"]).read_bytes()
+            return EncryptionEngine.encrypt(data, pub_pem, "PGP")
+        return EncryptionEngine.encrypt(data, step["key_bytes"], algo)
+
+    @staticmethod
+    def _dec_step(data: bytes, step: dict) -> bytes:
+        algo = step["algorithm"]
+        if algo == "PGP":
+            priv_pem = Path(step["priv_pem_path"]).read_bytes()
+            return EncryptionEngine.decrypt(data, priv_pem, "PGP")
+        return EncryptionEngine.decrypt(data, step["key_bytes"], algo)
