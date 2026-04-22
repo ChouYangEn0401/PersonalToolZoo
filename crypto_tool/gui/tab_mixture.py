@@ -1,8 +1,7 @@
-"""Tab 3 — Mixture (multi-stage) Encryption Mode."""
+"""Tab — Mixture (multi-stage pipeline) Encryption Mode."""
 
 from __future__ import annotations
 
-import base64
 import threading
 import tkinter as tk
 from pathlib import Path
@@ -12,90 +11,119 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinterdnd2 import DND_FILES
 
-from core.bytefile import ByteFile, BYTEFILE_EXT, default_note
-from core.engine import ALGORITHMS, PGP_ALGORITHMS, STAGE_ALGORITHMS, EncryptionEngine
-from core.utils import derive_key_bytes
+from core.bytefile import ByteFile, BYTEFILE_EXT
+from core.pipeline import (
+    encrypt_multi, decrypt_multi,
+    encrypt_layer_wrap, decrypt_layer_wrap,
+    PartialDecryptError,
+)
+from core.engine import STAGE_ALGORITHMS
 
-from .theme import FONT_TITLE, FONT_BODY, FONT_MONO, FONT_SUBTITLE, FONT_SMALL, PAD
-from .widgets import PasswordFrame, FileSelector, Tooltip, _clean_dnd_path
+from .theme import FONT_TITLE, FONT_BODY, FONT_MONO, FONT_SMALL, PAD
+from .widgets import FileSelector, _clean_dnd_path
+
 
 
 class _StageRow(ttk.Frame):
-    """One encryption-stage row: algorithm + password + delete button."""
+    """
+    One stage in the pipeline.
+
+    Stores raw user input (pw_source + key_type OR PGP paths).
+    Key derivation is deferred to the worker thread via core.pipeline so errors
+    surface in the right place and the same config works for both encrypt/decrypt.
+    """
+
+    _KEY_TYPES = ["text", "file", "image", "video", "bytefile", "txtfile"]
 
     def __init__(self, parent, index: int, on_delete):
         super().__init__(parent)
-        self.index = index
+        self.columnconfigure(1, weight=1)
         self._on_delete = on_delete
 
-        self.columnconfigure(1, weight=1)
+        # ── Index label ───────────────────────────────────────────────
+        self._lbl = ttk.Label(self, font=FONT_BODY, width=3)
+        self._lbl.grid(row=0, column=0, rowspan=2, padx=(0, 6))
+        self.set_index(index)
 
-        lbl = ttk.Label(self, text=f"#{index + 1}", font=FONT_BODY, width=3)
-        lbl.grid(row=0, column=0, rowspan=2, padx=(0, 6))
-
-        # Algorithm
+        # ── Algorithm ─────────────────────────────────────────────────
         self.algo_var = tk.StringVar(value="AES-256-CBC")
         ttk.Combobox(
             self, textvariable=self.algo_var, values=STAGE_ALGORITHMS,
             state="readonly", width=18, font=FONT_BODY,
         ).grid(row=0, column=1, sticky=W, pady=(0, 2))
 
-        # Password
+        # ── Symmetric password row ────────────────────────────────────
         self._pw_row = ttk.Frame(self)
-        pw_row = self._pw_row
-        pw_row.grid(row=1, column=1, sticky=EW, pady=(0, 2))
+        self._pw_row.grid(row=1, column=1, sticky=EW, pady=(0, 2))
+
         self.key_type_var = tk.StringVar(value="text")
         ttk.Combobox(
-            pw_row, textvariable=self.key_type_var,
-            values=["text", "file", "image", "video", "bytefile", "txtfile"],
-            state="readonly", width=8, font=FONT_SMALL,
+            self._pw_row, textvariable=self.key_type_var,
+            values=self._KEY_TYPES, state="readonly", width=8, font=FONT_SMALL,
         ).pack(side=LEFT, padx=(0, 4))
+        self.key_type_var.trace_add("write", self._on_key_type_change)
+
         self.pw_var = tk.StringVar()
-        self._pw_entry = ttk.Entry(pw_row, textvariable=self.pw_var, show="●", font=FONT_BODY)
+        self._pw_entry = ttk.Entry(
+            self._pw_row, textvariable=self.pw_var, show="●", font=FONT_BODY,
+        )
         self._pw_entry.pack(side=LEFT, fill=X, expand=True, padx=(0, 4))
-        ttk.Button(pw_row, text="👁", width=3, bootstyle="outline-secondary",
-                   command=self._toggle).pack(side=LEFT, padx=(0, 4))
+        self._show_pw = False
+        ttk.Button(
+            self._pw_row, text="👁", width=3, bootstyle="outline-secondary",
+            command=self._toggle_pw,
+        ).pack(side=LEFT, padx=(0, 4))
 
-        # File browse (shown when key_type != text)
-        self._browse_btn = ttk.Button(pw_row, text="📁", width=3, bootstyle="outline",
-                                       command=self._browse_file)
-        self._browse_btn.pack(side=LEFT, padx=(0, 4))
-        self.key_type_var.trace_add("write", self._on_type_change)
+        self._file_browse_btn = ttk.Button(
+            self._pw_row, text="📁", width=3, bootstyle="outline",
+            command=self._browse_key_file,
+        )
+        # shown only for non-text key types
 
-        # ── DnD on password entry (for file-based key drops) ─────────
+        # DnD on password entry
         self._pw_entry.drop_target_register(DND_FILES)
         self._pw_entry.dnd_bind("<<Drop>>", self._on_pw_drop)
 
-        # ── PGP key rows (shown instead of password when PGP selected) ─
+        # ── PGP row (shown when algorithm == "PGP") ───────────────────
         self._pgp_row = ttk.Frame(self)
-        # not gridded initially
+        # NOT gridded initially
+
         self._pgp_pub_var = tk.StringVar()
         self._pgp_priv_var = tk.StringVar()
-        _pgp_inner = ttk.Frame(self._pgp_row)
-        _pgp_inner.pack(fill=X)
-        ttk.Label(_pgp_inner, text="Pub key:", font=FONT_SMALL, width=8).pack(side=LEFT)
-        ttk.Entry(_pgp_inner, textvariable=self._pgp_pub_var, font=FONT_SMALL).pack(
-            side=LEFT, fill=X, expand=True, padx=(0, 2))
-        ttk.Button(_pgp_inner, text="📁", width=3, bootstyle="outline",
-                   command=lambda: self._browse_pgp(self._pgp_pub_var)).pack(side=LEFT, padx=(0, 6))
-        ttk.Label(_pgp_inner, text="Priv:", font=FONT_SMALL, width=5).pack(side=LEFT)
-        ttk.Entry(_pgp_inner, textvariable=self._pgp_priv_var, font=FONT_SMALL).pack(
-            side=LEFT, fill=X, expand=True, padx=(0, 2))
-        ttk.Button(_pgp_inner, text="📁", width=3, bootstyle="outline",
-                   command=lambda: self._browse_pgp(self._pgp_priv_var)).pack(side=LEFT)
+
+        def _pgp_field(label: str, var: tk.StringVar, browse_cb):
+            row = ttk.Frame(self._pgp_row)
+            row.pack(fill=X, pady=(0, 2))
+            ttk.Label(row, text=label, font=FONT_SMALL, width=18).pack(side=LEFT)
+            ttk.Entry(row, textvariable=var, font=FONT_SMALL).pack(
+                side=LEFT, fill=X, expand=True, padx=(0, 2))
+            ttk.Button(row, text="📁", width=3, bootstyle="outline",
+                       command=browse_cb).pack(side=LEFT)
+
+        _pgp_field("Public key (encrypt):",
+                   self._pgp_pub_var, lambda: self._browse_pem(self._pgp_pub_var))
+        _pgp_field("Private key (decrypt):",
+                   self._pgp_priv_var, lambda: self._browse_pem(self._pgp_priv_var))
+
+        # ── Delete + separator ────────────────────────────────────────
+        ttk.Button(
+            self, text="✕", width=3, bootstyle="outline-danger",
+            command=lambda: self._on_delete(self),
+        ).grid(row=0, column=2, rowspan=2, padx=(6, 0))
+        ttk.Separator(self, orient=HORIZONTAL).grid(
+            row=2, column=0, columnspan=3, sticky=EW, pady=(6, 2),
+        )
 
         self.algo_var.trace_add("write", self._on_algo_change)
 
-        # Delete
-        ttk.Button(self, text="✕", width=3, bootstyle="outline-danger",
-                   command=lambda: self._on_delete(self)).grid(row=0, column=2, rowspan=2, padx=(6, 0))
+    # ── Internal helpers ──────────────────────────────────────────────
 
-        self._show = False
-        ttk.Separator(self, orient=HORIZONTAL).grid(row=2, column=0, columnspan=3, sticky=EW, pady=(6, 2))
+    def set_index(self, idx: int):
+        self._lbl.config(text=f"#{idx + 1}")
 
-    def _toggle(self):
-        self._show = not self._show
-        self._pw_entry.config(show="" if self._show else "●")
+    def _toggle_pw(self):
+        self._show_pw = not self._show_pw
+        self._pw_entry.config(show="" if self._show_pw else "●")
 
     def _on_algo_change(self, *_):
         if self.algo_var.get() == "PGP":
@@ -105,84 +133,124 @@ class _StageRow(ttk.Frame):
             self._pgp_row.grid_remove()
             self._pw_row.grid()
 
-    def _browse_pgp(self, var: tk.StringVar):
-        p = filedialog.askopenfilename(
-            filetypes=[("PEM / Key files", "*.pem *.key *.pub *.txt"), ("All files", "*.*")]
-        )
-        if p:
-            var.set(p)
-
-    def _on_type_change(self, *_args):
+    def _on_key_type_change(self, *_):
         if self.key_type_var.get() == "text":
-            self._browse_btn.pack_forget()
-        else:
-            self._browse_btn.pack(side=LEFT, padx=(0, 4))
+            self._file_browse_btn.pack_forget()
+        elif not self._file_browse_btn.winfo_ismapped():
+            self._file_browse_btn.pack(side=LEFT, padx=(0, 4))
 
-    def _browse_file(self):
+    def _browse_key_file(self):
         p = filedialog.askopenfilename()
         if p:
             self.pw_var.set(p)
 
+    def _browse_pem(self, var: tk.StringVar):
+        p = filedialog.askopenfilename(
+            filetypes=[("PEM / Key files", "*.pem *.key *.pub *.txt"),
+                       ("All files", "*.*")]
+        )
+        if p:
+            var.set(p)
+
     def _on_pw_drop(self, event):
-        """Accept a dropped file path as the key-file path."""
         path = _clean_dnd_path(event.data)
         if path:
-            # Auto-switch key type to 'file' if text is currently selected
             if self.key_type_var.get() == "text":
                 self.key_type_var.set("file")
             self.pw_var.set(path)
 
+    # ── Public API ────────────────────────────────────────────────────
+
     def get_config(self) -> dict:
+        """
+        Return raw stage config dict.
+        Key derivation is NOT done here — pipeline module handles it in the worker.
+        """
         algo = self.algo_var.get()
         if algo == "PGP":
             return {
                 "algorithm": "PGP",
+                "key_type": "pgp",
+                "pw_source": "",
                 "pub_pem_path": self._pgp_pub_var.get().strip(),
                 "priv_pem_path": self._pgp_priv_var.get().strip(),
-                "key_bytes": b"",
-                "key_type": "pgp",
             }
         return {
             "algorithm": algo,
-            "key_bytes": derive_key_bytes(self.pw_var.get(), self.key_type_var.get()),
             "key_type": self.key_type_var.get(),
+            "pw_source": self.pw_var.get(),
         }
 
 
+# ── MixtureTab ────────────────────────────────────────────────────────────
+
 class MixtureTab(ttk.Frame):
+    """
+    Multi-stage encryption/decryption using two modes:
+
+    Multi-Encrypt  — all stages fused into ONE .isd.  Any wrong password = full fail.
+    Layer-Wrap     — each stage wraps result in a new .isd.  Partial decrypt saves
+                     the last valid .isd so the user can retry or use File tab.
+    """
+
+    _MODES = [
+        ("Multi-Encrypt",
+         "multi-encrypt",
+         f"content → enc₁ → enc₂ → … → ONE {BYTEFILE_EXT}"),
+        ("Layer-Wrap",
+         "layer-wrap",
+         f"content → enc₁ → isd₁ → enc₂ → isd₂ → … → outer {BYTEFILE_EXT}"),
+    ]
+
     def __init__(self, parent, status_var: tk.StringVar, **kw):
         super().__init__(parent, padding=PAD, **kw)
         self._status = status_var
         self._stages: list[_StageRow] = []
         self._build_ui()
-        self._add_stage()  # start with 1 stage
+        self._add_stage()
+
+    # ── UI construction ───────────────────────────────────────────────
 
     def _build_ui(self):
-        ttk.Label(self, text="🔗  Mixture Encryption", font=FONT_TITLE).pack(anchor=W, pady=(0, 4))
-        ttk.Label(self, text="Build a pipeline of stages (algorithm + password). Encrypt runs all stages forward; Decrypt runs all stages in reverse.",
-                  font=FONT_SMALL, wraplength=700).pack(anchor=W, pady=(0, PAD))
+        ttk.Label(self, text="🔗  Mixture Pipeline", font=FONT_TITLE).pack(
+            anchor=W, pady=(0, 4))
+        ttk.Label(
+            self,
+            text=(
+                "Build N stages, each with its own algorithm and password.  "
+                "Encrypt runs stages 1→N; Decrypt runs stages N→1.  "
+                "Mode controls whether stages share one .isd (Multi-Encrypt) or "
+                "each stage produces its own .isd (Layer-Wrap)."
+            ),
+            font=FONT_SMALL, wraplength=700,
+        ).pack(anchor=W, pady=(0, PAD))
 
-        # ── Mode & input ──────────────────────────────────────────────
+        # ── Mode + input type ─────────────────────────────────────────
         top = ttk.Frame(self)
         top.pack(fill=X, pady=(0, 8))
 
-        mode_frame = ttk.Labelframe(top, text="Mode", padding=8)
-        mode_frame.pack(side=LEFT, padx=(0, 12))
-        self.mode_var = tk.StringVar(value="layered")
-        ttk.Radiobutton(mode_frame, text=f"Layered  (多階段融合 → 1 {BYTEFILE_EXT})",
-                        variable=self.mode_var, value="layered").pack(anchor=W)
-        ttk.Radiobutton(mode_frame, text=f"Nested  (每階段各自一個 {BYTEFILE_EXT})",
-                        variable=self.mode_var, value="nested").pack(anchor=W)
+        mode_lf = ttk.Labelframe(top, text="Mode", padding=8)
+        mode_lf.pack(side=LEFT, padx=(0, 12))
+        self.mode_var = tk.StringVar(value="multi-encrypt")
+        for label, value, hint in self._MODES:
+            ttk.Radiobutton(
+                mode_lf, text=f"{label}  ({hint})",
+                variable=self.mode_var, value=value,
+            ).pack(anchor=W)
 
-        input_frame = ttk.Labelframe(top, text="Input type", padding=8)
-        input_frame.pack(side=LEFT, fill=X, expand=True)
+        input_lf = ttk.Labelframe(top, text="Input type", padding=8)
+        input_lf.pack(side=LEFT, fill=X, expand=True)
         self.input_type_var = tk.StringVar(value="file")
-        ttk.Radiobutton(input_frame, text="File", variable=self.input_type_var,
-                        value="file", command=self._switch_input).pack(side=LEFT, padx=(0, 12))
-        ttk.Radiobutton(input_frame, text="Text", variable=self.input_type_var,
-                        value="text", command=self._switch_input).pack(side=LEFT)
+        ttk.Radiobutton(
+            input_lf, text="File", variable=self.input_type_var,
+            value="file", command=self._switch_input,
+        ).pack(side=LEFT, padx=(0, 12))
+        ttk.Radiobutton(
+            input_lf, text="Text", variable=self.input_type_var,
+            value="text", command=self._switch_input,
+        ).pack(side=LEFT)
 
-        # ── Input area (file / text) ──────────────────────────────────
+        # ── Input area ────────────────────────────────────────────────
         self._input_container = ttk.Frame(self)
         self._input_container.pack(fill=X, pady=(0, 8))
 
@@ -194,36 +262,47 @@ class MixtureTab(ttk.Frame):
         self.input_text.pack(fill=X)
 
         # ── Pipeline stages (scrollable) ──────────────────────────────
-        stage_lf = ttk.Labelframe(self, text="Pipeline", padding=8)
+        stage_lf = ttk.Labelframe(self, text="Pipeline Stages", padding=8)
         stage_lf.pack(fill=BOTH, expand=True, pady=(0, 8))
 
-        stage_btn_row = ttk.Frame(stage_lf)
-        stage_btn_row.pack(fill=X, pady=(0, 4))
-        ttk.Button(stage_btn_row, text="＋ Add Stage", bootstyle="outline-primary",
-                   command=self._add_stage).pack(side=LEFT, padx=(0, 6))
-        ttk.Button(stage_btn_row, text="Clear All", bootstyle="outline-danger",
-                   command=self._clear_stages).pack(side=LEFT)
+        btn_row = ttk.Frame(stage_lf)
+        btn_row.pack(fill=X, pady=(0, 4))
+        ttk.Button(
+            btn_row, text="＋ Add Stage", bootstyle="outline-primary",
+            command=self._add_stage,
+        ).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(
+            btn_row, text="Clear All", bootstyle="outline-danger",
+            command=self._clear_stages,
+        ).pack(side=LEFT)
 
-        # Scrollable container
         canvas = tk.Canvas(stage_lf, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(stage_lf, orient=VERTICAL, command=canvas.yview)
+        sb = ttk.Scrollbar(stage_lf, orient=VERTICAL, command=canvas.yview)
         self._stage_frame = ttk.Frame(canvas)
-        self._stage_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        self._stage_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
         canvas.create_window((0, 0), window=self._stage_frame, anchor=NW)
-        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.configure(yscrollcommand=sb.set)
         canvas.pack(side=LEFT, fill=BOTH, expand=True)
-        scrollbar.pack(side=RIGHT, fill=Y)
-        # mouse scroll
-        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(-1 * (e.delta // 120), "units"))
-        self._canvas = canvas
+        sb.pack(side=RIGHT, fill=Y)
+        canvas.bind_all(
+            "<MouseWheel>",
+            lambda e: canvas.yview_scroll(-1 * (e.delta // 120), "units"),
+        )
 
-        # ── Action buttons ─────────────────────────────────────────────
+        # ── Action buttons ────────────────────────────────────────────
         act = ttk.Frame(self)
         act.pack(fill=X, pady=(0, 4))
-        ttk.Button(act, text="🔒  Encrypt", bootstyle="warning",
-                   command=self._do_encrypt).pack(side=LEFT, expand=True, fill=X, padx=(0, 4), ipady=6)
-        ttk.Button(act, text="🔓  Decrypt", bootstyle="success",
-                   command=self._do_decrypt).pack(side=LEFT, expand=True, fill=X, padx=(4, 0), ipady=6)
+        ttk.Button(
+            act, text="🔒  Encrypt", bootstyle="warning",
+            command=self._do_encrypt,
+        ).pack(side=LEFT, expand=True, fill=X, padx=(0, 4), ipady=6)
+        ttk.Button(
+            act, text="🔓  Decrypt", bootstyle="success",
+            command=self._do_decrypt,
+        ).pack(side=LEFT, expand=True, fill=X, padx=(4, 0), ipady=6)
 
     # ── Input switching ───────────────────────────────────────────────
 
@@ -248,9 +327,8 @@ class MixtureTab(ttk.Frame):
             return
         row.destroy()
         self._stages.remove(row)
-        # re-index
         for i, s in enumerate(self._stages):
-            s.index = i
+            s.set_index(i)
 
     def _clear_stages(self):
         for s in self._stages:
@@ -258,67 +336,69 @@ class MixtureTab(ttk.Frame):
         self._stages.clear()
         self._add_stage()
 
-    def _get_chain(self) -> list[dict]:
-        return [s.get_config() for s in self._stages]
+    # ── Input + stage helpers ─────────────────────────────────────────
+
+    def _read_input(self) -> tuple[bytes, str | None] | None:
+        """Return (raw_bytes, original_name) or show warning and return None."""
+        if self.input_type_var.get() == "file":
+            src = self.file_sel.get()
+            if not src:
+                messagebox.showwarning("Input", "Select a file.")
+                return None
+            p = Path(src)
+            return p.read_bytes(), p.name
+        raw = self.input_text.get("1.0", END).rstrip("\n")
+        if not raw:
+            messagebox.showwarning("Input", "Enter text.")
+            return None
+        return raw.encode("utf-8"), None
+
+    def _get_stages(self) -> list[dict] | None:
+        stages = [s.get_config() for s in self._stages]
+        if not stages:
+            messagebox.showwarning("Pipeline", "Add at least one stage.")
+            return None
+        return stages
 
     # ── Encrypt ───────────────────────────────────────────────────────
 
     def _do_encrypt(self):
-        src, src_is_path = self._resolve_input()
-        if src is None:
+        inp = self._read_input()
+        if inp is None:
             return
-        chain = self._resolve_chain()
-        if chain is None:
+        stages = self._get_stages()
+        if stages is None:
             return
         dest = filedialog.asksaveasfilename(
             defaultextension=BYTEFILE_EXT,
-            filetypes=[("ByteFile", f"*{BYTEFILE_EXT}"), ("All files", "*.*")],
+            filetypes=[("Encrypted file", f"*{BYTEFILE_EXT}"), ("All files", "*.*")],
         )
         if not dest:
             return
-        self._status.set("Encrypting...")
+        self._status.set("Encrypting…")
         threading.Thread(
             target=self._encrypt_worker,
-            args=(src, src_is_path, chain, dest),
+            args=(inp, stages, self.mode_var.get(), dest),
             daemon=True,
         ).start()
 
-    def _encrypt_worker(self, src: str, src_is_path: bool, chain: list[dict], dest: str):
+    def _encrypt_worker(
+        self,
+        inp: tuple[bytes, str | None],
+        stages: list[dict],
+        mode: str,
+        dest: str,
+    ):
         try:
-            raw_bytes, orig_name = self._load_input(src, src_is_path)
-            mode = self.mode_var.get()
-            chain_meta = [{"algorithm": s["algorithm"], "key_type": s.get("key_type", "text")} for s in chain]
-
-            if mode == "layered":
-                # content → enc1 → enc2 → … → encN → wrap ONE .isd
-                result = raw_bytes
-                for step in chain:
-                    result = self._enc_step(result, step)
-                note = default_note(
-                    algorithm=chain[0]["algorithm"], key_type=chain[0].get("key_type", "text"),
-                    mode="layered", iterations=len(chain),
-                    original_filename=orig_name, original_size=len(raw_bytes),
-                    mixture_chain=chain_meta,
+            data, orig_name = inp
+            if mode == "multi-encrypt":
+                bf = encrypt_multi(data, stages, orig_name=orig_name, orig_size=len(data))
+                bf.save(dest)
+            else:  # layer-wrap
+                result_bytes = encrypt_layer_wrap(
+                    data, stages, orig_name=orig_name, orig_size=len(data),
                 )
-                ByteFile(result, note).save(dest)
-            else:
-                # nested: each stage encrypts current bytes → wraps into a new .isd
-                # stage 1 input: raw content bytes
-                # stage 2 input: entire stage-1 .isd file as bytes (string representation)
-                # stage N output: saved as the final .isd
-                payload = raw_bytes
-                for i, step in enumerate(chain):
-                    encrypted = self._enc_step(payload, step)
-                    note = default_note(
-                        algorithm=step["algorithm"], key_type=step.get("key_type", "text"),
-                        mode="nested", iterations=len(chain),
-                        original_filename=orig_name if i == 0 else None,
-                        original_size=len(raw_bytes) if i == 0 else None,
-                    )
-                    note["layer"] = i + 1
-                    note["total_layers"] = len(chain)
-                    payload = ByteFile(encrypted, note).pack().encode("utf-8")
-                Path(dest).write_bytes(payload)
+                Path(dest).write_bytes(result_bytes)
 
             dest_name = Path(dest).name
             self.after(0, lambda n=dest_name: self._status.set(f"✅ Encrypted → {n}"))
@@ -331,137 +411,72 @@ class MixtureTab(ttk.Frame):
     # ── Decrypt ───────────────────────────────────────────────────────
 
     def _do_decrypt(self):
-        src, src_is_path = self._resolve_input()
-        if src is None:
+        inp = self._read_input()
+        if inp is None:
             return
-        chain = self._resolve_chain()
-        if chain is None:
+        stages = self._get_stages()
+        if stages is None:
             return
         dest = filedialog.asksaveasfilename(
             filetypes=[("All files", "*.*")],
         )
         if not dest:
             return
-        self._status.set("Decrypting...")
+        self._status.set("Decrypting…")
         threading.Thread(
             target=self._decrypt_worker,
-            args=(src, src_is_path, chain, dest),
+            args=(inp, stages, self.mode_var.get(), dest),
             daemon=True,
         ).start()
 
-    def _decrypt_worker(self, src: str, src_is_path: bool, chain: list[dict], dest: str):
+    def _decrypt_worker(
+        self,
+        inp: tuple[bytes, str | None],
+        stages: list[dict],
+        mode: str,
+        dest: str,
+    ):
         try:
-            raw_bytes, _orig_name = self._load_input(src, src_is_path)
-            mode = self.mode_var.get()
+            data, _ = inp
 
-            if mode == "layered":
-                # parse ONE .isd → decrypt chain in reverse → save raw bytes
-                bf = ByteFile.parse(raw_bytes.decode("utf-8"))
-                result = bf.content
-                for step in reversed(chain):
-                    result = self._dec_step(result, step)
+            if mode == "multi-encrypt":
+                try:
+                    bf = ByteFile.parse(data.decode("utf-8"))
+                except Exception as exc:
+                    raise ValueError(
+                        f"Cannot parse input as .isd — {exc}\n"
+                        "Make sure the input is a Multi-Encrypt .isd."
+                    ) from exc
+                result = decrypt_multi(bf, stages)
                 Path(dest).write_bytes(result)
                 dest_name = Path(dest).name
                 self.after(0, lambda n=dest_name: self._status.set(f"✅ Decrypted → {n}"))
                 self.after(0, lambda d=dest: messagebox.showinfo("Done", f"Decrypted!\n{d}"))
 
-            else:
-                # nested: peel layers in reverse (outermost first)
-                # each peel: parse current .isd → decrypt its content → current = result
-                # on failure: save the last valid .isd and warn the user (partial result)
-                current = raw_bytes
-                reversed_chain = list(reversed(chain))
-                completed = 0
-                for i, step in enumerate(reversed_chain):
-                    try:
-                        bf = ByteFile.parse(current.decode("utf-8"))
-                    except Exception as parse_err:
-                        err = str(parse_err)
-                        self.after(0, lambda m=err: messagebox.showerror(
-                            "Parse Error",
-                            f"Stage {i + 1} (reversed): could not parse as .isd — {m}"
-                        ))
-                        return
-                    try:
-                        current = self._dec_step(bf.content, step)
-                    except Exception as dec_err:
-                        # Save the last successfully-peeled .isd so user can continue
-                        Path(dest).write_bytes(current)
-                        stage_label = len(chain) - i
-                        err = str(dec_err)
-                        dest_name = Path(dest).name
-                        self.after(0, lambda n=dest_name, s=stage_label, m=err:
-                            self._status.set(f"⚠️ Partial decrypt at stage {s} → {n}"))
-                        self.after(0, lambda d=dest, s=stage_label, m=err:
-                            messagebox.showwarning(
-                                "Partial Decrypt",
-                                f"Stage {s} failed: {m}\n\n"
-                                f"The last valid .isd has been saved to:\n{d}\n\n"
-                                "You can open it in the File tab or fix the password and retry."
-                            ))
-                        return
-                    completed += 1
-
-                Path(dest).write_bytes(current)
-                dest_name = Path(dest).name
-                self.after(0, lambda n=dest_name: self._status.set(f"✅ Decrypted → {n}"))
-                self.after(0, lambda d=dest: messagebox.showinfo("Done", f"Decrypted!\n{d}"))
+            else:  # layer-wrap
+                try:
+                    result = decrypt_layer_wrap(data, stages)
+                    Path(dest).write_bytes(result)
+                    dest_name = Path(dest).name
+                    self.after(0, lambda n=dest_name: self._status.set(f"✅ Decrypted → {n}"))
+                    self.after(0, lambda d=dest: messagebox.showinfo("Done", f"Decrypted!\n{d}"))
+                except PartialDecryptError as pde:
+                    Path(dest).write_bytes(pde.partial)
+                    s = pde.stage_num
+                    m = str(pde)
+                    dest_name = Path(dest).name
+                    self.after(0, lambda n=dest_name, stage=s:
+                               self._status.set(f"⚠️ Partial decrypt — failed at layer {stage} → {n}"))
+                    self.after(0, lambda d=dest, stage=s, msg=m:
+                               messagebox.showwarning(
+                                   "Partial Decrypt",
+                                   f"Decryption failed at layer {stage}:\n{msg}\n\n"
+                                   f"Last valid .isd saved to:\n{d}\n\n"
+                                   "Open it in the File tab or correct the password and retry.",
+                               ))
 
         except Exception as exc:
             msg = str(exc)
             self.after(0, lambda m=msg: self._status.set(f"❌ {m}"))
             self.after(0, lambda m=msg: messagebox.showerror("Decrypt Error", m))
 
-    # ── Shared helpers ────────────────────────────────────────────────
-
-    def _resolve_input(self) -> tuple[str | None, bool]:
-        """Return (src, src_is_path). Returns (None, False) and shows warning on bad input."""
-        if self.input_type_var.get() == "file":
-            src = self.file_sel.get()
-            if not src:
-                messagebox.showwarning("Input", "Select a file.")
-                return None, False
-            return src, True
-        else:
-            raw = self.input_text.get("1.0", END).rstrip("\n")
-            if not raw:
-                messagebox.showwarning("Input", "Enter text.")
-                return None, False
-            return raw, False
-
-    def _resolve_chain(self) -> list[dict] | None:
-        """Return chain list or None (and show error) on failure."""
-        try:
-            chain = self._get_chain()
-            if not chain:
-                messagebox.showwarning("Pipeline", "Add at least one stage.")
-                return None
-            return chain
-        except Exception as exc:
-            msg = str(exc)
-            messagebox.showerror("Config Error", msg)
-            return None
-
-    @staticmethod
-    def _load_input(src: str, src_is_path: bool) -> tuple[bytes, str | None]:
-        """Return (raw_bytes, original_filename)."""
-        if src_is_path:
-            p = Path(src)
-            return p.read_bytes(), p.name
-        return src.encode("utf-8"), None
-
-    @staticmethod
-    def _enc_step(data: bytes, step: dict) -> bytes:
-        algo = step["algorithm"]
-        if algo == "PGP":
-            pub_pem = Path(step["pub_pem_path"]).read_bytes()
-            return EncryptionEngine.encrypt(data, pub_pem, "PGP")
-        return EncryptionEngine.encrypt(data, step["key_bytes"], algo)
-
-    @staticmethod
-    def _dec_step(data: bytes, step: dict) -> bytes:
-        algo = step["algorithm"]
-        if algo == "PGP":
-            priv_pem = Path(step["priv_pem_path"]).read_bytes()
-            return EncryptionEngine.decrypt(data, priv_pem, "PGP")
-        return EncryptionEngine.decrypt(data, step["key_bytes"], algo)

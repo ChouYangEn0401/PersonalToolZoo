@@ -2,7 +2,7 @@
 
 一款功能強大的加密/解密桌面工具，支援多種加密演算法、專屬 `.isd` 格式（輸出副檔名）、多階段混合加密，以及大檔案分段處理。
 
-> **v1.3.0** 新增：XOR-FOLD 演算法、PGP / PGP-Multi / PGP-Escrow 非對稱加密支援、txtfile 金鑰尾端換行正規化
+> **v1.4.0** 重構：Mixture 模式更名（Layered→**Multi-Encrypt**、Nested→**Layer-Wrap**）、核心 Pipeline 邏輯獨立為 `core/pipeline.py`、PGP 加密階段只需公鑰（解密階段才需私鑰）
 
 ---
 
@@ -12,7 +12,7 @@
 |------|------|
 | **檔案加密 (Tab 1)** | 加密任意檔案為 `.isd`（專屬格式），只有本工具能解開 |
 | **文字加密 (Tab 2)** | 快速加密一段文字，支援 Base64 顯示、剪貼簿複製、存檔 |
-| **混合加密 (Tab 3)** | 進階多階段加密管線，每階段可選不同演算法與密碼；**Layered**（多層融合為 1 個 `.isd`）或 **Nested**（每層各自為獨立 `.isd`，可逐步解開） |
+| **混合加密 (Tab 3)** | 進階多階段加密管線，每階段可選不同演算法與密碼；**Multi-Encrypt**（多層融合為 1 個 `.isd`，任一密碼錯誤即全體失敗）或 **Layer-Wrap**（每層各自封裝成獨立 `.isd`，可逐層剝開，解密失敗時保存最後有效的 `.isd`） |
 | **大檔案模式 (Tab 4)** | 分段切割大檔案，逐段加密，產出 manifest + chunk 檔案 |
 | **拖拉支援** | 所有檔案路徑輸入欄均可直接拖拉檔案（支援含空格、中文路徑）|
 | **Tooltip 提示** | 滑鼠懸停在各元件上可查看功能說明 |
@@ -74,6 +74,18 @@ python main.py
 
 ## 更新紀錄
 
+### v1.4.0
+- **Mixture 模式更名**：
+  - `Layered` → **Multi-Encrypt**（mode 字串 `"multi-encrypt"`，向下相容舊 `"layered"`）
+  - `Nested` → **Layer-Wrap**（mode 字串 `"layer-wrap"`，向下相容舊 `"nested"`）
+- **核心架構重構**：Pipeline 邏輯從 GUI 層移至 `core/pipeline.py`
+  - `encrypt_multi` / `decrypt_multi` — Multi-Encrypt 模式
+  - `encrypt_layer_wrap` / `decrypt_layer_wrap` — Layer-Wrap 模式
+  - `PartialDecryptError` — Layer-Wrap 解密失敗時攜帶最後有效 `.isd` bytes
+- **Stage 配置修正**：`_StageRow.get_config()` 不再在 UI 層即時衍生 `key_bytes`，改為儲存原始 `pw_source` + `key_type`，由 pipeline 在 worker thread 中按需衍生，正確支援多階段異質金鑰（如 text + image 混用）
+- **PGP 階段說明更新**：Public key (encrypt) / Private key (decrypt) 分別標示欄位用途
+- **Layer-Wrap 部分解密**：遇到錯誤時自動儲存最後有效 `.isd` 並通知使用者，而非直接崩潰
+
 ### v1.3.0
 - **XOR-FOLD 演算法**：折疊金鑰 XOR，確保整條金鑰都被使用；AlgoBar 與 tooltip 均已加入
 - **PGP / PGP-Multi / PGP-Escrow**：RSA-4096 + AES-GCM 非對稱包裝，所有 4 個分頁均支援
@@ -116,7 +128,7 @@ python main.py
    - **Algorithm Bar**：點選欲使用的演算法按鈕（金色 = 已選取）
    - **Reveal algorithm**：開啟（預設）→ 演算法存入 metadata，解密時自動辨識；關閉 → 演算法隱藏，解密方需手動選擇
    - **Author / Password hint**：可設定作者名稱與密碼提示（解密時自動顯示）
-   - **Mode / Iterations**：Layered 或 Nested 包法，迭代加密次數
+   - **Mode / Iterations**：Multi-Encrypt（多層融合）或 Layer-Wrap（每層獨立包裝）與迭代加密次數
 4. 點選 **🔒 Encrypt & Save**，選擇輸出路徑
 
 **解密檔案：**

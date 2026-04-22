@@ -32,7 +32,7 @@ class FileTab(ttk.Frame):
         self.algo_visible_var = tk.BooleanVar(value=True)           # store algo in metadata
         self.author_var       = tk.StringVar(value="@anonymous")
         self.hint_var         = tk.StringVar()
-        self.mode_var         = tk.StringVar(value="layered")
+        self.mode_var         = tk.StringVar(value="multi-encrypt")
         self.iter_var         = tk.IntVar(value=1)
         self._detected_algo: str | None = None  # read from loaded .isd
 
@@ -151,10 +151,10 @@ class FileTab(ttk.Frame):
         bot.pack(fill=X, pady=(6, 2))
 
         ttk.Label(bot, text="Mode:", font=FONT_BODY).pack(side=LEFT)
-        _sr = ttk.Radiobutton(bot, text="Layered", variable=self.mode_var, value="layered")
+        _sr = ttk.Radiobutton(bot, text="Multi-Encrypt", variable=self.mode_var, value="multi-encrypt")
         _sr.pack(side=LEFT, padx=(6, 8))
         Tooltip(_sr, f"多次加密全部融合進單一 {BYTEFILE_EXT}；用 File Tab 解密一次只能剝去整包密文的最外層，無法得到有效 {BYTEFILE_EXT}")
-        _nr = ttk.Radiobutton(bot, text="Nested", variable=self.mode_var, value="nested")
+        _nr = ttk.Radiobutton(bot, text="Layer-Wrap", variable=self.mode_var, value="layer-wrap")
         _nr.pack(side=LEFT, padx=(0, 16))
         Tooltip(_nr, f"每次加密各自封裝成獨立 {BYTEFILE_EXT}；用 File Tab 解密一次可得到下一層完整 {BYTEFILE_EXT}，逐層剝開最終還原原始檔案")
 
@@ -381,7 +381,7 @@ class FileTab(ttk.Frame):
             mode = self.mode_var.get()
             stored_algo = algo if self.algo_visible_var.get() else None
 
-            def _note_base(algorithm, mode_="layered"):
+            def _note_base(algorithm, mode_="multi-encrypt"):
                 note = default_note(
                     algorithm=algorithm, key_type=key_type, mode=mode_,
                     iterations=iterations,
@@ -399,13 +399,13 @@ class FileTab(ttk.Frame):
                     note["original_size"] = len(data)
                 return note
 
-            # -- Nested mode -------------------------------------------
-            if mode == "nested":
+            # -- Layer-Wrap mode ---------------------------------------
+            if mode == "layer-wrap":
                 key_bytes = derive_key_bytes(pw_source, key_type)
                 payload = data
                 for i in range(iterations):
                     encrypted = EncryptionEngine.encrypt(payload, key_bytes, algo)
-                    note = _note_base(stored_algo, mode_="nested")
+                    note = _note_base(stored_algo, mode_="layer-wrap")
                     note["keep_original_file_info"] = (
                         bool(self.reveal_orig_name_var.get()) or
                         bool(self.reveal_orig_size_var.get())
@@ -523,8 +523,8 @@ class FileTab(ttk.Frame):
             algo = bf.note.get("algorithm") or fallback_algo
             mode = bf.mode
 
-            if mode == "nested":
-                # Nested mode always uses a symmetric password
+            if mode == "layer-wrap":
+                # Layer-Wrap mode always uses a symmetric password
                 key_bytes = derive_key_bytes(pw_source, key_type)
                 payload = text
                 while True:
