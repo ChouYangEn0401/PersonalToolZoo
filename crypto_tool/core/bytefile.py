@@ -109,13 +109,15 @@ class ByteFile:
 
     @property
     def mode(self) -> str:
-        m = self.note.get("mode", "multi-encrypt")
-        # backward compat: map all old names to current canonical names
-        if m in ("simple", "layered"):
-            return "multi-encrypt"
-        if m in ("node", "nested"):
-            return "layer-wrap"
-        return m  # "multi-encrypt" | "layer-wrap" (canonical)
+        m = self.note.get("mode", "all-in-one")
+        # backward compat: map older names to new canonical names
+        # old 'simple' / 'multi-encrypt' => 'all-in-one'
+        if m in ("simple", "multi-encrypt"):
+            return "all-in-one"
+        # old 'node' / 'nested' / 'layer-wrap' => 'layered'
+        if m in ("node", "nested", "layer-wrap"):
+            return "layered"
+        return m  # 'all-in-one' | 'layered' (canonical)
 
     @property
     def original_filename(self) -> str | None:

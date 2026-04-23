@@ -1,13 +1,13 @@
 """
 High-level mixture pipeline — two independent modes.
 
-Multi-Encrypt  (mode="multi-encrypt", formerly "layered"):
+All-In-One  (mode="all-in-one", formerly "layered"):
     Encrypt:  content → enc₁ → enc₂ → … → encₙ → ONE .isd
     Decrypt:  parse .isd → decₙ → … → dec₁ → original bytes
     If any stage fails during decrypt, the whole operation fails (no valid .isd
     intermediate exists — only the single outer .isd is created).
 
-Layer-Wrap  (mode="layer-wrap", formerly "nested"):
+Layered  (mode="layered", formerly "nested"):
     Encrypt:  content → enc₁ → isd₁  →  isd₁_bytes → enc₂ → isd₂  →  …  →  isdₙ
     Decrypt:  parse isdₙ → dec (key_n) → isdₙ₋₁_bytes → parse → dec (key_n-1) → …
     On decrypt failure at any stage the last valid .isd bytes are preserved so the
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .engine import EncryptionEngine
+from .engine import EncryptionEngine, PGP_ALGORITHMS
 from .bytefile import ByteFile, default_note
 from .utils import derive_key_bytes
 
@@ -26,7 +26,7 @@ from .utils import derive_key_bytes
 
 def _key_bytes(stage: dict) -> bytes:
     """Derive key bytes from a stage config.  PGP stages return b'' (not used)."""
-    if stage.get("key_type") == "pgp":
+    if stage.get("key_type") == "pgp" or stage.get("algorithm", "") in PGP_ALGORITHMS:
         return b""
     return derive_key_bytes(stage["pw_source"], stage["key_type"])
 
@@ -36,20 +36,25 @@ def _enc_step(data: bytes, stage: dict) -> bytes:
     algo = stage["algorithm"]
     if algo == "PGP":
         pub_pem = Path(stage["pub_pem_path"]).read_bytes()
-        return EncryptionEngine.encrypt(data, pub_pem, "PGP")
+        return EncryptionEngine.pgp_encrypt(data, pub_pem)
+    if algo in ("PGP-Multi", "PGP-Escrow"):
+        pems = [Path(p).read_bytes() for p in stage.get("pub_pem_paths", []) if p]
+        if algo == "PGP-Escrow" and stage.get("escrow_pem_path"):
+            pems.append(Path(stage["escrow_pem_path"]).read_bytes())
+        return EncryptionEngine.pgp_encrypt_multi(data, pems)
     return EncryptionEngine.encrypt(data, _key_bytes(stage), algo)
 
 
 def _dec_step(data: bytes, stage: dict) -> bytes:
     """Apply one decrypt step to *data*."""
     algo = stage["algorithm"]
-    if algo == "PGP":
+    if algo in PGP_ALGORITHMS:
         priv_pem = Path(stage["priv_pem_path"]).read_bytes()
-        return EncryptionEngine.decrypt(data, priv_pem, "PGP")
+        return EncryptionEngine.pgp_decrypt(data, priv_pem)
     return EncryptionEngine.decrypt(data, _key_bytes(stage), algo)
 
 
-# ── Multi-Encrypt ─────────────────────────────────────────────────────────
+# ── All-In-One ─────────────────────────────────────────────────────────
 
 def encrypt_multi(
     data: bytes,
@@ -72,7 +77,7 @@ def encrypt_multi(
     note = default_note(
         algorithm=stages[0]["algorithm"],
         key_type=stages[0].get("key_type", "text"),
-        mode="multi-encrypt",
+        mode="all-in-one",
         iterations=len(stages),
         original_filename=orig_name,
         original_size=orig_size,
@@ -91,7 +96,7 @@ def decrypt_multi(bf: ByteFile, stages: list[dict]) -> bytes:
     return result
 
 
-# ── Layer-Wrap ────────────────────────────────────────────────────────────
+# ── Layered ────────────────────────────────────────────────────────────
 
 def encrypt_layer_wrap(
     data: bytes,
@@ -111,7 +116,7 @@ def encrypt_layer_wrap(
         note = default_note(
             algorithm=stage["algorithm"],
             key_type=stage.get("key_type", "text"),
-            mode="layer-wrap",
+            mode="layered",
             iterations=n,
             original_filename=orig_name if i == 0 else None,
             original_size=orig_size if i == 0 else None,

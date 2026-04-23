@@ -1,8 +1,8 @@
 """
 Tests for the two Mixture pipeline modes:
 
-  multi-encrypt — all stages fused into one .isd, decrypt reverses chain
-  layer-wrap    — each stage wraps content in a new .isd, decrypt peels one layer at a time
+    all-in-one — all stages fused into one .isd, decrypt reverses chain
+    layered    — each stage wraps content in a new .isd, decrypt peels one layer at a time
 """
 
 from crypto_tool.core.pipeline import (
@@ -25,7 +25,7 @@ def test_multi_encrypt_roundtrip():
     """content → enc1 → enc2 → ONE .isd  |  decrypt reverses stages."""
     orig = b"hello multi-encrypt world"
     bf = encrypt_multi(orig, STAGES, orig_name="test.txt", orig_size=len(orig))
-    assert bf.mode == "multi-encrypt"
+    assert bf.mode == "all-in-one"
     recovered = decrypt_multi(bf, STAGES)
     assert recovered == orig
 
@@ -50,7 +50,7 @@ def test_layer_wrap_roundtrip():
     outer_bytes = encrypt_layer_wrap(orig, STAGES, orig_name="test.txt", orig_size=len(orig))
     # outermost .isd must be parseable
     outer_bf = ByteFile.parse(outer_bytes.decode("utf-8"))
-    assert outer_bf.mode == "layer-wrap"
+    assert outer_bf.mode == "layered"
 
     recovered = decrypt_layer_wrap(outer_bytes, STAGES)
     assert recovered == orig

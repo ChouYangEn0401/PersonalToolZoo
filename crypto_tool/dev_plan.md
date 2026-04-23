@@ -47,16 +47,21 @@ crypto_tool/
   2. 顯示在下方 Textbox
   3. 存成 `.txt` 或 `.isd`
 
-### Tab 3 — 混合加密模式（進階玩家）
+### Tab 3 — 混合加密模式（進階玩家）✅ v1.4.0 已完成
 - 可新增多個加密階段，每階段獨立設定演算法 + 密碼
--- **Simple 模式**：資料連續加密 N 次 → 最後包成一個 `.isd`
--- **Node 模式**：每次加密都包成 `.isd`，層層包裝
+- **All-In-One 模式**（原 Simple/Layered）：資料連續加密 N 次 → 最後包成一個 `.isd`；加密順序 #1→#N，解密順序 #N→#1
+- **Layered 模式**（原 Node/Nested）：每次加密都包成 `.isd`，層層包裝；File Tab 每次解一層
 - 支援檔案 & 文字輸入
+- 文字輸入：加解密結果顯示於 Result 區，支援 Copy / Save .isd / Save .txt / ↩ 回填輸入框
+- ↑↓ 按鈕可調換 Pipeline 各階段順序
+- 支援 PGP / PGP-Multi / PGP-Escrow 於 Pipeline 各階段（Multi 支援多收件人）
+- core/pipeline.py 作為唯一 pipeline 邏輯出口（GUI 不含加密業務邏輯）
 
-### Tab 4 — 大檔案模式
+### Tab 4 — 大檔案模式（⚠️ 待完善）
 - 設定分段大小（chunk size）
--- 分段讀取 → 分段加密 → 輸出多個 `.isd` + manifest.json
+- 分段讀取 → 分段加密 → 輸出多個 `.isd` + manifest.json
 - 解密時讀取 manifest → 逐段解密 → 組裝還原
+- ⚠️ TODO：整合 core/pipeline.py 的加密邏輯；支援 all-in-one 與 layered 模式
 
 ---
 
@@ -114,19 +119,23 @@ NOTE="""<JSON 元資料>"""
 
 ---
 
-## 兩種加密大模式
+## 兩種加密大模式（v1.4.0 更名）
 
-### 1. Simple（簡單暴力）— 預設
+### 1. All-In-One（多階段融合）— 原 Simple / Layered
 ```
-原始資料 → encrypt₁ → encrypt₂ → ... → encryptₙ → 包成 .isd
+原始資料 → enc₁ → enc₂ → ... → encₙ → ONE .isd
+解密：decₙ → decₙ₋₁ → ... → dec₁ → 原始資料
 ```
-所有加密連續套用，最後整體包一次專屬格式。NOTE 記錄 mixture_chain。
+所有加密連續套用，最後整體包一次 `.isd`。NOTE 記錄 mixture_chain。
+任何一階段密碼錯誤 = 全體解密失敗。
 
-### 2. Node（多次保護節點）
+### 2. Layered（層層包裝）— 原 Node / Nested
 ```
-原始資料 → .isd₁ → .isd₂ → ... → .isdₙ
+原始資料 → enc₁ → isd₁ → enc₂ → isd₂ → ... → isdₙ (outermost)
+解密：parse isdₙ → decₙ → isdₙ₋₁ → ... → dec₁ → 原始資料
 ```
-每一層都是完整的 `.isd`，解密時一層一層剝開。
+每層都是完整的 `.isd`，解密時一層一層剝開（File Tab 每次解一層）。
+解密失敗時保留最後一個有效 `.isd` 以便重試。
 
 ---
 
@@ -165,3 +174,44 @@ NOTE="""<JSON 元資料>"""
 9. ✅ Unicode/編碼路徑安全 — 文字載入加入 UTF-8 → latin-1 fallback，DnD 路徑自動清理 `{}` 包裝
 10. ✅ 暖金色主題 — 改為暖金/琥珀色配色，Labelframe 標題金色，加密按鈕改為 warning (amber)
 11. ✅ Tooltip 說明 — 所有關鍵元件加入懸浮提示（演算法、密碼輸入、迭代次數、拖拉提示等）
+
+## 後續改善 (v1.2.0 ~ v1.3.0)
+
+12. ✅ AlgoBar — 分段演算法選擇元件（金色高亮）
+13. ✅ PGP / PGP-Multi / PGP-Escrow — RSA-4096 + AES-GCM 非對稱加密支援
+14. ✅ XOR-FOLD 演算法
+15. ✅ txtfile 金鑰正規化
+
+## Mixture 重構 (v1.4.0)
+
+16. ✅ 模式更名：Layered → All-In-One、Nested → Layered（向下相容舊 .isd）
+17. ✅ core/pipeline.py — Pipeline 邏輯獨立模組；`encrypt_multi`、`decrypt_multi`、`encrypt_layer_wrap`、`decrypt_layer_wrap`、`PartialDecryptError`
+18. ✅ Stage 設定延遲衍生金鑰 — `get_config()` 回傳 `pw_source`+`key_type`，pipeline 在 worker 執行緒中衍生
+19. ✅ File Tab layered 解密：改為每次只剝一層（修正多密碼 Mixture 後 wrong padding 問題）
+20. ✅ PGP-Multi / PGP-Escrow 整合至 Mixture Pipeline（`STAGE_ALGORITHMS` 含全部演算法）
+21. ✅ Mixture 文字輸入模式：加解密結果顯示於 Result 區；Copy / Save .isd / Save .txt / ↩ Use as Input
+22. ✅ Mixture Pipeline Stage 上下調換（↑↓ 按鈕）
+
+---
+
+## 待辦 TODO（未完成）
+
+### 高優先
+- [ ] **Tab 4 大檔案模式重構**
+  - 整合 `core/pipeline.py`（與 Mixture/File Tab 共享加密邏輯）
+  - 支援 All-In-One 和 Layered 兩種模式（目前只有 simple）
+  - 支援多次迭代 & 各 Chunk 獨立密碼（選配）
+  - 測試：manifest 完整性驗證、中途中斷重試
+
+### 中優先
+- [ ] **Mixture Tab — PGP-Multi 多收件人 UI 測試**（需要實際 PEM 金鑰驗證）
+- [ ] **File Tab — layered 解密後提示是否還有更多層**（根據 `note["total_layers"]` 與 `note["layer"]` 計算）
+- [ ] **Text Tab — 多階段加密支援**（目前只能單階段；考慮嵌入 Mixture Pipeline 小版本）
+
+### 低優先 / 研究性
+- [ ] **壓縮前置**：加密前先 zlib/lzma 壓縮，降低加密檔案大小
+- [ ] **金鑰管理**：產出、匯入、匯出 PGP/RSA 金鑰對的 GUI 工具（目前需手動用 CLI 產）
+- [ ] **多平台打包**：PyInstaller spec 更新；macOS / Linux .app / AppImage
+- [ ] **進度條**：大檔案模式加密/解密進度顯示
+
+---

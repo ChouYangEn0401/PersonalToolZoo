@@ -39,8 +39,8 @@ ALGORITHMS: list[str] = [
 # Algorithms that use RSA asymmetric keys instead of a symmetric password
 PGP_ALGORITHMS: frozenset[str] = frozenset({"PGP", "PGP-Multi", "PGP-Escrow"})
 
-# Algorithms safe for per-stage pipelines (single-key ops only)
-STAGE_ALGORITHMS: list[str] = [a for a in ALGORITHMS if a not in ("PGP-Multi", "PGP-Escrow")]
+# All algorithms are available in pipeline stages (PGP-Multi/Escrow use multi-key encrypt)
+STAGE_ALGORITHMS: list[str] = list(ALGORITHMS)
 
 # Algorithms valid as the inner cipher inside a PGP envelope
 NON_PGP_ALGORITHMS: list[str] = [a for a in ALGORITHMS if a not in PGP_ALGORITHMS]

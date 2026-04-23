@@ -103,7 +103,7 @@ class CryptoToolApp:
 
         nb.add(tab1, text="  📁  File  ")
         nb.add(tab2, text="  📝  Text  ")
-        nb.add(tab3, text="  🔗  Mixture  --UNTESTED")
+        nb.add(tab3, text="  🔗  Mixture")
         nb.add(tab4, text="  📦  Large File  --UNTESTED")
 
         # create_window returns an id; keep a reference to prevent GC surprises

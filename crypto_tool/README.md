@@ -2,7 +2,7 @@
 
 一款功能強大的加密/解密桌面工具，支援多種加密演算法、專屬 `.isd` 格式（輸出副檔名）、多階段混合加密，以及大檔案分段處理。
 
-> **v1.4.0** 重構：Mixture 模式更名（Layered→**Multi-Encrypt**、Nested→**Layer-Wrap**）、核心 Pipeline 邏輯獨立為 `core/pipeline.py`、PGP 加密階段只需公鑰（解密階段才需私鑰）
+> **v1.4.0** 全面重構：Mixture Pipeline 核心拆出至 `core/pipeline.py`（File/Mixture/LargeFile 共用）、Mixture 模式更名（All-In-One→**All-In-One**、Layered→**Layered**）、加解密順序明確為 1→N 加密 / N→1 解密、Layered 每次只剝一層（修正 Mixture 多密碼 wrong padding 問題）、Mixture 支援文字模式 inline 結果顯示、Pipeline 階段支援 ↑↓ 換序、Mixture 完整支援 PGP / PGP-Multi / PGP-Escrow
 
 ---
 
@@ -10,9 +10,9 @@
 
 | 功能 | 說明 |
 |------|------|
-| **檔案加密 (Tab 1)** | 加密任意檔案為 `.isd`（專屬格式），只有本工具能解開 |
+| **檔案加密 (Tab 1)** | 加密任意檔案為 `.isd`；支援 PGP/Multi/Escrow；Layered 每次解一層 |
 | **文字加密 (Tab 2)** | 快速加密一段文字，支援 Base64 顯示、剪貼簿複製、存檔 |
-| **混合加密 (Tab 3)** | 進階多階段加密管線，每階段可選不同演算法與密碼；**Multi-Encrypt**（多層融合為 1 個 `.isd`，任一密碼錯誤即全體失敗）或 **Layer-Wrap**（每層各自封裝成獨立 `.isd`，可逐層剝開，解密失敗時保存最後有效的 `.isd`） |
+| **混合加密 (Tab 3)** | 進階多階段加密管線，每階段可選不同演算法與密碼；支援 PGP/Multi/Escrow；↑↓ 換序；文字模式 inline 結果 |
 | **大檔案模式 (Tab 4)** | 分段切割大檔案，逐段加密，產出 manifest + chunk 檔案 |
 | **拖拉支援** | 所有檔案路徑輸入欄均可直接拖拉檔案（支援含空格、中文路徑）|
 | **Tooltip 提示** | 滑鼠懸停在各元件上可查看功能說明 |
@@ -75,16 +75,14 @@ python main.py
 ## 更新紀錄
 
 ### v1.4.0
-- **Mixture 模式更名**：
-  - `Layered` → **Multi-Encrypt**（mode 字串 `"multi-encrypt"`，向下相容舊 `"layered"`）
-  - `Nested` → **Layer-Wrap**（mode 字串 `"layer-wrap"`，向下相容舊 `"nested"`）
-- **核心架構重構**：Pipeline 邏輯從 GUI 層移至 `core/pipeline.py`
-  - `encrypt_multi` / `decrypt_multi` — Multi-Encrypt 模式
-  - `encrypt_layer_wrap` / `decrypt_layer_wrap` — Layer-Wrap 模式
-  - `PartialDecryptError` — Layer-Wrap 解密失敗時攜帶最後有效 `.isd` bytes
-- **Stage 配置修正**：`_StageRow.get_config()` 不再在 UI 層即時衍生 `key_bytes`，改為儲存原始 `pw_source` + `key_type`，由 pipeline 在 worker thread 中按需衍生，正確支援多階段異質金鑰（如 text + image 混用）
-- **PGP 階段說明更新**：Public key (encrypt) / Private key (decrypt) 分別標示欄位用途
-- **Layer-Wrap 部分解密**：遇到錯誤時自動儲存最後有效 `.isd` 並通知使用者，而非直接崩潰
+- **加解密順序修正確認**：All-In-One 加密 #1→#N、解密 #N→#1；Layered 同理，outermost = 最後一個 stage
+- **Layered 單層剝除（File Tab）**：File Tab 解密 layered 文件改為每次只剝一層，修正多密碼 Mixture 檔案出現 wrong padding 的問題；解完後若結果仍是 .isd，再次解密即可繼續剝層
+- **Mixture Pipeline 全功能 PGP 支援**：PGP / PGP-Multi（多收件人 ＋ 按鈕） / PGP-Escrow 均可用於 Pipeline 的任一 Stage；`STAGE_ALGORITHMS` 現包含所有演算法
+- **Mixture Pipeline ↑↓ 換序**：每個 Stage 右側新增 ↑ / ↓ 按鈕，可即時調整管線順序
+- **Mixture 文字模式 inline 輸出**：選擇 Text 輸入模式後，加密/解密結果直接顯示在 Result 文字區；提供 📋 Copy / 💾 Save .isd / 💾 Save .txt / ↩ Use as Input（可鏈式操作）
+- **Mixture 文字模式 DnD**：可將 .isd 檔案拖拉至輸入文字區，自動載入 .isd 內容（用於解密）
+- **Mixture 模式更名**（v1.4.0 延續）：`"all-in-one"`（All-In-One）與 `"layered"`（Layered）為目前預設模式字串（向下相容）
+- **核心架構**：`core/pipeline.py` 作為唯一 pipeline 邏輯出口；GUI 完全不含加密業務邏輯；Large File Tab 未來可直接引用
 
 ### v1.3.0
 - **XOR-FOLD 演算法**：折疊金鑰 XOR，確保整條金鑰都被使用；AlgoBar 與 tooltip 均已加入
@@ -128,7 +126,7 @@ python main.py
    - **Algorithm Bar**：點選欲使用的演算法按鈕（金色 = 已選取）
    - **Reveal algorithm**：開啟（預設）→ 演算法存入 metadata，解密時自動辨識；關閉 → 演算法隱藏，解密方需手動選擇
    - **Author / Password hint**：可設定作者名稱與密碼提示（解密時自動顯示）
-   - **Mode / Iterations**：Multi-Encrypt（多層融合）或 Layer-Wrap（每層獨立包裝）與迭代加密次數
+   - **Mode / Iterations**：All-In-One（多層融合）或 Layered（每層獨立包裝）與迭代加密次數
 4. 點選 **🔒 Encrypt & Save**，選擇輸出路徑
 
 **解密檔案：**
