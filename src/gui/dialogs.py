@@ -3,6 +3,174 @@ from tkinter import ttk, messagebox
 import subprocess
 from src.core.language_manager import lm
 
+import os
+
+def setup_autocomplete(entry, var, autocomplete_type, parent_frame, repo_path, on_submit_callback=None, multi_select=False):
+    """
+    通用自動完成功能：
+    支援 Tab/Shift+Tab 導航，Space/Enter 確認。
+    """
+    listbox = None
+    listbox_frame = None
+    _highlighted = [-1]
+    _ignore_trace = [False]
+
+    def get_suggestions(text):
+        if not repo_path: return []
+        try:
+            if autocomplete_type == 'branch':
+                res = subprocess.run("git branch -a", cwd=repo_path, shell=True,
+                                     capture_output=True, text=True, encoding='utf-8', errors='replace')
+                raw = [b.strip().replace('* ', '').replace('remotes/origin/', '').replace('remotes/', '')
+                       for b in res.stdout.split('\n') if b.strip()]
+                items = sorted(set(b for b in raw if not text or text.lower() in b.lower()))
+                return items[:15]
+            elif autocomplete_type == 'tag':
+                res = subprocess.run("git tag -l", cwd=repo_path, shell=True,
+                                     capture_output=True, text=True, encoding='utf-8', errors='replace')
+                items = sorted(t.strip() for t in res.stdout.split('\n')
+                               if t.strip() and (not text or text.lower() in t.lower()))
+                return items[:15]
+            elif autocomplete_type == 'commit':
+                res = subprocess.run("git log --oneline -n 50", cwd=repo_path, shell=True,
+                                     capture_output=True, text=True, encoding='utf-8', errors='replace')
+                commits = []
+                for line in res.stdout.split('\n'):
+                    if line.strip():
+                        parts = line.split(' ', 1)
+                        if len(parts) == 2 and (not text or text.lower() in line.lower()):
+                            commits.append(f"{parts[0]} - {parts[1][:50]}")
+                return commits[:15]
+            elif autocomplete_type == 'branch_tag':
+                # 綜合搜尋 (用於 checkout)
+                res_b = subprocess.run("git branch -a", cwd=repo_path, shell=True,
+                                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+                branches = [b.strip().replace('* ', '').replace('remotes/', '')
+                            for b in res_b.stdout.splitlines() if b.strip()]
+                res_t = subprocess.run("git tag -l", cwd=repo_path, shell=True,
+                                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+                tags = [t.strip() for t in res_t.stdout.splitlines() if t.strip()]
+                items = sorted(set(branches + tags))
+                if not text: return items[:15]
+                p = text.lower()
+                return [i for i in items if p in i.lower()][:15]
+        except: pass
+        return []
+
+    def _set_highlight(idx):
+        nonlocal listbox
+        if listbox is None: return
+        size = listbox.size()
+        if size == 0: return
+        idx = max(0, min(idx, size - 1))
+        _highlighted[0] = idx
+        listbox.selection_clear(0, tk.END)
+        listbox.selection_set(idx)
+        listbox.see(idx)
+
+    def _confirm_selection():
+        nonlocal listbox
+        if listbox is None or _highlighted[0] < 0: return
+        try:
+            value = listbox.get(_highlighted[0])
+            if autocomplete_type == 'commit':
+                value = value.split(' - ')[0]
+            
+            _ignore_trace[0] = True
+            if multi_select:
+                current = var.get().strip()
+                # 取得最後一個單字之前的內容
+                parts = current.split()
+                if parts:
+                    parts[-1] = value
+                    var.set(" ".join(parts) + " ")
+                else:
+                    var.set(value + " ")
+            else:
+                var.set(value)
+            _ignore_trace[0] = False
+            
+            entry.icursor(tk.END)
+            hide_suggestions()
+        except tk.TclError: pass
+
+    def show_suggestions():
+        nonlocal listbox, listbox_frame
+        current_val = var.get()
+        # 如果是多選，只拿最後一個單字來比對
+        search_text = current_val.split()[-1] if multi_select and current_val.strip() else current_val
+        suggestions = get_suggestions(search_text)
+        if not suggestions:
+            hide_suggestions()
+            return
+        if listbox_frame is None:
+            listbox_frame = tk.Frame(parent_frame, relief="solid", bd=1)
+            listbox_frame.pack(fill="x", pady=(2, 0))
+            listbox = tk.Listbox(listbox_frame, font=("Consolas", 9), bg="#fffacd",
+                                 selectbackground="#3399ff", selectforeground="#ffffff",
+                                 activestyle="none", exportselection=False)
+            listbox.pack(fill="x")
+            listbox.bind('<ButtonRelease-1>', lambda e: _confirm_selection())
+        listbox.delete(0, tk.END)
+        for s in suggestions: listbox.insert(tk.END, s)
+        listbox.config(height=min(len(suggestions), 8))
+        _set_highlight(0)
+
+    def hide_suggestions(event=None):
+        nonlocal listbox, listbox_frame
+        if listbox_frame:
+            listbox_frame.destroy()
+            listbox_frame = None
+            listbox = None
+        _highlighted[0] = -1
+
+    def on_tab(event):
+        if listbox is not None and listbox.size() > 0:
+            cur = _highlighted[0]
+            _set_highlight(cur + 1 if cur < listbox.size() - 1 else 0)
+            return "break"
+        return None
+
+    def on_shift_tab(event):
+        if listbox is not None and listbox.size() > 0:
+            cur = _highlighted[0]
+            _set_highlight(cur - 1 if cur > 0 else listbox.size() - 1)
+            return "break"
+        return None
+
+    def on_space(event):
+        if listbox is not None and _highlighted[0] >= 0:
+            _confirm_selection()
+            return "break"
+        return None
+
+    def on_enter(event):
+        if listbox is not None and _highlighted[0] >= 0:
+            _confirm_selection()
+            return "break"
+        if on_submit_callback:
+            on_submit_callback()
+        return None
+
+    def on_var_change(*_):
+        if not _ignore_trace[0]:
+            show_suggestions()
+
+    var.trace('w', on_var_change)
+    entry.bind('<Tab>', on_tab)
+    entry.bind('<Shift-Tab>', on_shift_tab)
+    entry.bind('<space>', on_space)
+    entry.bind('<Return>', on_enter)
+    entry.bind('<Escape>', hide_suggestions)
+    # 增加少許延遲避免點擊時立刻消失
+    entry.bind('<FocusOut>', lambda e: entry.after(200, hide_suggestions))
+
+    try:
+        help_label = ttk.Label(parent_frame, text=lm.t('autocomplete.hint'),
+                               font=("Arial", 9), foreground="#666666", justify="left")
+        help_label.pack(fill="x", pady=(4, 0))
+    except: pass
+
 
 class GitCommandDialog:
     """彈出式指令參數設定視窗"""
@@ -158,174 +326,5 @@ class GitCommandDialog:
         return self.result
 
     def _setup_autocomplete(self, entry, var, autocomplete_type, parent_frame):
-        """自動完成：Tab/Shift+Tab 導航清單，Space 確認選取，焦點留在 Entry"""
-        listbox = None
-        listbox_frame = None
-        _highlighted = [-1]          # 追蹤目前反白的 index
-        _ignore_trace = [False]       # 選取後寫回 var 時暫停 trace
-
-        # ── 取得建議清單 ─────────────────────────────────────────
-        def get_suggestions(text):
-            if not self.repo_path:
-                return []
-            try:
-                if autocomplete_type == 'branch':
-                    res = subprocess.run("git branch -a", cwd=self.repo_path, shell=True,
-                                         capture_output=True, text=True, encoding='utf-8', errors='replace')
-                    raw = [b.strip().replace('* ', '').replace('remotes/origin/', '')
-                           for b in res.stdout.split('\n') if b.strip()]
-                    items = sorted(set(b for b in raw if not text or text.lower() in b.lower()))
-                    return items[:12]
-
-                elif autocomplete_type == 'tag':
-                    res = subprocess.run("git tag -l", cwd=self.repo_path, shell=True,
-                                         capture_output=True, text=True, encoding='utf-8', errors='replace')
-                    items = sorted(t.strip() for t in res.stdout.split('\n')
-                                   if t.strip() and (not text or text.lower() in t.lower()))
-                    return items[:12]
-
-                elif autocomplete_type == 'commit':
-                    res = subprocess.run("git log --oneline -n 50", cwd=self.repo_path, shell=True,
-                                         capture_output=True, text=True, encoding='utf-8', errors='replace')
-                    commits = []
-                    for line in res.stdout.split('\n'):
-                        if line.strip():
-                            parts = line.split(' ', 1)
-                            if len(parts) == 2 and (not text or text.lower() in line.lower()):
-                                commits.append(f"{parts[0]} - {parts[1][:50]}")
-                    return commits[:12]
-            except:
-                pass
-            return []
-
-        # ── 把 listbox 第 idx 項反白（不改 Entry 內容）────────────
-        def _set_highlight(idx):
-            nonlocal listbox
-            if listbox is None:
-                return
-            size = listbox.size()
-            if size == 0:
-                return
-            idx = max(0, min(idx, size - 1))
-            _highlighted[0] = idx
-            listbox.selection_clear(0, tk.END)
-            listbox.selection_set(idx)
-            listbox.see(idx)
-
-        # ── 確認選取當前反白項目 ───────────────────────────────────
-        def _confirm_selection():
-            nonlocal listbox
-            if listbox is None or _highlighted[0] < 0:
-                return
-            try:
-                value = listbox.get(_highlighted[0])
-                if autocomplete_type == 'commit':
-                    value = value.split(' - ')[0]
-                _ignore_trace[0] = True
-                var.set(value)
-                _ignore_trace[0] = False
-                # 把游標移到 Entry 末尾
-                entry.icursor(tk.END)
-                hide_suggestions()
-            except tk.TclError:
-                pass
-
-        # ── 顯示 / 更新 建議列表 ──────────────────────────────────
-        def show_suggestions():
-            nonlocal listbox, listbox_frame
-            suggestions = get_suggestions(var.get())
-
-            if not suggestions:
-                hide_suggestions()
-                return
-
-            if listbox_frame is None:
-                listbox_frame = tk.Frame(parent_frame, relief="solid", bd=1)
-                listbox_frame.pack(fill="x", pady=(2, 0))
-                nonlocal listbox
-                listbox = tk.Listbox(
-                    listbox_frame,
-                    font=("Consolas", 9),
-                    bg="#fffacd",
-                    selectbackground="#3399ff",
-                    selectforeground="#ffffff",
-                    activestyle="none",
-                    exportselection=False,
-                )
-                listbox.pack(fill="x")
-
-                # 滑鼠點一下直接確認
-                listbox.bind('<ButtonRelease-1>', lambda e: _confirm_selection())
-
-            listbox.delete(0, tk.END)
-            for s in suggestions:
-                listbox.insert(tk.END, s)
-            listbox.config(height=min(len(suggestions), 6))
-
-            # 文字改變 → 清單刷新 → 反白第一項
-            _set_highlight(0)
-
-        # ── 隱藏建議列表 ──────────────────────────────────────────
-        def hide_suggestions(event=None):
-            nonlocal listbox, listbox_frame
-            if listbox_frame:
-                listbox_frame.destroy()
-                listbox_frame = None
-                listbox = None
-            _highlighted[0] = -1
-
-        # ── Tab：往下，Shift+Tab：往上（焦點留在 Entry）────────────
-        def on_tab(event):
-            if listbox is not None and listbox.size() > 0:
-                cur = _highlighted[0]
-                _set_highlight(cur + 1 if cur < listbox.size() - 1 else 0)
-                return "break"          # 阻止 Tab 跳焦點
-            return None
-
-        def on_shift_tab(event):
-            if listbox is not None and listbox.size() > 0:
-                cur = _highlighted[0]
-                _set_highlight(cur - 1 if cur > 0 else listbox.size() - 1)
-                return "break"
-            return None
-
-        # ── Space：選取目前反白項目 ───────────────────────────────
-        def on_space(event):
-            if listbox is not None and _highlighted[0] >= 0:
-                _confirm_selection()
-                return "break"
-            return None
-
-        # ── Enter：也可以確認（不阻止表單提交） ───────────────────
-        def on_enter(event):
-            if listbox is not None and _highlighted[0] >= 0:
-                _confirm_selection()
-                return "break"
-            # 若沒有建議清單或未反白任何項目，維持原先 Enter 的行為（提交對話框）
-            try:
-                self._on_submit()
-            except Exception:
-                pass
-            return None
-
-        # ── 綁定事件 ──────────────────────────────────────────────
-        def on_var_change(*_):
-            if not _ignore_trace[0]:
-                show_suggestions()
-
-        var.trace('w', on_var_change)
-        entry.bind('<Tab>',            on_tab)
-        entry.bind('<Shift-Tab>',      on_shift_tab)
-        entry.bind('<space>',          on_space)
-        entry.bind('<Return>',         on_enter)
-        entry.bind('<Escape>',         hide_suggestions)
-        entry.bind('<FocusOut>',       lambda e: self.dialog.after(200, hide_suggestions))
-
-        # 在輸入框下方顯示簡短鍵盤說明（小字、灰色）
-        try:
-            help_label = ttk.Label(parent_frame, text=lm.t('autocomplete.hint'),
-                                   font=("Arial", 9), foreground="#666666", justify="left")
-            help_label.pack(fill="x", pady=(4, 0))
-        except Exception:
-            pass
+        setup_autocomplete(entry, var, autocomplete_type, parent_frame, self.repo_path, self._on_submit)
 

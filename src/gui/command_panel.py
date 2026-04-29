@@ -114,10 +114,13 @@ class CommandPanel(ttk.Frame):
                 [(lm.t('btn.commit_msg'),  'commit_message', 12, False),
                 (lm.t('btn.amend'),        'commit_amend',   12, False)],
             ]),
-            (lm.t('group.push'), [
+            (lm.t('group.sync'), [
+                [(lm.t('btn.fetch'),      'fetch',                                         12, False),
+                (lm.t('btn.pull'),       'pull',                                          12, False)],
                 [(lm.t('btn.push'),       lambda: self.executor.run_simple("push"),       12, False),
                 (lm.t('btn.force_push'),  'force_push',                                    12, True),
                 (lm.t('btn.push_tags'),   lambda: self.executor.run_simple("push --tags"), 14, False)],
+                [(lm.t('btn.pushes_panel'), lambda: self.app.open_pushes_dialog(self.executor), 24, False)],
             ]),
             (lm.t('group.stash'), [
                 [(lm.t('btn.stash_list'), lambda: self.executor.run_simple("stash list"), 12, False),
@@ -131,13 +134,15 @@ class CommandPanel(ttk.Frame):
             (lm.t('group.branch'), [
                 [(lm.t('btn.branch_list'),   lambda: self.executor.run_simple("branch -a"),                    10, False),
                 (lm.t('btn.branch_create'),  'checkout_branch',                                                10, False),
-                (lm.t('btn.prune'),          'prune_branches',                                                 10, False),
-                (lm.t('btn.delete_branch'),  lambda: self.app.open_delete_branch_dialog(self.executor),        20, True)],
+                (lm.t('btn.prune'),          'prune_branches',                                                 10, False)],
+                [(lm.t('btn.branch_rename'), lambda: self.app.open_rename_branch_dialog(self.executor),        12, False),
+                (lm.t('btn.delete_branch'),  lambda: self.app.open_delete_branch_dialog(self.executor),        12, True)],
             ]),
             (lm.t('group.tag'), [
-                [(lm.t('btn.tag_list'),   lambda: self.executor.run_simple("tag -l"), 16, False),
-                (lm.t('btn.tag_create'),  'create_tag',                               16, False),
-                (lm.t('btn.delete_tag'),  lambda: self.app.open_delete_tag_dialog(self.executor), 20, True)],
+                [(lm.t('btn.tag_list'),   lambda: self.executor.run_simple("tag -l"), 12, False),
+                (lm.t('btn.tag_create'),  'create_tag',                               12, False)],
+                [(lm.t('btn.tag_rename'),   lambda: self.app.open_rename_tag_dialog(self.executor),   12, False),
+                (lm.t('btn.delete_tag'),  lambda: self.app.open_delete_tag_dialog(self.executor),   12, True)],
             ]),
             (lm.t('group.tools'), [
                 [(lm.t('btn.status'),    lambda: self.executor.run_simple("status"), 12, False),

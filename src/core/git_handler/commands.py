@@ -114,6 +114,25 @@ def get_commands_configs():
             ]
         },
 
+        # === Sync 系列 ===
+        'fetch': {
+            'name': lm.t('cmd.fetch.name'),
+            'base_cmd': 'fetch',
+            'params': [
+                {'name': 'remote', 'label': lm.t('cmd.fetch.param.remote'), 'required': False, 'type': 'text', 'default': 'origin'},
+                {'name': 'prune', 'label': lm.t('cmd.fetch.param.prune'), 'required': False, 'type': 'toggle'}
+            ]
+        },
+        'pull': {
+            'name': lm.t('cmd.pull.name'),
+            'base_cmd': 'pull',
+            'params': [
+                {'name': 'remote', 'label': lm.t('cmd.pull.param.remote'), 'required': False, 'type': 'text', 'default': 'origin'},
+                {'name': 'branch', 'label': lm.t('cmd.pull.param.branch'), 'required': False, 'type': 'text', 'autocomplete': 'branch'},
+                {'name': 'rebase', 'label': lm.t('cmd.pull.param.rebase'), 'required': False, 'type': 'toggle'}
+            ]
+        },
+
         # === Push 系列 ===
         'force_push': {
             'name': lm.t('cmd.force_push.name'),

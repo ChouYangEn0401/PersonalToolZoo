@@ -7,7 +7,7 @@ from src.core.git_handler.commands import get_commands_configs
 from src.core.git_handler.executor import GitExecutor
 from src.gui.command_panel import CommandPanel
 from src.gui.danger_operation_blocker import ConfirmationManager
-from src.gui.dialogs import GitCommandDialog
+from src.gui.dialogs import GitCommandDialog, setup_autocomplete
 from src.core.language_manager import lm
 from src.version import __version__
 
@@ -359,18 +359,27 @@ class GitAdvancedTool:
              branch_var, [""] + branches),
         ]
 
-        comboboxes = []
-        for row, label, hint, var, choices in field_defs:
+        for row, label, hint, var, atype in [
+            (0, lm.t('dialog.rebase_onto.newbase_label'), lm.t('dialog.rebase_onto.newbase_hint'), newbase_var, 'branch_tag'),
+            (1, lm.t('dialog.rebase_onto.upstream_label'), lm.t('dialog.rebase_onto.upstream_hint'), upstream_var, 'commit'),
+            (2, lm.t('dialog.rebase_onto.branch_label'), lm.t('dialog.rebase_onto.branch_field_hint'), branch_var, 'branch'),
+        ]:
             ttk.Label(fields_lf, text=label, font=("Arial", 9, "bold")).grid(
                 row=row * 2, column=0, sticky="nw", padx=(0, 10), pady=(8, 0))
-            cb = ttk.Combobox(fields_lf, textvariable=var, values=choices,
-                              font=("Consolas", 10), state="normal")
-            cb.grid(row=row * 2, column=1, sticky="ew", pady=(8, 0))
-            comboboxes.append(cb)
+            
+            f_container = ttk.Frame(fields_lf)
+            f_container.grid(row=row * 2, column=1, sticky="ew", pady=(8, 0))
+            
+            ent = ttk.Entry(f_container, textvariable=var, font=("Consolas", 10))
+            ent.pack(fill="x")
+            
+            setup_autocomplete(ent, var, atype, f_container, repo_path, on_execute)
 
             hint_row = ttk.Frame(fields_lf)
             hint_row.grid(row=row * 2 + 1, column=1, sticky="ew", padx=(2, 0), pady=(2, 0))
             ttk.Label(hint_row, text=hint, font=("Arial", 8), foreground="#777").pack(side="left")
+            
+            if row == 0: first_ent = ent
 
             # Branch 欄加「↪ 先切換到此分支」按鈕
             if row == 2:
@@ -432,7 +441,7 @@ class GitAdvancedTool:
         ttk.Button(btn_bar, text=lm.t('dialog.rebase_onto.execute_btn'), command=on_execute, width=22).pack(side="right", padx=2)
         ttk.Button(btn_bar, text=lm.t('dialog.shared.cancel_btn'), command=dialog.destroy, width=10).pack(side="right", padx=2)
 
-        comboboxes[0].focus_set()
+        first_ent.focus_set()
 
     def open_merge_dialog(self, executor):
         """Merge 對話框：支援一般、--no-ff、--squash、--ff-only 四種模式"""
@@ -532,9 +541,13 @@ class GitAdvancedTool:
         # 來源分支
         ttk.Label(fields_lf, text=lm.t('dialog.merge.source_label'), font=("Arial", 9, "bold")).grid(
             row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 2))
-        source_cb = ttk.Combobox(fields_lf, textvariable=source_var,
-                                 values=branches + commit_hashes, font=("Consolas", 10), state="normal")
-        source_cb.grid(row=0, column=1, sticky="ew", pady=(0, 2))
+        
+        source_frame = ttk.Frame(fields_lf)
+        source_frame.grid(row=0, column=1, sticky="ew", pady=(0, 2))
+        source_entry = ttk.Entry(source_frame, textvariable=source_var, font=("Consolas", 10))
+        source_entry.pack(fill="x")
+        
+        setup_autocomplete(source_entry, source_var, 'branch_tag', source_frame, repo_path, on_execute)
 
         def checkout_source():
             src = source_var.get().strip()
@@ -614,7 +627,7 @@ class GitAdvancedTool:
                    command=lambda: (executor.run_simple("merge --continue"), dialog.destroy()),
                    width=14).pack(side="left", padx=2)
 
-        source_cb.focus_set()
+        source_entry.focus_set()
 
     def open_checkout_dialog(self, executor):
         """Checkout 搜尋器：可搜尋 branch / origin/branch / tag / commit，支援 -b 建立新分支"""
@@ -701,30 +714,25 @@ class GitAdvancedTool:
         ttk.Label(search_lf, text=lm.t('dialog.checkouts.filter_hint'),
                   font=("Arial", 8), foreground="#888").pack(anchor="w", pady=(0, 6))
 
-        listbox_frame = ttk.Frame(search_lf)
-        listbox_frame.pack(fill="both", expand=True)
-        listbox = tk.Listbox(listbox_frame, font=("Consolas", 10), activestyle="dotbox",
-                             selectbackground="#cce5ff", selectforeground="#000")
-        lb_scroll = ttk.Scrollbar(listbox_frame, orient="vertical", command=listbox.yview)
-        listbox.configure(yscrollcommand=lb_scroll.set)
-        lb_scroll.pack(side="right", fill="y")
-        listbox.pack(side="left", fill="both", expand=True)
+        def on_execute_checkout():
+            target = entry_var.get().strip()
+            if not target:
+                messagebox.showwarning(lm.t('dialog.shared.missing_param_title'), lm.t('dialog.checkouts.missing_msg'))
+                return
+            cmd = f"git checkout -b {target}" if cb_var.get() else f"git checkout {target}"
+            res = executor.run(cmd)
+            if res is None:
+                messagebox.showerror(lm.t('msg.run_error_title'), lm.t('msg.checkout_error'))
+                return
+            if getattr(res, 'returncode', 1) == 0:
+                current_var.set(get_current_branch())
+                messagebox.showinfo(lm.t('msg.done'), lm.t('msg.switch_success', target=target))
+                dialog.destroy()
+            else:
+                stderr = (res.stderr or res.stdout or "").strip()
+                messagebox.showerror(lm.t('msg.switch_fail_title'), lm.t('dialog.checkouts.fail_msg', stderr=stderr))
 
-        def update_listbox(*_):
-            items = get_candidates(entry_var.get().strip())
-            listbox.delete(0, tk.END)
-            for it in items:
-                listbox.insert(tk.END, it)
-
-        entry_var.trace_add("write", update_listbox)
-        update_listbox()
-
-        def on_lb_select(e=None):
-            if listbox.curselection():
-                entry_var.set(listbox.get(listbox.curselection()[0]))
-
-        listbox.bind('<<ListboxSelect>>', on_lb_select)
-        listbox.bind('<Double-Button-1>', lambda e: on_execute())
+        setup_autocomplete(entry, entry_var, 'branch_tag', search_lf, repo_path, on_execute_checkout)
 
         # === 選項列 ===
         opt_frame = ttk.Frame(main)
@@ -767,7 +775,7 @@ class GitAdvancedTool:
 
         btn_bar = ttk.Frame(main)
         btn_bar.pack(fill="x")
-        ttk.Button(btn_bar, text=lm.t('dialog.checkouts.execute_btn'), command=on_execute, width=16).pack(side="right", padx=2)
+        ttk.Button(btn_bar, text=lm.t('dialog.checkouts.execute_btn'), command=on_execute_checkout, width=16).pack(side="right", padx=2)
         ttk.Button(btn_bar, text=lm.t('dialog.shared.cancel_btn'), command=dialog.destroy, width=10).pack(side="right", padx=2)
 
         entry.focus_set()
@@ -858,30 +866,7 @@ class GitAdvancedTool:
         ttk.Label(search_lf, text=lm.t('dialog.checkouts.filter_hint'),
                   font=("Arial", 8), foreground="#888").pack(anchor="w", pady=(0, 6))
 
-        lb_frame = ttk.Frame(search_lf)
-        lb_frame.pack(fill="both", expand=True)
-        listbox = tk.Listbox(lb_frame, font=("Consolas", 10), activestyle="dotbox",
-                             selectbackground="#cce5ff", selectforeground="#000")
-        lb_scroll = ttk.Scrollbar(lb_frame, orient="vertical", command=listbox.yview)
-        listbox.configure(yscrollcommand=lb_scroll.set)
-        lb_scroll.pack(side="right", fill="y")
-        listbox.pack(side="left", fill="both", expand=True)
-
-        def update_listbox(*_):
-            items = get_candidates(entry_var.get().strip())
-            listbox.delete(0, tk.END)
-            for it in items:
-                listbox.insert(tk.END, it)
-
-        entry_var.trace_add("write", update_listbox)
-        update_listbox()
-
-        def on_lb_select(e=None):
-            if listbox.curselection():
-                entry_var.set(listbox.get(listbox.curselection()[0]))
-
-        listbox.bind('<<ListboxSelect>>', on_lb_select)
-        listbox.bind('<Double-Button-1>', lambda e: on_checkout())
+        setup_autocomplete(entry1, entry_var, 'branch_tag', search_lf, repo_path, on_checkout)
 
         opt_frame = ttk.Frame(tab1)
         opt_frame.pack(fill="x", pady=(0, 6))
@@ -1045,9 +1030,12 @@ class GitAdvancedTool:
         frame.pack(fill="both", expand=True)
 
         ttk.Label(frame, text=lm.t('dialog.delete_branch.name_label'), font=("Arial", 10, "bold")).pack(anchor="w")
-        name_var = tk.StringVar()
-        name_cb = ttk.Combobox(frame, textvariable=name_var, values=get_all_branches(), font=("Consolas", 10), state="normal")
-        name_cb.pack(fill="x", pady=(4, 6))
+        name_frame = ttk.Frame(frame)
+        name_frame.pack(fill="x", pady=(4, 6))
+        name_ent = ttk.Entry(name_frame, textvariable=name_var, font=("Consolas", 10))
+        name_ent.pack(fill="x")
+
+        setup_autocomplete(name_ent, name_var, 'branch', name_frame, repo_path, on_execute, multi_select=True)
 
         opts_frame = ttk.Frame(frame)
         opts_frame.pack(fill="x", pady=(0, 6))
@@ -1109,7 +1097,7 @@ class GitAdvancedTool:
         ttk.Button(btn_row, text=lm.t('dialog.delete_branch.execute_btn'), command=on_execute, width=16, style="Danger.TButton").pack(side="right", padx=4)
         ttk.Button(btn_row, text=lm.t('dialog.shared.cancel_btn'), command=dialog.destroy, width=10).pack(side="right")
 
-        name_cb.focus_set()
+        name_ent.focus_set()
 
     # ─────────────────────────────────────────────────────────────────────
     def open_delete_tag_dialog(self, executor):
@@ -1140,9 +1128,12 @@ class GitAdvancedTool:
         frame.pack(fill="both", expand=True)
 
         ttk.Label(frame, text=lm.t('dialog.delete_tag.name_label'), font=("Arial", 10, "bold")).pack(anchor="w")
-        tag_var = tk.StringVar()
-        tag_cb = ttk.Combobox(frame, textvariable=tag_var, values=get_tags(), font=("Consolas", 10), state="normal")
-        tag_cb.pack(fill="x", pady=(4, 6))
+        tag_frame = ttk.Frame(frame)
+        tag_frame.pack(fill="x", pady=(4, 6))
+        tag_ent = ttk.Entry(tag_frame, textvariable=tag_var, font=("Consolas", 10))
+        tag_ent.pack(fill="x")
+
+        setup_autocomplete(tag_ent, tag_var, 'tag', tag_frame, repo_path, on_execute, multi_select=True)
 
         opts_frame = ttk.Frame(frame)
         opts_frame.pack(fill="x", pady=(0, 6))
@@ -1204,7 +1195,125 @@ class GitAdvancedTool:
         ttk.Button(btn_row, text=lm.t('dialog.delete_tag.execute_btn'), command=on_execute, width=20, style="Danger.TButton").pack(side="right", padx=4)
         ttk.Button(btn_row, text=lm.t('dialog.shared.cancel_btn'), command=dialog.destroy, width=10).pack(side="right")
 
-        tag_cb.focus_set()
+        tag_ent.focus_set()
+
+    def open_pushes_dialog(self, executor):
+        """Advanced Multi-Push Panel: Select multiple branches/tags, toggle force for each."""
+        repo_path = executor.repo_path
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(lm.t('btn.pushes_panel'))
+        dialog.geometry("700x650")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        dialog.update_idletasks()
+        rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
+        dw, dh = dialog.winfo_width(), dialog.winfo_height()
+        dialog.geometry(f"+{rx + (rw // 2) - (dw // 2)}+{ry + (rh // 2) - (dh // 2)}")
+
+        main_frame = ttk.Frame(dialog, padding=15)
+        main_frame.pack(fill="both", expand=True)
+
+        ttk.Label(main_frame, text="🚀 Advanced Pushes Panel", font=("Arial", 12, "bold")).pack(pady=(0, 10))
+
+        # 遠端選擇
+        rem_frame = ttk.Frame(main_frame)
+        rem_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(rem_frame, text="Remote:", font=("Arial", 9, "bold")).pack(side="left", padx=(0, 5))
+        remote_var = tk.StringVar(value="origin")
+        ttk.Entry(rem_frame, textvariable=remote_var, font=("Consolas", 10), width=15).pack(side="left")
+
+        # 列表區 (Scrollable)
+        list_frame = ttk.LabelFrame(main_frame, text=" Select Branches & Tags to Push ", padding=10)
+        list_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+        canvas = tk.Canvas(list_frame, bg="#f0f0f0", highlightthickness=0)
+        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=canvas.yview)
+        scroll_content = ttk.Frame(canvas)
+        canvas.create_window((0, 0), window=scroll_content, anchor="nw", tags="frame")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scroll_content.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure("frame", width=e.width))
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        items_data = [] # list of (type, name, select_var, force_var)
+
+        def add_item_row(itype, name):
+            row = ttk.Frame(scroll_content)
+            row.pack(fill="x", pady=2)
+            
+            sel_var = tk.BooleanVar(value=False)
+            force_var = tk.BooleanVar(value=False)
+            
+            ttk.Checkbutton(row, variable=sel_var).pack(side="left")
+            
+            icon = "🌿" if itype == "branch" else "🏷️"
+            tk.Label(row, text=f"{icon} {name}", font=("Consolas", 10), width=40, anchor="w").pack(side="left", padx=5)
+            
+            force_cb = ttk.Checkbutton(row, text="Force", variable=force_var)
+            force_cb.pack(side="right")
+            
+            items_data.append({'type': itype, 'name': name, 'sel': sel_var, 'force': force_var})
+
+        # 獲取資料
+        try:
+            # Branches
+            res_b = subprocess.run("git branch", cwd=repo_path, shell=True, capture_output=True, text=True, encoding='utf-8')
+            for line in res_b.stdout.splitlines():
+                name = line.replace('*', '').strip()
+                if name: add_item_row("branch", name)
+            
+            # Tags
+            res_t = subprocess.run("git tag", cwd=repo_path, shell=True, capture_output=True, text=True, encoding='utf-8')
+            for line in res_t.stdout.splitlines():
+                name = line.strip()
+                if name: add_item_row("tag", name)
+        except:
+            pass
+
+        def on_push_all():
+            remote = remote_var.get().strip() or "origin"
+            selected = [item for item in items_data if item['sel'].get()]
+            if not selected:
+                messagebox.showwarning("No Selection", "Please select at least one branch or tag.")
+                return
+            
+            # 先確認
+            preview = []
+            for item in selected:
+                prefix = "+" if item['force'].get() else ""
+                preview.append(f"{item['name']} ({'Branch' if item['type']=='branch' else 'Tag'}{' + Force' if item['force'].get() else ''})")
+            
+            if not messagebox.askokcancel("Confirm Multi-Push", "Ready to push the following items to " + remote + ":\n\n" + "\n".join(preview)):
+                return
+            
+            for item in selected:
+                cmd = ["git", "push", remote]
+                if item['force'].get():
+                    cmd.append("-f")
+                
+                if item['type'] == "tag":
+                    cmd.append(f"refs/tags/{item['name']}:refs/tags/{item['name']}")
+                else:
+                    cmd.append(item['name'])
+                
+                executor.run(" ".join(cmd))
+            
+            messagebox.showinfo("Done", "Multi-Push operations completed. Check Terminal for results.")
+            dialog.destroy()
+
+        btn_bar = ttk.Frame(main_frame)
+        btn_bar.pack(fill="x")
+        ttk.Button(btn_bar, text="🚀 Execute All Pushes", command=on_push_all, width=25).pack(side="right", padx=5)
+        ttk.Button(btn_bar, text="Cancel", command=dialog.destroy).pack(side="right")
+        
+        # 全選/全不選
+        def set_all(val):
+            for item in items_data: item['sel'].set(val)
+        ttk.Button(btn_bar, text="Select All", command=lambda: set_all(True), width=10).pack(side="left", padx=2)
+        ttk.Button(btn_bar, text="Clear All", command=lambda: set_all(False), width=10).pack(side="left", padx=2)
 
     def open_file_selector(self, executor):
         """開啟檔案選擇器：支援單獨 Add、雙重狀態計數"""
