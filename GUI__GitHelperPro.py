@@ -13,6 +13,57 @@ from src.version import __version__
 
 
 # ==========================================
+# ReorderableClosableNotebook (可互動標籤頁)
+# ==========================================
+class ReorderableClosableNotebook(ttk.Notebook):
+    def __init__(self, master=None, **kw):
+        super().__init__(master, **kw)
+        self.bind("<Button-1>", self._on_press)
+        self.bind("<B1-Motion>", self._on_drag)
+        self.bind("<Button-2>", self._on_middle_click)
+        self.bind("<Button-3>", self._show_context_menu)
+        self._dragging_tab = None
+
+    def _on_press(self, event):
+        try:
+            element = self.identify(event.x, event.y)
+            if "label" in element:
+                self._dragging_tab = self.index(f"@{event.x},{event.y}")
+        except Exception:
+            self._dragging_tab = None
+
+    def _on_drag(self, event):
+        if self._dragging_tab is None:
+            return
+        try:
+            new_index = self.index(f"@{event.x},{event.y}")
+            if new_index != self._dragging_tab:
+                tabs = self.tabs()
+                self.insert(new_index, tabs[self._dragging_tab])
+                self._dragging_tab = new_index
+        except Exception:
+            pass
+
+    def _on_middle_click(self, event):
+        try:
+            index = self.index(f"@{event.x},{event.y}")
+            if index is not None:
+                self.forget(index)
+        except Exception:
+            pass
+
+    def _show_context_menu(self, event):
+        try:
+            index = self.index(f"@{event.x},{event.y}")
+            if index is not None:
+                menu = tk.Menu(self, tearoff=0)
+                menu.add_command(label=lm.t('tab.close', default="Close Tab"), 
+                                 command=lambda: self.forget(index))
+                menu.post(event.x_root, event.y_root)
+        except Exception:
+            pass
+
+# ==========================================
 # GitAdvancedTool (主程式整合模組)
 # ==========================================
 class GitAdvancedTool:
@@ -53,7 +104,7 @@ class GitAdvancedTool:
         self.lang_combobox.bind("<<ComboboxSelected>>", _on_lang_change)
 
         # 主 Notebook
-        self.notebook = ttk.Notebook(self.root)
+        self.notebook = ReorderableClosableNotebook(self.root)
         self.notebook.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
 
         self.root.grid_rowconfigure(1, weight=1)
@@ -193,7 +244,7 @@ class GitAdvancedTool:
 
         # 檢查危險權限
         if config.get('danger', False):
-            if not self.confirm_mgr.confirm(config['name'], None):
+            if not self.confirm_mgr.confirm(config['name'], None, category=cmd_key):
                 return
 
         dialog = GitCommandDialog(self.root, config['name'], config['params'], repo_path)
@@ -1002,6 +1053,149 @@ class GitAdvancedTool:
         entry1.focus_set()
 
     # ─────────────────────────────────────────────────────────────────────
+    def open_rename_branch_dialog(self, executor):
+        """Rename/Move Branch: rename local and optionally handle remote."""
+        repo_path = executor.repo_path
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(lm.t('btn.branch_rename'))
+        dialog.geometry("550x450")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        dialog.update_idletasks()
+        pw, ph, px, py = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
+        dw, dh = dialog.winfo_width(), dialog.winfo_height()
+        dialog.geometry(f"+{px + (pw // 2) - (dw // 2)}+{py + (ph // 2) - (dh // 2)}")
+
+        main = ttk.Frame(dialog, padding=15)
+        main.pack(fill="both", expand=True)
+
+        # 選擇現有分支
+        ttk.Label(main, text="Select Branch to Rename:", font=("Arial", 9, "bold")).pack(anchor="w")
+        old_var = tk.StringVar()
+        old_frame = ttk.Frame(main)
+        old_frame.pack(fill="x", pady=(2, 10))
+        old_ent = ttk.Entry(old_frame, textvariable=old_var, font=("Consolas", 10))
+        old_ent.pack(fill="x")
+        setup_autocomplete(old_ent, old_var, 'branch', old_frame, repo_path)
+
+        # 輸入新名稱
+        ttk.Label(main, text="New Branch Name:", font=("Arial", 9, "bold")).pack(anchor="w")
+        new_var = tk.StringVar()
+        new_ent = ttk.Entry(main, textvariable=new_var, font=("Consolas", 10))
+        new_ent.pack(fill="x", pady=(2, 10))
+
+        # 選項
+        sync_remote = tk.BooleanVar(value=True)
+        ttk.Checkbutton(main, text="Also Rename on Remote (Delete old, Push new)", variable=sync_remote).pack(anchor="w", pady=5)
+        
+        remote_var = tk.StringVar(value="origin")
+        rem_frame = ttk.Frame(main)
+        rem_frame.pack(fill="x", pady=5)
+        ttk.Label(rem_frame, text="Remote:").pack(side="left")
+        ttk.Entry(rem_frame, textvariable=remote_var, width=10).pack(side="left", padx=5)
+
+        def on_rename():
+            old_n = old_var.get().strip()
+            new_n = new_var.get().strip()
+            rem = remote_var.get().strip() or "origin"
+            if not old_n or not new_n:
+                messagebox.showwarning("Missing Info", "Please provide both old and new names.")
+                return
+            
+            # Local Rename
+            executor.run(f"git branch -m {old_n} {new_n}")
+            
+            if sync_remote.get():
+                # Check if old branch exists on remote
+                res = subprocess.run(f"git ls-remote --heads {rem} {old_n}", cwd=repo_path, shell=True, capture_output=True, text=True)
+                if old_n in res.stdout:
+                    if messagebox.askyesno("Remote Sync", f"Branch '{old_n}' exists on '{rem}'.\nDo you want to delete it and push '{new_n}'?"):
+                        executor.run(f"git push {rem} :{old_n}")
+                        executor.run(f"git push {rem} {new_n}")
+                        # Set upstream
+                        executor.run(f"git branch --set-upstream-to={rem}/{new_n} {new_n}")
+            
+            messagebox.showinfo("Done", f"Branch renamed from {old_n} to {new_n}")
+            dialog.destroy()
+
+        btn_bar = ttk.Frame(main)
+        btn_bar.pack(fill="x", pady=(15, 0))
+        ttk.Button(btn_bar, text="✓ Execute Rename", command=on_rename, width=20).pack(side="right")
+        ttk.Button(btn_bar, text="Cancel", command=dialog.destroy).pack(side="right", padx=5)
+
+    def open_rename_tag_dialog(self, executor):
+        """Rename/Move Tag: rename local and optionally handle remote."""
+        repo_path = executor.repo_path
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(lm.t('btn.tag_rename'))
+        dialog.geometry("550x450")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        dialog.update_idletasks()
+        pw, ph, px, py = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
+        dw, dh = dialog.winfo_width(), dialog.winfo_height()
+        dialog.geometry(f"+{px + (pw // 2) - (dw // 2)}+{py + (ph // 2) - (dh // 2)}")
+
+        main = ttk.Frame(dialog, padding=15)
+        main.pack(fill="both", expand=True)
+
+        # 選擇現有 Tag
+        ttk.Label(main, text="Select Tag to Rename/Move:", font=("Arial", 9, "bold")).pack(anchor="w")
+        old_var = tk.StringVar()
+        old_frame = ttk.Frame(main)
+        old_frame.pack(fill="x", pady=(2, 10))
+        old_ent = ttk.Entry(old_frame, textvariable=old_var, font=("Consolas", 10))
+        old_ent.pack(fill="x")
+        setup_autocomplete(old_ent, old_var, 'tag', old_frame, repo_path)
+
+        # 輸入新名稱
+        ttk.Label(main, text="New Tag Name:", font=("Arial", 9, "bold")).pack(anchor="w")
+        new_var = tk.StringVar()
+        new_ent = ttk.Entry(main, textvariable=new_var, font=("Consolas", 10))
+        new_ent.pack(fill="x", pady=(2, 10))
+
+        # 選項
+        sync_remote = tk.BooleanVar(value=True)
+        ttk.Checkbutton(main, text="Also Rename on Remote (Delete old, Push new)", variable=sync_remote).pack(anchor="w", pady=5)
+        
+        remote_var = tk.StringVar(value="origin")
+        rem_frame = ttk.Frame(main)
+        rem_frame.pack(fill="x", pady=5)
+        ttk.Label(rem_frame, text="Remote:").pack(side="left")
+        ttk.Entry(rem_frame, textvariable=remote_var, width=10).pack(side="left", padx=5)
+
+        def on_rename():
+            old_n = old_var.get().strip()
+            new_n = new_var.get().strip()
+            rem = remote_var.get().strip() or "origin"
+            if not old_n or not new_n:
+                messagebox.showwarning("Missing Info", "Please provide both old and new names.")
+                return
+            
+            # Local Rename: Create new at old's location, then delete old
+            executor.run(f"git tag {new_n} {old_n}")
+            executor.run(f"git tag -d {old_n}")
+            
+            if sync_remote.get():
+                # Check if old tag exists on remote
+                res = subprocess.run(f"git ls-remote --tags {rem} {old_n}", cwd=repo_path, shell=True, capture_output=True, text=True)
+                if old_n in res.stdout:
+                    if messagebox.askyesno("Remote Sync", f"Tag '{old_n}' exists on '{rem}'.\nDo you want to delete it and push '{new_n}'?"):
+                        executor.run(f"git push {rem} :refs/tags/{old_n}")
+                        executor.run(f"git push {rem} {new_n}")
+            
+            messagebox.showinfo("Done", f"Tag renamed from {old_n} to {new_n}")
+            dialog.destroy()
+
+        btn_bar = ttk.Frame(main)
+        btn_bar.pack(fill="x", pady=(15, 0))
+        ttk.Button(btn_bar, text="✓ Execute Rename", command=on_rename, width=20).pack(side="right")
+        ttk.Button(btn_bar, text="Cancel", command=dialog.destroy).pack(side="right", padx=5)
+
     def open_delete_branch_dialog(self, executor):
         """Delete Branch dialog: allow deleting local and/or remote branches with checkboxes."""
         repo_path = executor.repo_path

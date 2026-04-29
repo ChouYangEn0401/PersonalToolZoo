@@ -127,9 +127,9 @@ class CommandPanel(ttk.Frame):
                 (lm.t('btn.stash_pop'),   lambda: self.executor.run_simple("stash pop"),  12, False)],
                 [(lm.t('btn.stash_save'),  lambda: self.executor.run_simple("stash"),     12, False),
                 (lm.t('btn.stash_clear'),
-                 lambda: self.confirm_mgr.confirm(lm.t('confirm.stash_clear'), lambda: self.executor.run_simple("stash clear")), 12, True),
+                 lambda: self.confirm_mgr.confirm(lm.t('confirm.stash_clear'), lambda: self.executor.run_simple("stash clear"), category="stash_clear"), 12, True),
                 (lm.t('btn.stash_drop'),
-                 lambda: self.confirm_mgr.confirm(lm.t('confirm.stash_drop'), lambda: self.executor.run_simple("stash drop")),   12, True)],
+                 lambda: self.confirm_mgr.confirm(lm.t('confirm.stash_drop'), lambda: self.executor.run_simple("stash drop"), category="stash_drop"),   12, True)],
             ]),
             (lm.t('group.branch'), [
                 [(lm.t('btn.branch_list'),   lambda: self.executor.run_simple("branch -a"),                    10, False),
@@ -149,7 +149,7 @@ class CommandPanel(ttk.Frame):
                 (lm.t('btn.checkouts'),  lambda: self.app.open_checkouts_dialog(self.executor), 12, False),
                 (lm.t('btn.diff'),       lambda: self.executor.run_simple("diff"),   12, False)],
                 [(lm.t('btn.clean_fd'),
-                 lambda: self.confirm_mgr.confirm(lm.t('confirm.clean_fd'), lambda: self.executor.run_simple("clean -fd")), 12, True)],
+                 lambda: self.confirm_mgr.confirm(lm.t('confirm.clean_fd'), lambda: self.executor.run_simple("clean -fd"), category="clean_fd"), 12, True)],
             ]),
         ]
 
