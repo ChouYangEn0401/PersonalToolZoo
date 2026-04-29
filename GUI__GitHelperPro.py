@@ -410,27 +410,27 @@ class GitAdvancedTool:
              branch_var, [""] + branches),
         ]
 
-        for row, label, hint, var, atype in [
-            (0, lm.t('dialog.rebase_onto.newbase_label'), lm.t('dialog.rebase_onto.newbase_hint'), newbase_var, 'branch_tag'),
-            (1, lm.t('dialog.rebase_onto.upstream_label'), lm.t('dialog.rebase_onto.upstream_hint'), upstream_var, 'commit'),
-            (2, lm.t('dialog.rebase_onto.branch_label'), lm.t('dialog.rebase_onto.branch_field_hint'), branch_var, 'branch'),
+        for row, label, hint, var, atype, choices in [
+            (0, lm.t('dialog.rebase_onto.newbase_label'), lm.t('dialog.rebase_onto.newbase_hint'), newbase_var, 'branch_tag', branches + head_shortcuts + commit_hashes),
+            (1, lm.t('dialog.rebase_onto.upstream_label'), lm.t('dialog.rebase_onto.upstream_hint'), upstream_var, 'commit', head_shortcuts + commit_hashes + branches),
+            (2, lm.t('dialog.rebase_onto.branch_label'), lm.t('dialog.rebase_onto.branch_field_hint'), branch_var, 'branch', [""] + branches),
         ]:
             ttk.Label(fields_lf, text=label, font=("Arial", 9, "bold")).grid(
                 row=row * 2, column=0, sticky="nw", padx=(0, 10), pady=(8, 0))
             
-            f_container = ttk.Frame(fields_lf)
-            f_container.grid(row=row * 2, column=1, sticky="ew", pady=(8, 0))
+            row_container = ttk.Frame(fields_lf)
+            row_container.grid(row=row * 2, column=1, sticky="ew", pady=(8, 0))
             
-            ent = ttk.Entry(f_container, textvariable=var, font=("Consolas", 10))
-            ent.pack(fill="x")
+            cb = ttk.Combobox(row_container, textvariable=var, values=choices, font=("Consolas", 10))
+            cb.pack(fill="x")
             
-            setup_autocomplete(ent, var, atype, f_container, repo_path, on_execute)
+            setup_autocomplete(cb, var, atype, row_container, repo_path, on_execute, extra_items=choices)
 
             hint_row = ttk.Frame(fields_lf)
             hint_row.grid(row=row * 2 + 1, column=1, sticky="ew", padx=(2, 0), pady=(2, 0))
             ttk.Label(hint_row, text=hint, font=("Arial", 8), foreground="#777").pack(side="left")
             
-            if row == 0: first_ent = ent
+            if row == 0: first_cb = cb
 
             # Branch 欄加「↪ 先切換到此分支」按鈕
             if row == 2:
@@ -492,7 +492,7 @@ class GitAdvancedTool:
         ttk.Button(btn_bar, text=lm.t('dialog.rebase_onto.execute_btn'), command=on_execute, width=22).pack(side="right", padx=2)
         ttk.Button(btn_bar, text=lm.t('dialog.shared.cancel_btn'), command=dialog.destroy, width=10).pack(side="right", padx=2)
 
-        first_ent.focus_set()
+        first_cb.focus_set()
 
     def open_merge_dialog(self, executor):
         """Merge 對話框：支援一般、--no-ff、--squash、--ff-only 四種模式"""
@@ -593,12 +593,12 @@ class GitAdvancedTool:
         ttk.Label(fields_lf, text=lm.t('dialog.merge.source_label'), font=("Arial", 9, "bold")).grid(
             row=0, column=0, sticky="w", padx=(0, 10), pady=(0, 2))
         
-        source_frame = ttk.Frame(fields_lf)
-        source_frame.grid(row=0, column=1, sticky="ew", pady=(0, 2))
-        source_entry = ttk.Entry(source_frame, textvariable=source_var, font=("Consolas", 10))
-        source_entry.pack(fill="x")
+        source_container = ttk.Frame(fields_lf)
+        source_container.grid(row=0, column=1, sticky="ew", pady=(0, 2))
+        source_cb = ttk.Combobox(source_container, textvariable=source_var, values=branches + commit_hashes, font=("Consolas", 10))
+        source_cb.pack(fill="x")
         
-        setup_autocomplete(source_entry, source_var, 'branch_tag', source_frame, repo_path, on_execute)
+        setup_autocomplete(source_cb, source_var, 'branch_tag', source_container, repo_path, on_execute, extra_items=branches+commit_hashes)
 
         def checkout_source():
             src = source_var.get().strip()
@@ -678,7 +678,7 @@ class GitAdvancedTool:
                    command=lambda: (executor.run_simple("merge --continue"), dialog.destroy()),
                    width=14).pack(side="left", padx=2)
 
-        source_entry.focus_set()
+        source_cb.focus_set()
 
     def open_checkout_dialog(self, executor):
         """Checkout 搜尋器：可搜尋 branch / origin/branch / tag / commit，支援 -b 建立新分支"""
@@ -1224,12 +1224,10 @@ class GitAdvancedTool:
         frame.pack(fill="both", expand=True)
 
         ttk.Label(frame, text=lm.t('dialog.delete_branch.name_label'), font=("Arial", 10, "bold")).pack(anchor="w")
-        name_frame = ttk.Frame(frame)
-        name_frame.pack(fill="x", pady=(4, 6))
-        name_ent = ttk.Entry(name_frame, textvariable=name_var, font=("Consolas", 10))
-        name_ent.pack(fill="x")
+        name_cb = ttk.Combobox(frame, textvariable=name_var, values=get_all_branches(), font=("Consolas", 10))
+        name_cb.pack(fill="x", pady=(4, 6))
 
-        setup_autocomplete(name_ent, name_var, 'branch', name_frame, repo_path, on_execute, multi_select=True)
+        setup_autocomplete(name_cb, name_var, 'branch', frame, repo_path, on_execute, multi_select=True, extra_items=get_all_branches())
 
         opts_frame = ttk.Frame(frame)
         opts_frame.pack(fill="x", pady=(0, 6))
@@ -1291,7 +1289,7 @@ class GitAdvancedTool:
         ttk.Button(btn_row, text=lm.t('dialog.delete_branch.execute_btn'), command=on_execute, width=16, style="Danger.TButton").pack(side="right", padx=4)
         ttk.Button(btn_row, text=lm.t('dialog.shared.cancel_btn'), command=dialog.destroy, width=10).pack(side="right")
 
-        name_ent.focus_set()
+        name_cb.focus_set()
 
     # ─────────────────────────────────────────────────────────────────────
     def open_delete_tag_dialog(self, executor):
@@ -1322,12 +1320,10 @@ class GitAdvancedTool:
         frame.pack(fill="both", expand=True)
 
         ttk.Label(frame, text=lm.t('dialog.delete_tag.name_label'), font=("Arial", 10, "bold")).pack(anchor="w")
-        tag_frame = ttk.Frame(frame)
-        tag_frame.pack(fill="x", pady=(4, 6))
-        tag_ent = ttk.Entry(tag_frame, textvariable=tag_var, font=("Consolas", 10))
-        tag_ent.pack(fill="x")
+        tag_cb = ttk.Combobox(frame, textvariable=tag_var, values=get_tags(), font=("Consolas", 10))
+        tag_cb.pack(fill="x", pady=(4, 6))
 
-        setup_autocomplete(tag_ent, tag_var, 'tag', tag_frame, repo_path, on_execute, multi_select=True)
+        setup_autocomplete(tag_cb, tag_var, 'tag', frame, repo_path, on_execute, multi_select=True, extra_items=get_tags())
 
         opts_frame = ttk.Frame(frame)
         opts_frame.pack(fill="x", pady=(0, 6))
@@ -1389,7 +1385,7 @@ class GitAdvancedTool:
         ttk.Button(btn_row, text=lm.t('dialog.delete_tag.execute_btn'), command=on_execute, width=20, style="Danger.TButton").pack(side="right", padx=4)
         ttk.Button(btn_row, text=lm.t('dialog.shared.cancel_btn'), command=dialog.destroy, width=10).pack(side="right")
 
-        tag_ent.focus_set()
+        tag_cb.focus_set()
 
     def open_pushes_dialog(self, executor):
         """Advanced Multi-Push Panel: Select multiple branches/tags, toggle force for each."""

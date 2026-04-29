@@ -1,0 +1,24 @@
+# GitHelper To-Do List
+
+- [x] 1. Fetch / Pull functions implementation
+- [x] 2. Enhanced Delete (branch, tag, origin-branch, origin-tag)
+    - [x] Multi-select support
+    - [x] Simplified interface
+    - [x] Restore search functionality (Tab selection yellow window)
+- [x] 3. Restore Search for Merge, --onto, Checkouts
+    - [x] Integrate the "cute yellow window" search feature
+- [x] 4. Pushes Panel
+    - [x] Multi-push support
+    - [x] Individual Force push toggles
+    - [x] Support for both tags and branches
+- [x] 5. Alert-window Categories & Positioning
+    - [x] Categorize alert windows
+    - [x] Ensure TopLevel-like positioning (always on top of main app)
+    - [x] Duration selection list (1m, 5m, 15m, 30m, Until Restart, Permanent)
+- [x] 6. Rename/Move Tag and Branch
+    - [x] Rename/Move implementation (Delete & Rebuild)
+    - [x] Handle Remote synchronization (checking origin)
+    - [x] Support force-push for these operations
+- [x] 7. Notebook Tab Enhancements
+    - [x] Closeable tabs
+    - [x] Draggable/Reorderable tabs

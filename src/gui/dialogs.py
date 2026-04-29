@@ -5,10 +5,11 @@ from src.core.language_manager import lm
 
 import os
 
-def setup_autocomplete(entry, var, autocomplete_type, parent_frame, repo_path, on_submit_callback=None, multi_select=False):
+def setup_autocomplete(entry, var, autocomplete_type, parent_frame, repo_path, on_submit_callback=None, multi_select=False, extra_items=None):
     """
     通用自動完成功能：
     支援 Tab/Shift+Tab 導航，Space/Enter 確認。
+    extra_items: 額外的靜態建議項目 (如 HEAD~1)
     """
     listbox = None
     listbox_frame = None
@@ -51,9 +52,15 @@ def setup_autocomplete(entry, var, autocomplete_type, parent_frame, repo_path, o
                                        capture_output=True, text=True, encoding='utf-8', errors='replace')
                 tags = [t.strip() for t in res_t.stdout.splitlines() if t.strip()]
                 items = sorted(set(branches + tags))
+                if extra_items: items = sorted(set(items + extra_items))
                 if not text: return items[:15]
                 p = text.lower()
                 return [i for i in items if p in i.lower()][:15]
+            
+            # 如果有額外項目且沒有特定的 type
+            if extra_items:
+                items = [i for i in extra_items if not text or text.lower() in i.lower()]
+                return items[:15]
         except: pass
         return []
 
@@ -164,12 +171,6 @@ def setup_autocomplete(entry, var, autocomplete_type, parent_frame, repo_path, o
     entry.bind('<Escape>', hide_suggestions)
     # 增加少許延遲避免點擊時立刻消失
     entry.bind('<FocusOut>', lambda e: entry.after(200, hide_suggestions))
-
-    try:
-        help_label = ttk.Label(parent_frame, text=lm.t('autocomplete.hint'),
-                               font=("Arial", 9), foreground="#666666", justify="left")
-        help_label.pack(fill="x", pady=(4, 0))
-    except: pass
 
 
 class GitCommandDialog:
