@@ -1,0 +1,68 @@
+# Template config for PyInstaller spec/template usage.
+# Place this file at your project root and customize keys.
+
+[tool.pyinstaller_template]
+# Human-friendly name for the application (used in exe name format)
+name = "YourApp"
+
+# Path to the entry script relative to project root
+entry_script = "src/your_package/__main__.py"
+
+# Package name used by importlib.metadata.version() when installed
+package_name = "your-package-name"
+
+# Alternative: path to a file that defines __version__ (ast-parsable)
+# e.g. "src/your_package/_version.py". If both are provided, importlib
+# is tried first, then file parse.
+version_file = "src/your_package/_version.py"
+
+# Folders to collect into datas (will be bundled preserving relative paths)
+include_folders = ["language", "data"]
+
+# Patterns to exclude when collecting files (fnmatch)
+exclude_patterns = ["*.pyc", "__pycache__", ".git*", "*.tmp"]
+
+# Name format for produced exe; placeholders: {name}, {version}
+exe_name_format = "{name}(v{version})"
+
+# PyInstaller flags
+console = true
+upx = true
+onefile = true
+
+# If true, template.spec will write a build/version.txt and include it
+embed_version_file = true
+
+# If true, sanitize version string for filesystem safety (replace spaces/slashes)
+sanitize_version = true
+# Template configuration for PyInstaller packaging and version discovery.
+# Copy this file into a project root and update values as needed.
+
+[project]
+# Name of the project / package (used for exe naming and importlib lookups)
+name = "your_package_name"
+
+# Version discovery (prefer file if both provided)
+# - version_file: relative path to a Python file that defines __version__ (safer)
+# - version_attr: module path + attribute, e.g. "mypkg._version.__version__"
+version_file = "src/your_package/_version.py"
+version_attr = "your_package._version.__version__"
+
+[build]
+# Path to the entry script that PyInstaller should package (relative to project root)
+entry_script = "crypto_tool/GUI__Encrypter.py"
+
+# output exe naming template. Available placeholders: {name}, {version}
+# Example: "GUI__{name}(v{version})"
+exe_name_template = "GUI__{name}(v{version})"
+
+# Directories to include as data. These will be collected recursively.
+include_data_dirs = ["data", "language"]
+
+# Glob patterns to exclude when collecting data
+exclude_patterns = ["*.pyc", "__pycache__", ".git", "*.tmp"]
+
+# PyInstaller options
+onefile = true
+console = false
+upx = true
