@@ -1,0 +1,9 @@
+1. fetch / pull 功能
+2. 我希望 delete (branch, tag, origin-branch, origin-tag) 可以更加方便一點，多選、介面簡單、搜尋功能回復(就是可以用tab做選擇的那個可愛黃黃視窗)
+3. merge, --onto, checkouts 介面的搜尋功能也要恢復(跟之前舊版面依樣)，不是單純 listbox 而已。那個很厲害好看的搜尋功能，我也還是想要，你想一下如何整合好了。(就是可以用tab做選擇的那個可愛黃黃視窗)
+4. 額外新增 pushes 按鈕，打開 push-panel 可以一次 push 很多 同時細節決定誰要 force， tags 和 branches 也都支援
+5. alert-window 需要分門別類，不是大家共用這一個。而且也要確保視窗不會出現再飛預期位置(要跟toplevel依樣出現再程式上方)。時間我也希望可以蓋成用 list 去選擇，1分/5分/15分/30分/重啟之前/永久，就這樣，沒有其他選項。但其實我有再想如此危險的操作，我還是希望不要讓人 "重啟之前" 或 "永久" 這部分我很猶豫。
+6. tag 和 branch 如果有重名，我其實希望可以做 rename 或者 move-tag 或者 move-branch。 rename 好處理 就是 delete, rebuild； move-tag 同理就是刪掉原本在的地方，然後充新建立； move-branch 我其實也覺得是同理。 然後我覺得比較麻煩的點在於，需要去確認遠端狀況。變成說如果 branch 或者 tag 已經有 origin 那可能就會需要同時做處理，不然可能會有東西壞掉。 然後當然這邊有時候也會需要 force-push tag/branch 所以功能要做到非常正確才可以。
+7. 我希望 notebook_tab 可以關掉 或者 拖動改變位置
+```
+如果你發現 to_do_list.md 不存在 root/ 下面，你要建立一個小清單 to_do_list.md 然後追蹤這邊是否都做完了，每次做完要跟新md。
