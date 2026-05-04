@@ -8,6 +8,7 @@ from src.core.git_handler.executor import GitExecutor
 from src.gui.command_panel import CommandPanel
 from src.gui.danger_operation_blocker import ConfirmationManager
 from src.gui.dialogs import GitCommandDialog
+from src.gui.ac_helper import attach_autocomplete
 from src.core.language_manager import lm
 from src.version import __version__
 
@@ -58,6 +59,68 @@ class GitAdvancedTool:
 
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
+
+        self._setup_tab_controls()
+
+    def _setup_tab_controls(self):
+        """Bind right-click context menu and Ctrl+W for tab close/move."""
+        self.notebook.bind("<Button-3>", self._on_tab_right_click)
+        self.root.bind("<Control-w>", lambda e: self._close_current_tab())
+
+    def _on_tab_right_click(self, event):
+        try:
+            clicked_tab = self.notebook.tk.call(self.notebook._w, "identify", "tab", event.x, event.y)
+        except Exception:
+            return
+        if clicked_tab == "":
+            return
+        menu = tk.Menu(self.root, tearoff=0)
+        menu.add_command(label=lm.t("tab.close", default="關閉分頁"),
+                         command=lambda: self._close_tab_by_index(int(clicked_tab)))
+        menu.add_separator()
+        menu.add_command(label=lm.t("tab.move_left", default="← 向左移"),
+                         command=lambda: self._move_tab(int(clicked_tab), -1))
+        menu.add_command(label=lm.t("tab.move_right", default="→ 向右移"),
+                         command=lambda: self._move_tab(int(clicked_tab), 1))
+        menu.post(event.x_root, event.y_root)
+
+    def _close_current_tab(self):
+        try:
+            idx = self.notebook.index(self.notebook.select())
+            self._close_tab_by_index(idx)
+        except Exception:
+            pass
+
+    def _close_tab_by_index(self, idx: int):
+        try:
+            tabs = self.notebook.tabs()
+            if idx < 0 or idx >= len(tabs):
+                return
+            tab_id = tabs[idx]
+            self.notebook.forget(tab_id)
+            # Remove from _command_panels if index still valid
+            if idx < len(self._command_panels):
+                self._command_panels.pop(idx)
+        except Exception:
+            pass
+
+    def _move_tab(self, idx: int, direction: int):
+        try:
+            tabs = self.notebook.tabs()
+            n = len(tabs)
+            new_idx = idx + direction
+            if new_idx < 0 or new_idx >= n:
+                return
+            tab_id = tabs[idx]
+            frame = self.notebook.nametowidget(tab_id)
+            tab_text = self.notebook.tab(tab_id, "text")
+            # tkinter Notebook.insert
+            self.notebook.insert(new_idx, frame, text=tab_text)
+            # Reorder _command_panels list
+            if 0 <= idx < len(self._command_panels) and 0 <= new_idx < len(self._command_panels):
+                self._command_panels.insert(new_idx, self._command_panels.pop(idx))
+        except Exception:
+            pass
 
     def _rebuild_ui(self):
         """Refresh all translatable UI text after a language switch."""
@@ -193,7 +256,12 @@ class GitAdvancedTool:
 
         # 檢查危險權限
         if config.get('danger', False):
-            if not self.confirm_mgr.confirm(config['name'], None):
+            # Route to typed confirm methods for specific operations
+            _danger_method = {
+                'reset_hard':  self.confirm_mgr.confirm_reset,
+                'force_push':  self.confirm_mgr.confirm_force_push,
+            }.get(cmd_key, self.confirm_mgr.confirm)
+            if not _danger_method(config['name'], None):
                 return
 
         dialog = GitCommandDialog(self.root, config['name'], config['params'], repo_path)
@@ -266,15 +334,13 @@ class GitAdvancedTool:
 
         dialog = tk.Toplevel(self.root)
         dialog.title("Rebase --onto")
-        dialog.geometry("600x550")
         dialog.transient(self.root)
         dialog.grab_set()
-        dialog.resizable(False, False)
-
-        dialog.update_idletasks()
-        rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
-        dw, dh = dialog.winfo_width(), dialog.winfo_height()
-        dialog.geometry(f"+{rx + (rw // 2) - (dw // 2)}+{ry + (rh // 2) - (dh // 2)}")
+        dialog.resizable(True, True)
+        w, h = 640, 600
+        rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
+        rw, rh = self.root.winfo_width(), self.root.winfo_height()
+        dialog.geometry(f"{w}x{h}+{rx+(rw-w)//2}+{ry+(rh-h)//2}")
 
         main_frame = ttk.Frame(dialog, padding=15)
         main_frame.pack(fill="both", expand=True)
@@ -348,25 +414,39 @@ class GitAdvancedTool:
         branch_var = tk.StringVar(value="")
 
         field_defs = [
-            (0, lm.t('dialog.rebase_onto.newbase_label'),
+            (lm.t('dialog.rebase_onto.newbase_label'),
              lm.t('dialog.rebase_onto.newbase_hint'),
              newbase_var, branches + head_shortcuts + commit_hashes),
-            (1, lm.t('dialog.rebase_onto.upstream_label'),
+            (lm.t('dialog.rebase_onto.upstream_label'),
              lm.t('dialog.rebase_onto.upstream_hint'),
              upstream_var, head_shortcuts + commit_hashes + branches),
-            (2, lm.t('dialog.rebase_onto.branch_label'),
+            (lm.t('dialog.rebase_onto.branch_label'),
              lm.t('dialog.rebase_onto.branch_field_hint'),
              branch_var, [""] + branches),
         ]
 
         comboboxes = []
-        for row, label, hint, var, choices in field_defs:
+        _ac_pools = [
+            branches + head_shortcuts + commit_hashes,   # newbase
+            head_shortcuts + commit_hashes + branches,   # upstream
+            [""] + branches,                             # branch
+        ]
+        for row, (label, hint, var, choices), pool in zip(range(3), field_defs, _ac_pools):
             ttk.Label(fields_lf, text=label, font=("Arial", 9, "bold")).grid(
                 row=row * 2, column=0, sticky="nw", padx=(0, 10), pady=(8, 0))
             cb = ttk.Combobox(fields_lf, textvariable=var, values=choices,
                               font=("Consolas", 10), state="normal")
             cb.grid(row=row * 2, column=1, sticky="ew", pady=(8, 0))
             comboboxes.append(cb)
+
+            # Autocomplete yellow popup
+            _pool = pool
+            def _ac_fn(text, p=_pool):
+                if not text:
+                    return p[:20]
+                t = text.lower()
+                return [x for x in p if t in x.lower()][:20]
+            attach_autocomplete(cb, var, _ac_fn, fields_lf)
 
             hint_row = ttk.Frame(fields_lf)
             hint_row.grid(row=row * 2 + 1, column=1, sticky="ew", padx=(2, 0), pady=(2, 0))
@@ -432,6 +512,8 @@ class GitAdvancedTool:
         ttk.Button(btn_bar, text=lm.t('dialog.rebase_onto.execute_btn'), command=on_execute, width=22).pack(side="right", padx=2)
         ttk.Button(btn_bar, text=lm.t('dialog.shared.cancel_btn'), command=dialog.destroy, width=10).pack(side="right", padx=2)
 
+        dialog.bind("<Return>", lambda e: on_execute())
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
         comboboxes[0].focus_set()
 
     def open_merge_dialog(self, executor):
@@ -440,15 +522,13 @@ class GitAdvancedTool:
 
         dialog = tk.Toplevel(self.root)
         dialog.title(lm.t('dialog.merge.title'))
-        dialog.geometry("600x630")
         dialog.transient(self.root)
         dialog.grab_set()
-        dialog.resizable(False, False)
-
-        dialog.update_idletasks()
-        rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
-        dw, dh = dialog.winfo_width(), dialog.winfo_height()
-        dialog.geometry(f"+{rx + (rw // 2) - (dw // 2)}+{ry + (rh // 2) - (dh // 2)}")
+        dialog.resizable(True, True)
+        w, h = 640, 640
+        rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
+        rw, rh = self.root.winfo_width(), self.root.winfo_height()
+        dialog.geometry(f"{w}x{h}+{rx+(rw-w)//2}+{ry+(rh-h)//2}")
 
         main_frame = ttk.Frame(dialog, padding=15)
         main_frame.pack(fill="both", expand=True)
@@ -536,6 +616,15 @@ class GitAdvancedTool:
                                  values=branches + commit_hashes, font=("Consolas", 10), state="normal")
         source_cb.grid(row=0, column=1, sticky="ew", pady=(0, 2))
 
+        # Autocomplete yellow popup for source combobox
+        def _merge_ac(text):
+            pool = branches + commit_hashes
+            if not text:
+                return pool[:20]
+            t = text.lower()
+            return [x for x in pool if t in x.lower()][:20]
+        attach_autocomplete(source_cb, source_var, _merge_ac, source_cb)
+
         def checkout_source():
             src = source_var.get().strip()
             if not src:
@@ -607,6 +696,10 @@ class GitAdvancedTool:
         btn_bar.pack(fill="x")
         ttk.Button(btn_bar, text=lm.t('dialog.merge.execute_btn'), command=on_execute, width=16).pack(side="right", padx=2)
         ttk.Button(btn_bar, text=lm.t('dialog.shared.cancel_btn'), command=dialog.destroy, width=10).pack(side="right", padx=2)
+
+        dialog.bind("<Return>", lambda e: on_execute())
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
+        source_cb.focus_set()
         ttk.Button(btn_bar, text=lm.t('dialog.merge.abort_btn'),
                    command=lambda: (executor.run_simple("merge --abort"), dialog.destroy()),
                    width=10, style="Danger.TButton").pack(side="left", padx=2)
@@ -954,8 +1047,17 @@ class GitAdvancedTool:
         except:
             pass
         source_var = tk.StringVar(value="HEAD")
-        ttk.Combobox(fields2, textvariable=source_var, values=["HEAD"] + source_vals,
-                     font=("Consolas", 10), state="normal").grid(row=0, column=1, sticky="ew")
+        source_cb2 = ttk.Combobox(fields2, textvariable=source_var, values=["HEAD"] + source_vals,
+                     font=("Consolas", 10), state="normal")
+        source_cb2.grid(row=0, column=1, sticky="ew")
+
+        def _src_ac(text):
+            pool = ["HEAD"] + source_vals
+            if not text:
+                return pool[:20]
+            t = text.lower()
+            return [x for x in pool if t in x.lower()][:20]
+        attach_autocomplete(source_cb2, source_var, _src_ac, fields2)
         ttk.Label(fields2, text=lm.t('dialog.checkouts.source_hint'), font=("Arial", 8), foreground="#888").grid(
             row=1, column=1, sticky="w", pady=(2, 8))
 
@@ -1023,15 +1125,12 @@ class GitAdvancedTool:
 
         dialog = tk.Toplevel(self.root)
         dialog.title(lm.t('dialog.delete_branch.title'))
-        dialog.geometry("520x260")
         dialog.transient(self.root)
         dialog.grab_set()
-        dialog.resizable(False, False)
-
-        dialog.update_idletasks()
+        dialog.resizable(True, True)
+        w, h = 520, 340
         rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
-        dw, dh = dialog.winfo_width(), dialog.winfo_height()
-        dialog.geometry(f"+{rx + (rw // 2) - (dw // 2)}+{ry + (rh // 2) - (dh // 2)}")
+        dialog.geometry(f"{w}x{h}+{rx + (rw - w) // 2}+{ry + (rh - h) // 2}")
 
         def get_all_branches():
             try:
@@ -1048,6 +1147,12 @@ class GitAdvancedTool:
         name_var = tk.StringVar()
         name_cb = ttk.Combobox(frame, textvariable=name_var, values=get_all_branches(), font=("Consolas", 10), state="normal")
         name_cb.pack(fill="x", pady=(4, 6))
+        _branch_pool = get_all_branches()
+        attach_autocomplete(name_cb, name_var,
+                            lambda text, pool=_branch_pool: (
+                                pool[:20] if not text
+                                else [x for x in pool if text.lower() in x.lower()][:20]
+                            ))
 
         opts_frame = ttk.Frame(frame)
         opts_frame.pack(fill="x", pady=(0, 6))
@@ -1063,9 +1168,13 @@ class GitAdvancedTool:
         ttk.Entry(rem_row, textvariable=remote_var, font=("Consolas", 10), width=12).pack(side="left", padx=(6, 0))
 
         prev_lf = ttk.LabelFrame(frame, text=f" {lm.t('dialog.shared.preview_section')} ", padding=8)
-        prev_lf.pack(fill="x", pady=(6, 8))
-        preview_var = tk.StringVar()
-        ttk.Label(prev_lf, textvariable=preview_var, font=("Consolas", 10), foreground="#cc0000").pack(anchor="w")
+        prev_lf.pack(fill="both", expand=True, pady=(6, 8))
+        preview_text = tk.Text(prev_lf, font=("Consolas", 10), foreground="#cc0000",
+                               bg="#fff8f8", height=4, wrap="none", state="disabled")
+        preview_sb = ttk.Scrollbar(prev_lf, orient="vertical", command=preview_text.yview)
+        preview_text.configure(yscrollcommand=preview_sb.set)
+        preview_sb.pack(side="right", fill="y")
+        preview_text.pack(fill="both", expand=True)
 
         def update_preview(*_):
             names = name_var.get().strip() or '<branch>'
@@ -1075,7 +1184,11 @@ class GitAdvancedTool:
                     cmds.append(f"git branch -D {n}")
                 if delete_remote.get():
                     cmds.append(f"git push {remote_var.get().strip() or 'origin'} --delete {n}")
-            preview_var.set('\n'.join(cmds) if cmds else '<select actions>')
+            content = '\n'.join(cmds) if cmds else '<select actions>'
+            preview_text.config(state="normal")
+            preview_text.delete("1.0", "end")
+            preview_text.insert("1.0", content)
+            preview_text.config(state="disabled")
 
         name_var.trace_add("write", update_preview)
         delete_local.trace_add("write", update_preview)
@@ -1091,24 +1204,28 @@ class GitAdvancedTool:
             if not (delete_local.get() or delete_remote.get()):
                 messagebox.showwarning(lm.t('dialog.shared.no_action_title'), lm.t('dialog.delete_branch.no_action_msg'))
                 return
-            if not messagebox.askokcancel(lm.t('msg.confirm_delete_title'), lm.t('dialog.delete_branch.confirm_msg', preview=preview_var.get())):
+            if not messagebox.askokcancel(lm.t('msg.confirm_delete_title'), lm.t('dialog.delete_branch.confirm_msg', preview=preview_text.get("1.0", "end-1c"))):
                 return
 
-            for n in names.split():
-                if delete_local.get():
-                    executor.run(f"git branch -D {n}")
-                if delete_remote.get():
-                    r = remote_var.get().strip() or 'origin'
-                    executor.run(f"git push {r} --delete {n}")
+            def _do_delete():
+                for n in names.split():
+                    if delete_local.get():
+                        executor.run(f"git branch -D {n}")
+                    if delete_remote.get():
+                        r = remote_var.get().strip() or 'origin'
+                        executor.run(f"git push {r} --delete {n}")
+                messagebox.showinfo(lm.t('msg.done'), lm.t('dialog.delete_branch.done_msg'))
+                dialog.destroy()
 
-            messagebox.showinfo(lm.t('msg.done'), lm.t('dialog.delete_branch.done_msg'))
-            dialog.destroy()
+            self.confirm_mgr.confirm_delete_branch(names, _do_delete)
 
         btn_row = ttk.Frame(frame)
         btn_row.pack(fill="x")
         ttk.Button(btn_row, text=lm.t('dialog.delete_branch.execute_btn'), command=on_execute, width=16, style="Danger.TButton").pack(side="right", padx=4)
         ttk.Button(btn_row, text=lm.t('dialog.shared.cancel_btn'), command=dialog.destroy, width=10).pack(side="right")
 
+        dialog.bind("<Return>", lambda e: on_execute())
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
         name_cb.focus_set()
 
     # ─────────────────────────────────────────────────────────────────────
@@ -1118,15 +1235,14 @@ class GitAdvancedTool:
 
         dialog = tk.Toplevel(self.root)
         dialog.title(lm.t('dialog.delete_tag.title'))
-        dialog.geometry("520x260")
         dialog.transient(self.root)
         dialog.grab_set()
-        dialog.resizable(False, False)
+        dialog.resizable(True, True)
 
         dialog.update_idletasks()
+        w, h = 520, 340
         rw, rh, rx, ry = self.root.winfo_width(), self.root.winfo_height(), self.root.winfo_x(), self.root.winfo_y()
-        dw, dh = dialog.winfo_width(), dialog.winfo_height()
-        dialog.geometry(f"+{rx + (rw // 2) - (dw // 2)}+{ry + (rh // 2) - (dh // 2)}")
+        dialog.geometry(f"{w}x{h}+{rx + (rw - w) // 2}+{ry + (rh - h) // 2}")
 
         def get_tags():
             try:
@@ -1143,6 +1259,12 @@ class GitAdvancedTool:
         tag_var = tk.StringVar()
         tag_cb = ttk.Combobox(frame, textvariable=tag_var, values=get_tags(), font=("Consolas", 10), state="normal")
         tag_cb.pack(fill="x", pady=(4, 6))
+        _tag_pool = get_tags()
+        attach_autocomplete(tag_cb, tag_var,
+                            lambda text, pool=_tag_pool: (
+                                pool[:20] if not text
+                                else [x for x in pool if text.lower() in x.lower()][:20]
+                            ))
 
         opts_frame = ttk.Frame(frame)
         opts_frame.pack(fill="x", pady=(0, 6))
@@ -1158,9 +1280,15 @@ class GitAdvancedTool:
         ttk.Entry(rem_row, textvariable=remote_var, font=("Consolas", 10), width=12).pack(side="left", padx=(6, 0))
 
         prev_lf = ttk.LabelFrame(frame, text=f" {lm.t('dialog.shared.preview_section')} ", padding=8)
-        prev_lf.pack(fill="x", pady=(6, 8))
-        preview_var = tk.StringVar()
-        ttk.Label(prev_lf, textvariable=preview_var, font=("Consolas", 10), foreground="#cc0000").pack(anchor="w")
+        prev_lf.pack(fill="both", expand=True, pady=(6, 8))
+        prev_lf.columnconfigure(0, weight=1)
+        prev_lf.rowconfigure(0, weight=1)
+        preview_text = tk.Text(prev_lf, font=("Consolas", 10), foreground="#cc0000",
+                               bg="#fff8f8", height=4, wrap="none", state="disabled")
+        preview_sb = ttk.Scrollbar(prev_lf, orient="vertical", command=preview_text.yview)
+        preview_text.configure(yscrollcommand=preview_sb.set)
+        preview_sb.pack(side="right", fill="y")
+        preview_text.pack(fill="both", expand=True)
 
         def update_preview(*_):
             names = tag_var.get().strip() or '<tag>'
@@ -1170,7 +1298,11 @@ class GitAdvancedTool:
                     cmds.append(f"git tag -d {t}")
                 if delete_remote.get():
                     cmds.append(f"git push {remote_var.get().strip() or 'origin'} --delete {t}")
-            preview_var.set('\n'.join(cmds) if cmds else '<select actions>')
+            content = '\n'.join(cmds) if cmds else '<select actions>'
+            preview_text.config(state="normal")
+            preview_text.delete("1.0", "end")
+            preview_text.insert("1.0", content)
+            preview_text.config(state="disabled")
 
         tag_var.trace_add("write", update_preview)
         delete_local.trace_add("write", update_preview)
@@ -1186,7 +1318,7 @@ class GitAdvancedTool:
             if not (delete_local.get() or delete_remote.get()):
                 messagebox.showwarning(lm.t('dialog.shared.no_action_title'), lm.t('dialog.delete_tag.no_action_msg'))
                 return
-            if not messagebox.askokcancel(lm.t('msg.confirm_delete_title'), lm.t('dialog.delete_tag.confirm_msg', preview=preview_var.get())):
+            if not messagebox.askokcancel(lm.t('msg.confirm_delete_title'), lm.t('dialog.delete_tag.confirm_msg', preview=preview_text.get("1.0", "end-1c"))):
                 return
 
             for t in names.split():
@@ -1204,6 +1336,8 @@ class GitAdvancedTool:
         ttk.Button(btn_row, text=lm.t('dialog.delete_tag.execute_btn'), command=on_execute, width=20, style="Danger.TButton").pack(side="right", padx=4)
         ttk.Button(btn_row, text=lm.t('dialog.shared.cancel_btn'), command=dialog.destroy, width=10).pack(side="right")
 
+        dialog.bind("<Return>", lambda e: on_execute())
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
         tag_cb.focus_set()
 
     def open_file_selector(self, executor):
@@ -1523,6 +1657,902 @@ class GitAdvancedTool:
 
         except Exception as e:
             messagebox.showerror(lm.t('msg.error_title'), lm.t('dialog.restore.read_error', err=str(e)))
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Fetch dialog (with optional --prune)
+    # ─────────────────────────────────────────────────────────────────────
+    def open_fetch_dialog(self, executor):
+        dialog = tk.Toplevel(self.root)
+        dialog.title(lm.t('dialog.fetch.title', default='🌐 Fetch'))
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        w, h = 360, 160
+        rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
+        rw, rh = self.root.winfo_width(), self.root.winfo_height()
+        dialog.geometry(f"{w}x{h}+{rx+(rw-w)//2}+{ry+(rh-h)//2}")
+
+        frame = ttk.Frame(dialog, padding=16)
+        frame.pack(fill="both", expand=True)
+
+        rem_row = ttk.Frame(frame)
+        rem_row.pack(fill="x", pady=(0, 8))
+        ttk.Label(rem_row, text=lm.t('dialog.fetch.remote_label', default='遠端:'),
+                  font=("Arial", 9, "bold")).pack(side="left")
+        remote_var = tk.StringVar(value="--all")
+        ttk.Entry(rem_row, textvariable=remote_var, width=16, font=("Consolas", 10)).pack(side="left", padx=(6, 0))
+        ttk.Label(rem_row, text=lm.t('dialog.fetch.remote_hint', default='(--all 代表全部)'),
+                  font=("Arial", 8), foreground="#888").pack(side="left", padx=(8, 0))
+
+        prune_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(frame,
+                        text=lm.t('dialog.fetch.prune_cb', default='--prune（刪除遠端已不存在的追蹤分支）'),
+                        variable=prune_var).pack(anchor="w", pady=(0, 12))
+
+        def on_execute():
+            remote = remote_var.get().strip() or "--all"
+            cmd = f"fetch {remote}"
+            if prune_var.get():
+                cmd += " --prune"
+            executor.run_simple(cmd)
+            dialog.destroy()
+
+        btn_row = ttk.Frame(frame)
+        btn_row.pack(fill="x")
+        ttk.Button(btn_row, text=lm.t('dialog.fetch.execute_btn', default='🌐 執行 Fetch'),
+                   command=on_execute, width=16).pack(side="right", padx=4)
+        ttk.Button(btn_row, text=lm.t('dialog.shared.cancel_btn', default='✗ 取消'),
+                   command=dialog.destroy, width=10).pack(side="right")
+
+        dialog.bind("<Return>", lambda e: on_execute())
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Task 5: Rename Branch
+    # ─────────────────────────────────────────────────────────────────────
+    def open_rename_branch_dialog(self, executor):
+        repo_path = executor.repo_path
+
+        def get_branches():
+            try:
+                r = subprocess.run("git branch -a", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                return [b.strip().replace('* ', '') for b in r.stdout.splitlines() if b.strip()]
+            except:
+                return []
+
+        def get_remote_branches():
+            try:
+                r = subprocess.run("git branch -r", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                return [b.strip().replace('origin/', '') for b in r.stdout.splitlines() if b.strip()]
+            except:
+                return []
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(lm.t('dialog.rename_branch.title', default='重命名分支'))
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.update_idletasks()
+        w, h = 520, 320
+        rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
+        rw, rh = self.root.winfo_width(), self.root.winfo_height()
+        dialog.geometry(f"{w}x{h}+{rx+(rw-w)//2}+{ry+(rh-h)//2}")
+
+        frame = ttk.Frame(dialog, padding=16)
+        frame.pack(fill="both", expand=True)
+        frame.columnconfigure(1, weight=1)
+
+        all_branches = get_branches()
+        remote_branches = get_remote_branches()
+
+        # Old name
+        ttk.Label(frame, text=lm.t('dialog.rename_branch.old_label', default='原分支名稱 *'),
+                  font=("Arial", 9, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 4), padx=(0, 8))
+        old_var = tk.StringVar()
+        old_cb = ttk.Combobox(frame, textvariable=old_var, values=all_branches, font=("Consolas", 10), state="normal")
+        old_cb.grid(row=0, column=1, sticky="ew", pady=(0, 4))
+
+        def _old_ac(text):
+            if not text:
+                return all_branches[:20]
+            t = text.lower()
+            return [x for x in all_branches if t in x.lower()][:20]
+        attach_autocomplete(old_cb, old_var, _old_ac, frame)
+
+        # New name
+        ttk.Label(frame, text=lm.t('dialog.rename_branch.new_label', default='新分支名稱 *'),
+                  font=("Arial", 9, "bold")).grid(row=1, column=0, sticky="w", pady=(0, 4), padx=(0, 8))
+        new_var = tk.StringVar()
+        ttk.Entry(frame, textvariable=new_var, font=("Consolas", 10)).grid(row=1, column=1, sticky="ew", pady=(0, 4))
+
+        # Remote options
+        remote_frame = ttk.Frame(frame)
+        remote_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 4))
+        update_remote_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(remote_frame,
+                        text=lm.t('dialog.rename_branch.update_remote_cb', default='同步更新遠端（Push 新 + Delete 舊）'),
+                        variable=update_remote_var).pack(side="left")
+        ttk.Label(remote_frame, text=lm.t('dialog.rename_branch.remote_label', default='遠端名稱:'),
+                  font=("Arial", 9)).pack(side="left", padx=(12, 4))
+        remote_var = tk.StringVar(value="origin")
+        ttk.Entry(remote_frame, textvariable=remote_var, width=10, font=("Consolas", 10)).pack(side="left")
+
+        # Remote warning label
+        warn_lbl = ttk.Label(frame, text="", foreground="#cc6600", font=("Arial", 8))
+        warn_lbl.grid(row=3, column=0, columnspan=2, sticky="w")
+
+        def _check_remote_warn(*_):
+            old = old_var.get().strip()
+            if old and old in remote_branches:
+                warn_lbl.config(text=lm.t('dialog.rename_branch.warn_remote',
+                                           default='⚠️ 此分支在遠端也存在，建議勾選「同步更新遠端」。'))
+            else:
+                warn_lbl.config(text="")
+        old_var.trace_add("write", _check_remote_warn)
+
+        # Preview
+        prev_lf = ttk.LabelFrame(frame, text=f" {lm.t('dialog.shared.preview_section')} ", padding=8)
+        prev_lf.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(8, 8))
+        preview_var = tk.StringVar()
+        ttk.Label(prev_lf, textvariable=preview_var, font=("Consolas", 9), foreground="#0066cc").pack(anchor="w")
+
+        def _update_prev(*_):
+            old = old_var.get().strip() or "<old>"
+            new = new_var.get().strip() or "<new>"
+            rem = remote_var.get().strip() or "origin"
+            lines = [lm.t('dialog.rename_branch.preview_local',
+                           default=f'本地重命名: git branch -m {old} {new}',
+                           old=old, new=new)]
+            if update_remote_var.get():
+                lines.append(lm.t('dialog.rename_branch.preview_remote',
+                                   default=f'遠端更新: push {new} → delete {old} @ {rem}',
+                                   old=old, new=new, remote=rem))
+            preview_var.set("\n".join(lines))
+
+        old_var.trace_add("write", _update_prev)
+        new_var.trace_add("write", _update_prev)
+        update_remote_var.trace_add("write", _update_prev)
+        remote_var.trace_add("write", _update_prev)
+        _update_prev()
+
+        def on_execute():
+            old = old_var.get().strip()
+            new = new_var.get().strip()
+            rem = remote_var.get().strip() or "origin"
+            if not old:
+                messagebox.showwarning("", lm.t('dialog.rename_branch.old_required', default='請輸入原始分支名稱'))
+                return
+            if not new:
+                messagebox.showwarning("", lm.t('dialog.rename_branch.new_required', default='請輸入新分支名稱'))
+                return
+            executor.run(f"git branch -m {old} {new}")
+            if update_remote_var.get():
+                executor.run(f"git push {rem} {new}")
+                executor.run(f"git push {rem} --delete {old}")
+            messagebox.showinfo(lm.t('msg.done'), lm.t('dialog.rename_branch.done_msg', default='分支重命名完成'))
+            dialog.destroy()
+
+        btn_row = ttk.Frame(frame)
+        btn_row.grid(row=5, column=0, columnspan=2, sticky="ew")
+        ttk.Button(btn_row, text=lm.t('dialog.rename_branch.execute_btn', default='✓ 執行重命名'),
+                   command=on_execute, width=16).pack(side="right", padx=4)
+        ttk.Button(btn_row, text=lm.t('dialog.shared.cancel_btn', default='✗ 取消'),
+                   command=dialog.destroy, width=10).pack(side="right")
+        old_cb.focus_set()
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Task 5: Rename / Move Tag
+    # ─────────────────────────────────────────────────────────────────────
+    def open_rename_tag_dialog(self, executor):
+        repo_path = executor.repo_path
+
+        def get_tags():
+            try:
+                r = subprocess.run("git tag -l", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                return sorted(t.strip() for t in r.stdout.splitlines() if t.strip())
+            except:
+                return []
+
+        def get_remote_tags():
+            try:
+                r = subprocess.run("git ls-remote --tags origin", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                tags = []
+                for line in r.stdout.splitlines():
+                    parts = line.split()
+                    if len(parts) >= 2 and '^{}' not in parts[1]:
+                        tags.append(parts[1].replace('refs/tags/', '').strip())
+                return tags
+            except:
+                return []
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(lm.t('dialog.rename_tag.title', default='移動 / 重命名 Tag'))
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        w, h = 520, 300
+        rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
+        rw, rh = self.root.winfo_width(), self.root.winfo_height()
+        dialog.geometry(f"{w}x{h}+{rx+(rw-w)//2}+{ry+(rh-h)//2}")
+
+        all_tags = get_tags()
+        remote_tags = get_remote_tags()
+
+        frame = ttk.Frame(dialog, padding=16)
+        frame.pack(fill="both", expand=True)
+        frame.columnconfigure(1, weight=1)
+
+        ttk.Label(frame, text=lm.t('dialog.rename_tag.old_label', default='原 Tag 名稱 *'),
+                  font=("Arial", 9, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 4), padx=(0, 8))
+        old_var = tk.StringVar()
+        old_cb = ttk.Combobox(frame, textvariable=old_var, values=all_tags, font=("Consolas", 10), state="normal")
+        old_cb.grid(row=0, column=1, sticky="ew", pady=(0, 4))
+
+        def _tag_ac(text):
+            if not text:
+                return all_tags[:20]
+            t = text.lower()
+            return [x for x in all_tags if t in x.lower()][:20]
+        attach_autocomplete(old_cb, old_var, _tag_ac, frame)
+
+        ttk.Label(frame, text=lm.t('dialog.rename_tag.new_label', default='新 Tag 名稱 *'),
+                  font=("Arial", 9, "bold")).grid(row=1, column=0, sticky="w", pady=(0, 4), padx=(0, 8))
+        new_var = tk.StringVar()
+        ttk.Entry(frame, textvariable=new_var, font=("Consolas", 10)).grid(row=1, column=1, sticky="ew", pady=(0, 4))
+
+        remote_frame = ttk.Frame(frame)
+        remote_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 4))
+        update_remote_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(remote_frame,
+                        text=lm.t('dialog.rename_tag.update_remote_cb', default='同步更新遠端（Push 新 + Delete 舊）'),
+                        variable=update_remote_var).pack(side="left")
+        ttk.Label(remote_frame, text=lm.t('dialog.rename_tag.remote_label', default='遠端名稱:'),
+                  font=("Arial", 9)).pack(side="left", padx=(12, 4))
+        remote_var = tk.StringVar(value="origin")
+        ttk.Entry(remote_frame, textvariable=remote_var, width=10, font=("Consolas", 10)).pack(side="left")
+
+        warn_lbl = ttk.Label(frame, text="", foreground="#cc6600", font=("Arial", 8))
+        warn_lbl.grid(row=3, column=0, columnspan=2, sticky="w")
+
+        def _check_remote(*_):
+            old = old_var.get().strip()
+            if old and old in remote_tags:
+                warn_lbl.config(text=lm.t('dialog.rename_tag.warn_remote',
+                                           default='⚠️ 此 Tag 在遠端也存在，建議勾選「同步更新遠端」。'))
+            else:
+                warn_lbl.config(text="")
+        old_var.trace_add("write", _check_remote)
+
+        def on_execute():
+            old = old_var.get().strip()
+            new = new_var.get().strip()
+            rem = remote_var.get().strip() or "origin"
+            if not old:
+                messagebox.showwarning("", lm.t('dialog.rename_tag.old_required', default='請輸入原始 Tag 名稱'))
+                return
+            if not new:
+                messagebox.showwarning("", lm.t('dialog.rename_tag.new_required', default='請輸入新 Tag 名稱'))
+                return
+            # Get commit hash that old tag points to, create new tag, delete old
+            try:
+                r = subprocess.run(f"git rev-parse {old}^{{}}",
+                                   cwd=repo_path, shell=True, capture_output=True,
+                                   text=True, encoding='utf-8', errors='replace')
+                commit_hash = r.stdout.strip()
+                if not commit_hash:
+                    commit_hash = old  # fallback: use tag name directly
+            except Exception:
+                commit_hash = old
+            executor.run(f"git tag {new} {commit_hash}")
+            executor.run(f"git tag -d {old}")
+            if update_remote_var.get():
+                executor.run(f"git push {rem} {new}")
+                executor.run(f"git push {rem} --delete {old}")
+            messagebox.showinfo(lm.t('msg.done'), lm.t('dialog.rename_tag.done_msg', default='Tag 移動完成'))
+            dialog.destroy()
+
+        btn_row = ttk.Frame(frame)
+        btn_row.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        ttk.Button(btn_row, text=lm.t('dialog.rename_tag.execute_btn', default='✓ 執行移動 Tag'),
+                   command=on_execute, width=18).pack(side="right", padx=4)
+        ttk.Button(btn_row, text=lm.t('dialog.shared.cancel_btn', default='✗ 取消'),
+                   command=dialog.destroy, width=10).pack(side="right")
+        old_cb.focus_set()
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Reverse Commit (git revert)
+    # ─────────────────────────────────────────────────────────────────────
+    def open_reverse_commit_dialog(self, executor):
+        """建立一個逆向 commit（git revert），完全抵消指定 commit 的變更。"""
+        repo_path = executor.repo_path
+
+        def get_commits():
+            try:
+                res = subprocess.run("git log --oneline -n 40", cwd=repo_path, shell=True,
+                                     capture_output=True, text=True, encoding='utf-8', errors='replace')
+                return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+            except Exception:
+                return []
+
+        commits = get_commits()
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(lm.t('dialog.revert.title', default='⏮️ Reverse Commit (git revert)'))
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(True, True)
+        w, h = 580, 440
+        rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
+        rw, rh = self.root.winfo_width(), self.root.winfo_height()
+        dialog.geometry(f"{w}x{h}+{rx+(rw-w)//2}+{ry+(rh-h)//2}")
+
+        frame = ttk.Frame(dialog, padding=16)
+        frame.pack(fill="both", expand=True)
+
+        # === Info ===
+        info_lf = ttk.LabelFrame(frame, text=f" {lm.t('dialog.shared.info_section')} ", padding=8)
+        info_lf.pack(fill="x", pady=(0, 10))
+        ttk.Label(info_lf, text="git revert <commit>",
+                  font=("Consolas", 9), foreground="#555").pack(anchor="w")
+        ttk.Label(info_lf,
+                  text=lm.t('dialog.revert.desc',
+                             default='建立一個新的 commit，其內容是指定 commit 的完全反向操作。\n原歷史不會被改動，適合已推送的分支。'),
+                  font=("Arial", 9), foreground="#333",
+                  justify="left", wraplength=520).pack(anchor="w", pady=(4, 0))
+
+        # === Commit selector ===
+        ttk.Label(frame, text=lm.t('dialog.revert.commit_label', default='要反轉的 Commit *'),
+                  font=("Arial", 9, "bold")).pack(anchor="w", pady=(0, 4))
+        commit_var = tk.StringVar()
+        cb = ttk.Combobox(frame, textvariable=commit_var, values=commits,
+                          font=("Consolas", 10), state="normal")
+        cb.pack(fill="x", pady=(0, 4))
+
+        def _commit_ac(text):
+            if not text:
+                return commits[:20]
+            t = text.lower()
+            return [x for x in commits if t in x.lower()][:20]
+        attach_autocomplete(cb, commit_var, _commit_ac)
+
+        # === Options ===
+        no_commit_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            frame,
+            text=lm.t('dialog.revert.no_commit_cb',
+                       default='--no-commit（僅暫存反向變更，不自動建立 commit）'),
+            variable=no_commit_var).pack(anchor="w", pady=(6, 8))
+
+        # === Preview ===
+        prev_lf = ttk.LabelFrame(frame, text=f" {lm.t('dialog.shared.preview_section')} ", padding=8)
+        prev_lf.pack(fill="x", pady=(0, 10))
+        preview_var = tk.StringVar()
+        ttk.Label(prev_lf, textvariable=preview_var,
+                  font=("Consolas", 10), foreground="#0066cc").pack(anchor="w")
+
+        def _update_preview(*_):
+            raw = commit_var.get().strip()
+            h = raw.split()[0] if raw else '<commit>'
+            cmd = f"git revert {h}"
+            if no_commit_var.get():
+                cmd += " --no-commit"
+            preview_var.set(cmd)
+
+        commit_var.trace_add("write", _update_preview)
+        no_commit_var.trace_add("write", _update_preview)
+        _update_preview()
+
+        # === Buttons ===
+        def on_execute():
+            raw = commit_var.get().strip()
+            h = raw.split()[0] if raw else ""
+            if not h:
+                messagebox.showwarning(
+                    "", lm.t('dialog.revert.missing_commit', default='請選擇或輸入要反轉的 Commit Hash'))
+                return
+            cmd = f"git revert {h}"
+            if no_commit_var.get():
+                cmd += " --no-commit"
+            executor.run(cmd)
+            dialog.destroy()
+
+        btn_row = ttk.Frame(frame)
+        btn_row.pack(fill="x")
+        ttk.Button(btn_row, text=lm.t('dialog.revert.execute_btn', default='⏮️ 執行 Revert'),
+                   command=on_execute, width=18).pack(side="right", padx=4)
+        ttk.Button(btn_row, text=lm.t('dialog.shared.cancel_btn'),
+                   command=dialog.destroy, width=10).pack(side="right")
+
+        dialog.bind("<Return>", lambda e: on_execute())
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
+        cb.focus_set()
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Task 6-1: Push Panel
+    # ─────────────────────────────────────────────────────────────────────
+    def open_push_panel(self, executor):
+        repo_path = executor.repo_path
+
+        def get_branches():
+            try:
+                r = subprocess.run("git branch", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                return [b.strip().replace('* ', '').strip() for b in r.stdout.splitlines() if b.strip()]
+            except:
+                return []
+
+        def get_tags():
+            try:
+                r = subprocess.run("git tag -l", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                return sorted(t.strip() for t in r.stdout.splitlines() if t.strip())
+            except:
+                return []
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(lm.t('dialog.push_panel.title', default='🚀 Push Panel'))
+        dialog.transient(self.root)
+        dialog.grab_set()
+        w, h = 600, 560
+        rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
+        rw, rh = self.root.winfo_width(), self.root.winfo_height()
+        dialog.geometry(f"{w}x{h}+{rx+(rw-w)//2}+{ry+(rh-h)//2}")
+        dialog.resizable(True, True)
+
+        outer = ttk.Frame(dialog, padding=12)
+        outer.pack(fill="both", expand=True)
+
+        # Remote row
+        rem_row = ttk.Frame(outer)
+        rem_row.pack(fill="x", pady=(0, 8))
+        ttk.Label(rem_row, text=lm.t('dialog.push_panel.remote_label', default='遠端名稱:'),
+                  font=("Arial", 9, "bold")).pack(side="left")
+        remote_var = tk.StringVar(value="origin")
+        ttk.Entry(rem_row, textvariable=remote_var, width=12, font=("Consolas", 10)).pack(side="left", padx=(6, 0))
+        ttk.Label(rem_row, text=lm.t('dialog.push_panel.force_lease_hint', default='Force = --force-with-lease'),
+                  font=("Arial", 8), foreground="#888").pack(side="right")
+
+        # Refresh + select all buttons
+        ctrl_row = ttk.Frame(outer)
+        ctrl_row.pack(fill="x", pady=(0, 6))
+
+        branch_data = []   # list of (name, selected_var, force_var)
+        tag_data = []
+
+        def _build_items():
+            nonlocal branch_data, tag_data
+            for w in branches_inner.winfo_children():
+                w.destroy()
+            for w in tags_inner.winfo_children():
+                w.destroy()
+            branch_data.clear()
+            tag_data.clear()
+
+            for name in get_branches():
+                sel = tk.BooleanVar(value=True)
+                force = tk.BooleanVar(value=False)
+                branch_data.append((name, sel, force))
+                row = ttk.Frame(branches_inner)
+                row.pack(fill="x", pady=1)
+                ttk.Checkbutton(row, variable=sel).pack(side="left")
+                ttk.Label(row, text=name, font=("Consolas", 10), anchor="w").pack(side="left", fill="x", expand=True)
+                ttk.Checkbutton(row, text="Force", variable=force).pack(side="right")
+
+            for name in get_tags():
+                sel = tk.BooleanVar(value=False)
+                force = tk.BooleanVar(value=False)
+                tag_data.append((name, sel, force))
+                row = ttk.Frame(tags_inner)
+                row.pack(fill="x", pady=1)
+                ttk.Checkbutton(row, variable=sel).pack(side="left")
+                ttk.Label(row, text=name, font=("Consolas", 10), anchor="w").pack(side="left", fill="x", expand=True)
+                ttk.Checkbutton(row, text="Force", variable=force).pack(side="right")
+
+        # Branches section
+        branches_lf = ttk.LabelFrame(outer, text=f" {lm.t('dialog.push_panel.branches_section', default='📌 Local Branches')} ", padding=6)
+        branches_lf.pack(fill="both", expand=True, pady=(0, 6))
+        branches_canvas = tk.Canvas(branches_lf, bg="#f0f0f0", highlightthickness=0, height=160)
+        branches_sb = ttk.Scrollbar(branches_lf, orient="vertical", command=branches_canvas.yview)
+        branches_inner = ttk.Frame(branches_canvas)
+        branches_canvas.create_window((0, 0), window=branches_inner, anchor="nw", tags="bi")
+        branches_canvas.configure(yscrollcommand=branches_sb.set)
+        branches_inner.bind("<Configure>", lambda e: branches_canvas.configure(scrollregion=branches_canvas.bbox("all")))
+        branches_canvas.bind("<Configure>", lambda e: branches_canvas.itemconfigure("bi", width=e.width))
+        branches_sb.pack(side="right", fill="y")
+        branches_canvas.pack(side="left", fill="both", expand=True)
+
+        # Tags section
+        tags_lf = ttk.LabelFrame(outer, text=f" {lm.t('dialog.push_panel.tags_section', default='🏷️ Tags')} ", padding=6)
+        tags_lf.pack(fill="both", expand=True, pady=(0, 6))
+        tags_canvas = tk.Canvas(tags_lf, bg="#f0f0f0", highlightthickness=0, height=120)
+        tags_sb = ttk.Scrollbar(tags_lf, orient="vertical", command=tags_canvas.yview)
+        tags_inner = ttk.Frame(tags_canvas)
+        tags_canvas.create_window((0, 0), window=tags_inner, anchor="nw", tags="ti")
+        tags_canvas.configure(yscrollcommand=tags_sb.set)
+        tags_inner.bind("<Configure>", lambda e: tags_canvas.configure(scrollregion=tags_canvas.bbox("all")))
+        tags_canvas.bind("<Configure>", lambda e: tags_canvas.itemconfigure("ti", width=e.width))
+        tags_sb.pack(side="right", fill="y")
+        tags_canvas.pack(side="left", fill="both", expand=True)
+
+        _build_items()
+
+        # Refresh button
+        ttk.Button(ctrl_row, text=lm.t('dialog.push_panel.refresh_btn', default='🔄 刷新'),
+                   command=_build_items, width=10).pack(side="left", padx=2)
+        ttk.Button(ctrl_row, text=lm.t('dialog.push_panel.select_all_btn', default='全選'),
+                   command=lambda: [v.set(True) for _, v, _ in branch_data + tag_data], width=8).pack(side="left", padx=2)
+        ttk.Button(ctrl_row, text=lm.t('dialog.push_panel.deselect_btn', default='清除'),
+                   command=lambda: [v.set(False) for _, v, _ in branch_data + tag_data], width=8).pack(side="left", padx=2)
+
+        def on_execute():
+            rem = remote_var.get().strip() or "origin"
+            pushed_any = False
+            for name, sel, force in branch_data:
+                if sel.get():
+                    pushed_any = True
+                    if force.get():
+                        executor.run(f"git push {rem} {name} --force-with-lease")
+                    else:
+                        executor.run(f"git push {rem} {name}")
+            for name, sel, force in tag_data:
+                if sel.get():
+                    pushed_any = True
+                    if force.get():
+                        executor.run(f"git push {rem} {name} --force")
+                    else:
+                        executor.run(f"git push {rem} {name}")
+            if not pushed_any:
+                messagebox.showwarning("", lm.t('dialog.push_panel.no_selection', default='請至少選擇一個分支或 Tag'))
+                return
+            messagebox.showinfo(lm.t('msg.done'), lm.t('dialog.push_panel.done_msg', default='Push 已執行（請查看 Terminal）'))
+            dialog.destroy()
+
+        btn_row = ttk.Frame(outer)
+        btn_row.pack(fill="x", pady=(4, 0))
+        ttk.Button(btn_row, text=lm.t('dialog.push_panel.execute_btn', default='🚀 執行 Push'),
+                   command=on_execute, width=16).pack(side="right", padx=4)
+        ttk.Button(btn_row, text=lm.t('dialog.shared.cancel_btn', default='✗ 取消'),
+                   command=dialog.destroy, width=10).pack(side="right")
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Delete Panel — unified single-page design
+    # ─────────────────────────────────────────────────────────────────────
+    def open_delete_panel(self, executor):
+        repo_path = executor.repo_path
+
+        # ── Dialog setup ─────────────────────────────────────────────────
+        dialog = tk.Toplevel(self.root)
+        dialog.title(lm.t('dialog.delete_panel.title', default='🗑️ Delete Panel'))
+        dialog.transient(self.root)
+        dialog.grab_set()
+        w, h = 640, 600
+        rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
+        rw, rh = self.root.winfo_width(), self.root.winfo_height()
+        dialog.geometry(f"{w}x{h}+{rx+(rw-w)//2}+{ry+(rh-h)//2}")
+        dialog.resizable(True, True)
+
+        outer = ttk.Frame(dialog, padding=10)
+        outer.pack(fill="both", expand=True)
+
+        # ── Remote name ──────────────────────────────────────────────────
+        rem_row = ttk.Frame(outer)
+        rem_row.pack(fill="x", pady=(0, 6))
+        ttk.Label(rem_row, text=lm.t('dialog.delete_panel.remote_label', default='遠端名稱:'),
+                  font=("Arial", 9, "bold")).pack(side="left")
+        remote_var = tk.StringVar(value="origin")
+        ttk.Entry(rem_row, textvariable=remote_var, width=12, font=("Consolas", 10)).pack(side="left", padx=(6, 0))
+
+        # ── Pool data ────────────────────────────────────────────────────
+        # _pool["entries"]: list of (disp, canonical, itype, scope)
+        #   disp examples:  "[B]  main"  "[rB] origin/main"  "[T]  v1.0"  "[rT] v1.0"
+        # _pool["lookup"]:  disp → (canonical, itype, scope)
+        # _pool["avail"]:   (canonical, itype) → set of scopes present in pool
+        _pool = {"entries": None, "lookup": {}, "avail": {}}
+
+        def _build_pool():
+            entries = []
+            rem = remote_var.get().strip() or "origin"
+            try:
+                r = subprocess.run("git branch", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                for b in r.stdout.splitlines():
+                    name = b.strip().replace('* ', '').strip()
+                    if name:
+                        entries.append((f"[B]  {name}", name, "branch", "local"))
+            except Exception:
+                pass
+            try:
+                r = subprocess.run("git branch -r", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                prefix = rem + "/"
+                for b in r.stdout.splitlines():
+                    full = b.strip()
+                    if not full or '->' in full:
+                        continue
+                    canon = full[len(prefix):] if full.startswith(prefix) else full.split("/", 1)[-1]
+                    entries.append((f"[rB] {full}", canon, "branch", "remote"))
+            except Exception:
+                pass
+            try:
+                r = subprocess.run("git tag -l", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                for t in sorted(r.stdout.splitlines()):
+                    name = t.strip()
+                    if name:
+                        entries.append((f"[T]  {name}", name, "tag", "local"))
+            except Exception:
+                pass
+            try:
+                r = subprocess.run(f"git ls-remote --tags {rem}", cwd=repo_path, shell=True,
+                                   capture_output=True, text=True, encoding='utf-8', errors='replace')
+                for line in r.stdout.splitlines():
+                    parts = line.split()
+                    if len(parts) >= 2 and '^{}' not in parts[1]:
+                        name = parts[1].replace('refs/tags/', '').strip()
+                        if name:
+                            entries.append((f"[rT] {name}", name, "tag", "remote"))
+            except Exception:
+                pass
+
+            lookup, avail = {}, {}
+            for disp, canonical, itype, scope in entries:
+                lookup[disp] = (canonical, itype, scope)
+                avail.setdefault((canonical, itype), set()).add(scope)
+            _pool["entries"] = entries
+            _pool["lookup"] = lookup
+            _pool["avail"] = avail
+
+        def _ensure_pool():
+            if _pool["entries"] is None:
+                _build_pool()
+
+        def _valid_scope_opts(canonical, itype):
+            """Ordered scope values actually present in pool for this item."""
+            available = _pool["avail"].get((canonical, itype), set())
+            opts = []
+            if "local" in available:
+                opts.append("local")
+            if "remote" in available:
+                opts.append("remote")
+            if len(available) >= 2:
+                opts.append("both")
+            return opts or ["local"]
+
+        # ── Queue ────────────────────────────────────────────────────────
+        # {(canonical, itype): {"scope_var", "row", "label"}}
+        queue_items = {}
+
+        SCOPE_COLORS = {"local": "#333333", "remote": "#cc0000", "both": "#cc6600"}
+
+        def _scope_color(scope):
+            return SCOPE_COLORS.get(scope, "#333333")
+
+        def _update_label_color(label, scope_var):
+            label.config(foreground=_scope_color(scope_var.get()))
+
+        def _flash_green_then(label, scope_var):
+            label.config(foreground="#009900")
+            label.after(1500, lambda: _update_label_color(label, scope_var))
+
+        def _get_filtered(text):
+            """Return up to 20 display strings, excluding already-fully-covered queue entries."""
+            _ensure_pool()
+            results = []
+            tl = text.lower() if text else ""
+            for disp, canonical, itype, scope in _pool["entries"]:
+                key = (canonical, itype)
+                if key in queue_items:
+                    cur = queue_items[key]["scope_var"].get()
+                    # Skip this display entry if its scope is already covered
+                    if cur == "both" or cur == scope:
+                        continue
+                if not tl or tl in disp.lower():
+                    results.append(disp)
+                if len(results) >= 20:
+                    break
+            return results
+
+        def _add_to_queue(input_str):
+            """Accept an exact display string or a loose canonical/substring match."""
+            _ensure_pool()
+            txt = (input_str or "").strip()
+            lookup = _pool["lookup"]
+
+            # Resolve to exact display key
+            if not txt:
+                suggestions = _get_filtered("")
+                if not suggestions:
+                    return
+                disp = suggestions[0]
+            elif txt in lookup:
+                disp = txt
+            else:
+                tl = txt.lower()
+                disp = next(
+                    (k for k, v in lookup.items() if v[0] == txt),    # exact canonical
+                    next((k for k in lookup if tl in k.lower()), None) # substring
+                )
+            if disp is None:
+                search_var.set("")
+                return
+
+            search_var.set("")
+            canonical, itype, initial_scope = lookup[disp]
+            key = (canonical, itype)
+            avail = _pool["avail"].get(key, set())
+
+            if key in queue_items:
+                # Attempt to merge scope
+                existing = queue_items[key]
+                cur = existing["scope_var"].get()
+                if cur != "both" and cur != initial_scope and "local" in avail and "remote" in avail:
+                    existing["scope_var"].set("both")
+                    _flash_green_then(existing["label"], existing["scope_var"])
+                return
+
+            # Determine valid scope options and initial value
+            valid_opts = _valid_scope_opts(canonical, itype)
+            init_scope = initial_scope if initial_scope in valid_opts else valid_opts[0]
+            scope_var = tk.StringVar(value=init_scope)
+
+            # Label prefix reflects current scope
+            def _prefix_for(sc, it):
+                if it == "branch":
+                    return {"local": "[B]", "remote": "[rB]", "both": "[B+rB]"}.get(sc, "[B]")
+                return {"local": "[T]", "remote": "[rT]", "both": "[T+rT]"}.get(sc, "[T]")
+
+            row = ttk.Frame(queue_inner)
+            row.pack(fill="x", pady=1)
+
+            name_lbl = tk.Label(row,
+                                text=f"{_prefix_for(init_scope, itype)} {canonical}",
+                                font=("Consolas", 10), anchor="w",
+                                bg="#f0f0f0",
+                                foreground=_scope_color(init_scope))
+            name_lbl.pack(side="left", fill="x", expand=True)
+
+            def _remove(r=row, k=key):
+                r.destroy()
+                queue_items.pop(k, None)
+                queue_canvas.update_idletasks()
+                queue_canvas.configure(scrollregion=queue_canvas.bbox("all"))
+
+            ttk.Button(row, text="✕", command=_remove, width=3).pack(side="right", padx=(2, 0))
+            scope_cb = ttk.Combobox(row, textvariable=scope_var, values=valid_opts,
+                                    width=8, state="readonly", font=("Consolas", 9))
+            scope_cb.pack(side="right", padx=(2, 2))
+
+            def _on_scope_change(*_, lbl=name_lbl, sv=scope_var, cn=canonical, it=itype):
+                sc = sv.get()
+                lbl.config(text=f"{_prefix_for(sc, it)} {cn}",
+                           foreground=_scope_color(sc))
+
+            scope_var.trace_add("write", _on_scope_change)
+            queue_items[key] = {"scope_var": scope_var, "row": row, "label": name_lbl}
+            queue_canvas.update_idletasks()
+            queue_canvas.configure(scrollregion=queue_canvas.bbox("all"))
+
+        # ── Search bar ───────────────────────────────────────────────────
+        search_lf = ttk.LabelFrame(
+            outer,
+            text=f" {lm.t('dialog.delete_panel.search_hint', default='搜尋 (Tab選擇/Enter加入)')} ",
+            padding=8)
+        search_lf.pack(fill="x", pady=(0, 2))
+        search_var = tk.StringVar()
+        search_entry = ttk.Entry(search_lf, textvariable=search_var, font=("Consolas", 10))
+        search_entry.pack(fill="x")
+
+        # Legend
+        legend_row = ttk.Frame(outer)
+        legend_row.pack(fill="x", pady=(2, 4))
+        ttk.Label(legend_row,
+                  text="[B]=本地分支  [rB]=遠端分支  [T]=本地標籤  [rT]=遠端標籤  ·  "
+                       "scope顏色: 黑=local  紅=remote  橘=both",
+                  font=("Arial", 8), foreground="#888").pack(side="left")
+
+        # ── Queue canvas ─────────────────────────────────────────────────
+        queue_lf = ttk.LabelFrame(
+            outer,
+            text=f" {lm.t('dialog.delete_panel.pending_label', default='待刪清單')} ",
+            padding=6)
+        queue_lf.pack(fill="both", expand=True, pady=(0, 4))
+
+        queue_canvas = tk.Canvas(queue_lf, bg="#f0f0f0", highlightthickness=0)
+        queue_sb = ttk.Scrollbar(queue_lf, orient="vertical", command=queue_canvas.yview)
+        queue_inner = ttk.Frame(queue_canvas)
+        queue_canvas.create_window((0, 0), window=queue_inner, anchor="nw", tags="qi")
+        queue_canvas.configure(yscrollcommand=queue_sb.set)
+        queue_inner.bind("<Configure>",
+                         lambda e: queue_canvas.configure(scrollregion=queue_canvas.bbox("all")))
+        queue_canvas.bind("<Configure>",
+                          lambda e: queue_canvas.itemconfigure("qi", width=e.width))
+        queue_sb.pack(side="right", fill="y")
+        queue_canvas.pack(side="left", fill="both", expand=True)
+
+        # Attach autocomplete now that all closures + widgets are defined
+        attach_autocomplete(search_entry, search_var, _get_filtered, on_confirm=_add_to_queue)
+
+        def _on_enter_add(event):
+            val = search_var.get().strip()
+            if not val:
+                s = _get_filtered("")
+                if s:
+                    _add_to_queue(s[0])
+            else:
+                _add_to_queue(val)
+
+        search_entry.bind("<Return>", _on_enter_add, add=True)
+
+        # ── Control bar ──────────────────────────────────────────────────
+        btn_ctrl = ttk.Frame(outer)
+        btn_ctrl.pack(fill="x", pady=(2, 4))
+
+        def _clear_queue():
+            for w in queue_inner.winfo_children():
+                w.destroy()
+            queue_items.clear()
+
+        def on_delete():
+            if not queue_items:
+                messagebox.showwarning("", lm.t('dialog.delete_panel.no_selection',
+                                                default='請至少加入一個項目'))
+                return
+            rem = remote_var.get().strip() or "origin"
+            preview_lines = []
+            for (canonical, itype), data in queue_items.items():
+                scope = data["scope_var"].get()
+                if itype == "branch":
+                    if scope in ("local", "both"):
+                        preview_lines.append(f"git branch -D {canonical}")
+                    if scope in ("remote", "both"):
+                        preview_lines.append(f"git push {rem} --delete {canonical}")
+                else:
+                    if scope in ("local", "both"):
+                        preview_lines.append(f"git tag -d {canonical}")
+                    if scope in ("remote", "both"):
+                        preview_lines.append(f"git push {rem} --delete {canonical}")
+            if not preview_lines:
+                return
+            preview_str = "\n".join(preview_lines)
+            if not messagebox.askokcancel(
+                    lm.t('msg.confirm_delete_title'),
+                    lm.t('dialog.delete_panel.confirm_msg',
+                          default=f'確定要執行？\n\n{preview_str}', items=preview_str)):
+                return
+            for (canonical, itype), data in queue_items.items():
+                scope = data["scope_var"].get()
+                if itype == "branch":
+                    if scope in ("local", "both"):
+                        executor.run(f"git branch -D {canonical}")
+                    if scope in ("remote", "both"):
+                        executor.run(f"git push {rem} --delete {canonical}")
+                else:
+                    if scope in ("local", "both"):
+                        executor.run(f"git tag -d {canonical}")
+                    if scope in ("remote", "both"):
+                        executor.run(f"git push {rem} --delete {canonical}")
+            messagebox.showinfo(lm.t('msg.done'),
+                                lm.t('dialog.delete_panel.done_msg',
+                                     default='刪除操作已執行（請查看 Terminal）'))
+            dialog.destroy()
+
+        ttk.Button(btn_ctrl, text=lm.t('dialog.shared.refresh_btn', default='↻ Refresh'),
+                   command=_build_pool, width=8).pack(side="left", padx=2)
+        ttk.Button(btn_ctrl, text=lm.t('dialog.delete_panel.clear_btn', default='清空清單'),
+                   command=_clear_queue, width=8).pack(side="left", padx=2)
+        ttk.Button(btn_ctrl,
+                   text=lm.t('dialog.delete_panel.execute_btn', default='🗑️ 執行刪除'),
+                   command=on_delete, width=16, style="Danger.TButton").pack(side="right", padx=2)
+
+        ttk.Button(outer, text=lm.t('dialog.shared.cancel_btn', default='✗ 取消'),
+                   command=dialog.destroy, width=10).pack(side="right", pady=(0, 0))
+
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
+        search_entry.focus_set()
 
 if __name__ == "__main__":
     root = tk.Tk()

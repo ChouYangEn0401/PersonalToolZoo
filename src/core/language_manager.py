@@ -6,8 +6,14 @@ Usage:
     lm.t("toolbar.new_project")
     lm.t("msg.switched_to", target="main")   # fills {target}
     lm.load_text("key", lang_code="en")       # explicit language override
+
+Language storage: primary source is language/translations.csv
+  Columns: key, zh-tw, zh-cn, en, ... (one column per language code)
+  Fallback: individual <lang>.json files (legacy support)
+  Newline encoding in CSV: literal \\n sequences are decoded to actual newlines
 """
 
+import csv
 import json
 import os
 import sys
@@ -111,11 +117,88 @@ class LanguageManager:
         except Exception:
             pass
 
+    # ── CSV helpers ─────────────────────────────────────────────────────
+    def _csv_path(self, lang_dir: Optional[str]) -> Optional[str]:
+        """Return path to translations.csv under *lang_dir*, or None."""
+        if lang_dir and os.path.isdir(lang_dir):
+            p = os.path.join(lang_dir, "translations.csv")
+            if os.path.exists(p):
+                return p
+        return None
+
+    def _load_from_csv(self, lang_code: str) -> Optional[dict]:
+        """Load a language column from translations.csv.
+        External dir takes precedence over bundled (same as JSON override behaviour).
+        Returns dict {key: value} on success, or None if CSV / column not found."""
+        csv_path = self._csv_path(_EXTERNAL_LANG_DIR) or self._csv_path(_BUNDLED_LANG_DIR)
+        if csv_path is None:
+            return None
+        try:
+            with open(csv_path, "r", encoding="utf-8", newline="") as f:
+                reader = csv.DictReader(f)
+                if lang_code not in (reader.fieldnames or []):
+                    self._logger.warning(
+                        f"Column '{lang_code}' not found in {csv_path}. "
+                        f"Available: {reader.fieldnames}"
+                    )
+                    return None
+                result = {}
+                for row in reader:
+                    key = row.get("key", "").strip()
+                    if not key:
+                        continue
+                    value = row.get(lang_code, "")
+                    # Decode literal \n sequences → actual newlines
+                    result[key] = value.replace("\\n", "\n")
+            self._logger.info(f"Loaded '{lang_code}' from CSV: {csv_path}")
+            self._last_loaded = csv_path
+            return result
+        except Exception:
+            self._logger.exception(f"Failed to read CSV: {csv_path}")
+            return None
+
+    def _available_from_csv(self) -> Optional[dict]:
+        """Return {lang_code: display_name} from CSV header columns.
+        External dir takes precedence over bundled.
+        Returns None when no CSV file is found."""
+        csv_path = self._csv_path(_EXTERNAL_LANG_DIR) or self._csv_path(_BUNDLED_LANG_DIR)
+        if csv_path is None:
+            return None
+        try:
+            with open(csv_path, "r", encoding="utf-8", newline="") as f:
+                reader = csv.DictReader(f)
+                fieldnames = list(reader.fieldnames or [])
+                # Language codes are all columns except 'key'
+                lang_codes = [c for c in fieldnames if c != "key"]
+                # Read display names from _meta.display_name row
+                display_map: dict = {}
+                for row in reader:
+                    if row.get("key", "").strip() == "_meta.display_name":
+                        for code in lang_codes:
+                            v = row.get(code, "").strip()
+                            display_map[code] = v if v else code
+                        break
+            # Fill missing display names with the code itself
+            result = {code: display_map.get(code, code) for code in lang_codes}
+            return result
+        except Exception:
+            self._logger.exception(f"Failed to read CSV headers: {csv_path}")
+            return None
+
     # ── Language loading ─────────────────────────────────────────────────
     def load_language(self, lang_code: str) -> bool:
-        """Load a language file by code (e.g. 'en', 'zh-tw').
-        Returns True on success, False if file not found / unreadable."""
-        # Load bundled base strings first (so defaults always present)
+        """Load a language by code (e.g. 'en', 'zh-tw').
+        Tries translations.csv first; falls back to <lang>.json files.
+        Returns True on success, False if neither source is found."""
+        # 1) Try CSV (preferred)
+        csv_data = self._load_from_csv(lang_code)
+        if csv_data is not None:
+            self._strings = csv_data
+            self._current_lang = lang_code
+            self._save_config()
+            return True
+
+        # 2) Fallback: individual JSON files (bundled base + external overrides)
         base = {}
         if _BUNDLED_LANG_DIR and os.path.isdir(_BUNDLED_LANG_DIR):
             bpath = os.path.join(_BUNDLED_LANG_DIR, f"{lang_code}.json")
@@ -128,7 +211,6 @@ class LanguageManager:
                 except Exception:
                     self._logger.exception(f"Failed to read bundled language file: {bpath}")
 
-        # Then load external overrides if any (external files override bundled keys)
         overrides = {}
         if _EXTERNAL_LANG_DIR and os.path.isdir(_EXTERNAL_LANG_DIR):
             epath = os.path.join(_EXTERNAL_LANG_DIR, f"{lang_code}.json")
@@ -141,19 +223,14 @@ class LanguageManager:
                 except Exception:
                     self._logger.exception(f"Failed to read external language file: {epath}")
 
-        # If neither bundled nor external provided the language, fallback to default
         if not base and not overrides:
             if lang_code != _DEFAULT_LANG:
                 return self.load_language(_DEFAULT_LANG)
             return False
 
-        # Merge: base <- overrides (overrides win), preserving missing keys from base
-        merged = {}
-        if isinstance(base, dict):
-            merged.update(base)
-        if isinstance(overrides, dict):
-            merged.update(overrides)
-
+        merged: dict = {}
+        merged.update(base)
+        merged.update(overrides)
         self._strings = merged
         self._current_lang = lang_code
         self._save_config()
@@ -171,31 +248,30 @@ class LanguageManager:
         **kwargs  : named placeholders for str.format(), e.g. target="main"
         """
         if lang_code is not None and lang_code != self._current_lang:
-            # Build temporary merged strings from bundled + external (same logic as load_language)
-            temp_base = {}
-            if _BUNDLED_LANG_DIR and os.path.isdir(_BUNDLED_LANG_DIR):
-                bpath = os.path.join(_BUNDLED_LANG_DIR, f"{lang_code}.json")
-                if os.path.exists(bpath):
-                    try:
-                        with open(bpath, "r", encoding="utf-8") as f:
-                            temp_base = json.load(f)
-                        self._logger.info(f"Temporarily loaded bundled '{lang_code}' from: {bpath}")
-                    except Exception:
-                        self._logger.exception(f"Failed to read bundled language file: {bpath}")
-            temp_overrides = {}
-            if _EXTERNAL_LANG_DIR and os.path.isdir(_EXTERNAL_LANG_DIR):
-                epath = os.path.join(_EXTERNAL_LANG_DIR, f"{lang_code}.json")
-                if os.path.exists(epath):
-                    try:
-                        with open(epath, "r", encoding="utf-8") as f:
-                            temp_overrides = json.load(f)
-                        self._logger.info(f"Temporarily loaded external overrides '{lang_code}' from: {epath}")
-                    except Exception:
-                        self._logger.exception(f"Failed to read external language file: {epath}")
-            temp = {}
-            if isinstance(temp_base, dict):
+            # 1) Try CSV
+            temp = self._load_from_csv(lang_code)
+            if temp is None:
+                # 2) Fallback to JSON files
+                temp_base = {}
+                if _BUNDLED_LANG_DIR and os.path.isdir(_BUNDLED_LANG_DIR):
+                    bpath = os.path.join(_BUNDLED_LANG_DIR, f"{lang_code}.json")
+                    if os.path.exists(bpath):
+                        try:
+                            with open(bpath, "r", encoding="utf-8") as f:
+                                temp_base = json.load(f)
+                        except Exception:
+                            pass
+                temp_overrides = {}
+                if _EXTERNAL_LANG_DIR and os.path.isdir(_EXTERNAL_LANG_DIR):
+                    epath = os.path.join(_EXTERNAL_LANG_DIR, f"{lang_code}.json")
+                    if os.path.exists(epath):
+                        try:
+                            with open(epath, "r", encoding="utf-8") as f:
+                                temp_overrides = json.load(f)
+                        except Exception:
+                            pass
+                temp = {}
                 temp.update(temp_base)
-            if isinstance(temp_overrides, dict):
                 temp.update(temp_overrides)
             text = temp.get(key, default if default is not None else f"[{key}]")
         else:
@@ -225,13 +301,15 @@ class LanguageManager:
     def available_languages(self) -> dict:
         """Return {code: display_name} for all available language codes.
 
-        A language is available if it exists in _BUNDLED_LANG_DIR or
-        _EXTERNAL_LANG_DIR (or both).  Display name resolution:
-          1. External file's _meta.display_name  (if present)
-          2. Bundled file's _meta.display_name   (fallback)
-          3. Language code string                 (last resort)
+        Checks translations.csv first (preferred). Falls back to scanning
+        individual .json files when no CSV is found.
         """
-        # Collect all codes from both dirs
+        # 1) Try CSV
+        csv_langs = self._available_from_csv()
+        if csv_langs is not None:
+            return csv_langs
+
+        # 2) Fallback: scan JSON files
         all_codes: set = set()
         if _BUNDLED_LANG_DIR and os.path.isdir(_BUNDLED_LANG_DIR):
             for fname in os.listdir(_BUNDLED_LANG_DIR):
@@ -245,7 +323,6 @@ class LanguageManager:
         result = {}
         used_display = set()
         for code in sorted(all_codes):
-            # Try to get display_name: external first, then bundled, then code
             display = None
             if _EXTERNAL_LANG_DIR:
                 ext = os.path.join(_EXTERNAL_LANG_DIR, f"{code}.json")
@@ -266,12 +343,10 @@ class LanguageManager:
                     except Exception:
                         pass
             display = display if display is not None else code
-            # ensure display_name is unique; if duplicate, append code to disambiguate
             if display in used_display:
                 display = f"{display} ({code})"
             used_display.add(display)
             result[code] = display
-
         return result
         
 

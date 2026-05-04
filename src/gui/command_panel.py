@@ -105,6 +105,8 @@ class CommandPanel(ttk.Frame):
                 ("Soft HEAD~2",  lambda: self.executor.run_simple("reset --soft HEAD~2"), 12, False)],
                 [(lm.t('btn.soft_reset'), 'reset_soft', 12, False),
                 (lm.t('btn.hard_reset'), 'reset_hard', 12, True)],
+                [(lm.t('btn.reverse_commit', default='⏮️ Reverse Commit'),
+                  lambda: self.app.open_reverse_commit_dialog(self.executor), 24, False)],
             ]),
             (lm.t('group.commit'), [
                 [(lm.t('btn.fixup'),       lambda: self.executor.quick_commit("f", "fixup"),    6, False),
@@ -115,9 +117,10 @@ class CommandPanel(ttk.Frame):
                 (lm.t('btn.amend'),        'commit_amend',   12, False)],
             ]),
             (lm.t('group.push'), [
-                [(lm.t('btn.push'),       lambda: self.executor.run_simple("push"),       12, False),
-                (lm.t('btn.force_push'),  'force_push',                                    12, True),
-                (lm.t('btn.push_tags'),   lambda: self.executor.run_simple("push --tags"), 14, False)],
+                [(lm.t('btn.push'),        lambda: self.executor.run_simple("push"),        12, False),
+                (lm.t('btn.force_push'),   'force_push',                                    12, True),
+                (lm.t('btn.push_tags'),    lambda: self.executor.run_simple("push --tags"), 14, False)],
+                [(lm.t('btn.push_panel'),  lambda: self.app.open_push_panel(self.executor), 24, False)],
             ]),
             (lm.t('group.stash'), [
                 [(lm.t('btn.stash_list'), lambda: self.executor.run_simple("stash list"), 12, False),
@@ -131,13 +134,19 @@ class CommandPanel(ttk.Frame):
             (lm.t('group.branch'), [
                 [(lm.t('btn.branch_list'),   lambda: self.executor.run_simple("branch -a"),                    10, False),
                 (lm.t('btn.branch_create'),  'checkout_branch',                                                10, False),
-                (lm.t('btn.prune'),          'prune_branches',                                                 10, False),
+                (lm.t('btn.prune'),          'prune_branches',                                                 10, False)],
+                [(lm.t('btn.rename_branch'), lambda: self.app.open_rename_branch_dialog(self.executor),        12, False),
                 (lm.t('btn.delete_branch'),  lambda: self.app.open_delete_branch_dialog(self.executor),        20, True)],
             ]),
             (lm.t('group.tag'), [
-                [(lm.t('btn.tag_list'),   lambda: self.executor.run_simple("tag -l"), 16, False),
-                (lm.t('btn.tag_create'),  'create_tag',                               16, False),
-                (lm.t('btn.delete_tag'),  lambda: self.app.open_delete_tag_dialog(self.executor), 20, True)],
+                [(lm.t('btn.tag_list'),   lambda: self.executor.run_simple("tag -l"),                 16, False),
+                (lm.t('btn.tag_create'),  'create_tag',                                               16, False)],
+                [(lm.t('btn.rename_tag'), lambda: self.app.open_rename_tag_dialog(self.executor),     16, False),
+                (lm.t('btn.delete_tag'),  lambda: self.app.open_delete_tag_dialog(self.executor),     20, True)],
+            ]),
+            (lm.t('group.remote'), [
+                [(lm.t('btn.fetch'), lambda: self.app.open_fetch_dialog(self.executor), 12, False),
+                (lm.t('btn.pull'),   lambda: self.executor.run_simple("pull"),                12, False)],
             ]),
             (lm.t('group.tools'), [
                 [(lm.t('btn.status'),    lambda: self.executor.run_simple("status"), 12, False),
@@ -145,6 +154,7 @@ class CommandPanel(ttk.Frame):
                 (lm.t('btn.diff'),       lambda: self.executor.run_simple("diff"),   12, False)],
                 [(lm.t('btn.clean_fd'),
                  lambda: self.confirm_mgr.confirm(lm.t('confirm.clean_fd'), lambda: self.executor.run_simple("clean -fd")), 12, True)],
+                [(lm.t('btn.delete_panel'),  lambda: self.app.open_delete_panel(self.executor), 24, True)],
             ]),
         ]
 
