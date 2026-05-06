@@ -45,22 +45,23 @@ python GUI__GitHelperPro.py
 | 🌐 Fetch / Pull | 一鍵 Fetch --all --prune、一鍵 Pull |
 | ✈️ 遠端推送 | Push、Force Push（獨立危險確認彈窗）、Push Tags、🚀 Push Panel（批次 Push + 個別 Force） |
 | 📦 Stash 緩衝區 | Save / Pop / List / Drop / Clear |
-| 🌿 Branch 分支管理 | List、Checkout 搜尋器、Create、✏️ Rename（含遠端同步）、🗑️ Delete（獨立危險確認彈窗）、Prune、🗑️ Delete Panel |
-| 🏷️ Tag 標籤管理 | List / Create / ✏️ Move Tag（重建到同 Commit）/ Delete |
-| 🗑️ Delete Panel | 四分類（本地分支、遠端分支、本地 Tag、遠端 Tag）批次刪除，含搜尋自動補全 |
+| 🌿 Branch 分支管理 | List、Checkout 搜尋器、Create、✏️ Rename（含遠端同步）、🗑️ Delete（含自動補全 + 危險確認彈窗）、Prune |
+| 🏷️ Tag 標籤管理 | List / Create / ✏️ Move Tag（重建到同 Commit）/ Delete（含自動補全）|
+| 🗑️ Delete Panel | 統一搜尋框搜尋本地分支 / 遠端分支 / 本地 Tag / 遠端 Tag；加入 Queue 後可選 scope（local / remote / both）；同名項目自動合併並閃綠提示 |
+| ⏮️ Reverse Commit | 安全執行 `git revert`，可選 --no-commit 模式 |
 | 🔍 狀態與工具 | Status、Diff、Clean -fd、Checkouts（分支切換 + Checkout File 兩頁） |
 
 ---
 
 ## 🟡 黃色自動補全（Yellow Autocomplete）
 
-在 **Merge 來源分支**、**Rebase --onto 三欄位**、**Delete Panel 搜尋** 等欄位中，  
+在 **Merge 來源分支**、**Rebase --onto 三欄位**、**Delete Branch / Tag**、**Delete Panel 搜尋** 等欄位中，  
 輸入關鍵字時會自動彈出黃色候選清單：
 
 | 按鍵 | 動作 |
 |------|------|
-| `Tab` | 清單向下選（循環） |
-| `Shift+Tab` | 清單向上選（循環） |
+| `Tab` | 清單向下選（循環）；清單未開啟時自動打開並預選第一項 |
+| `Shift+Tab` | 清單向上選（循環）；清單未開啟時自動打開並預選最後一項 |
 | `Space` / `Enter` | 確認選中項目填入欄位 |
 | 滑鼠單擊 | 直接確認 |
 | `Escape` / 失焦 | 關閉清單 |
@@ -102,14 +103,34 @@ python GUI__GitHelperPro.py
 
 ## 🗑️ Delete Panel
 
-四個分頁批次刪除：
+統一單頁設計，一個搜尋框搜尋所有類型：
 
-- **🌿 Local Branch** — 搜尋 + 加入待刪清單 → 一鍵刪除
-- **☁️ Remote Branch** — 同上，執行 `git push <remote> --delete`
-- **🏷️ Local Tag** — 搜尋 + 加入待刪清單 → `git tag -d`
-- **☁️🏷️ Remote Tag** — 同上，執行 `git push <remote> --delete`
+| 前綴 | 意義 |
+|------|------|
+| `[B]  name` | 本地分支 |
+| `[rB] origin/name` | 遠端分支 |
+| `[T]  name` | 本地 Tag |
+| `[rT] name` | 遠端 Tag |
 
-所有搜尋欄均配備黃色自動補全 popup。
+**加入 Queue 後每個項目可獨立設定刪除範圍（scope）：**
+
+| Scope | 顏色 | 執行指令 |
+|-------|------|----------|
+| `local` | 黑色 | `git branch -D` / `git tag -d` |
+| `remote` | 紅色 | `git push <remote> --delete` |
+| `both` | 橘色 | 兩者都執行 |
+
+> scope 選項**自動根據實際存在的資源決定**：若某分支只有本地版本則只顯示 `local`；只有遠端則只顯示 `remote`；兩者都有才開放 `both`。
+
+**智慧合併：**  
+若分別加入 `[B] main`（local）和 `[rB] origin/main`（remote），兩者會自動合併為一個 Queue 項目，scope 設為 `both`，並以**綠色字體閃爍 1.5 秒**提醒已合併。
+
+> 已加入 Queue 的項目**不會再出現在搜尋建議中**（完全覆蓋時），避免重複選取。
+
+**按鈕：**
+- **Refresh** — 重新從 Git 讀取所有分支 / Tag
+- **清空清單** — 移除所有 Queue 項目
+- **🗑️ 執行刪除** — 顯示預覽後執行（危險操作）
 
 ---
 
@@ -156,10 +177,18 @@ CSV 欄位：`key, zh-tw, zh-cn, en`，每行一個翻譯 key。
 
 **批次清理多個分支 / Tag**
 ```
-1. 點擊「🗑️ Delete Panel」
-2. 選擇對應分頁（Local Branch / Remote Branch / Local Tag / Remote Tag）
-3. 搜尋 → 加入待刪清單（支援黃色自動補全）
-4. 執行刪除
+1. 在「Status & Tools」群組點擊「🗑️ Delete Panel」
+2. 在搜尋框輸入分支或 Tag 名稱（或按 Tab 瀏覽全部）
+3. 從黃色候選清單選取 → 自動加入 Queue
+4. 在 Queue 中調整每個項目的 scope（local / remote / both）
+5. 點擊「🗑️ 執行刪除」
+```
+
+**Reverse Commit（安全復原某次 commit）**
+```
+1. 在「Reset 回退」群組點擊「⏮️ Reverse Commit」
+2. 從下拉選單選擇要 revert 的 commit
+3. 可選：勾選「--no-commit 模式」（先 stage 不 commit）→ 執行
 ```
 
 **重命名分支**
