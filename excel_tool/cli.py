@@ -25,6 +25,11 @@ def _coerce(param, raw: str):
         return int(raw)
     if param.kind == "bool":
         return str(raw).strip().lower() in ("1", "true", "yes", "y", "t", "升冪")
+    if param.kind == "table":
+        return pd.read_excel(raw)                       # another Excel path -> df
+    if param.kind == "mapping":
+        pairs = [p for p in raw.split(",") if ":" in p]  # old:new,old2:new2
+        return {k.strip(): v.strip() for k, v in (p.split(":", 1) for p in pairs)}
     return raw  # column / text / choice
 
 

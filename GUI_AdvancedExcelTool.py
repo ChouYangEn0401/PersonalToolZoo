@@ -1,11 +1,9 @@
 """Advanced Excel Tool — GUI entry point.
 
-一個分頁式 Excel 工具（整理單檔 / 比對雙檔 / 合併 / AB 比對 / 條件清理 / 集合運算），
-以 infinity_treeview.InfinityTable 為表格核心、core/gui 分層（MVC）。
+一個分頁式 Excel 工具，三個工作台：🧹 核心整理 / 🔗 合併 / 🔍 比較，
+以 infinity_treeview.InfinityTable 為表格核心、core/gui 分層（MVC + 操作註冊表）。
 
     python GUI_AdvancedExcelTool.py
-
-Phase 1：僅骨架 + 空殼分頁，供審視架構。
 """
 from __future__ import annotations
 
