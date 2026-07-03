@@ -211,37 +211,37 @@ def _reg():
     register(Operation("dedup", dedup, "刪除重複列",
                        [Param("subset", "columns", "依這些欄位判斷（留空=整列）", required=False)],
                        group="列"))
-    register(Operation("drop_all_nan_rows", drop_all_nan_rows, "刪除全為空的列", [], group="列"))
-    register(Operation("drop_nan_rows_in_column", drop_nan_rows_in_column, "刪除某欄為空的列",
+    register(Operation("drop_all_nan_rows", drop_all_nan_rows, "刪除所有欄位都無資料的列", [], group="列"))
+    register(Operation("drop_nan_rows_in_column", drop_nan_rows_in_column, "刪除指定欄位無資料的列",
                        [Param("column", "column", "欄位")], group="列"))
-    register(Operation("drop_nan_rows_in_subset", drop_nan_rows_in_subset, "刪除指定欄位皆為空的列",
+    register(Operation("drop_nan_rows_in_subset", drop_nan_rows_in_subset, "刪除多個欄位同時無資料的列",
                        [Param("subset", "columns", "這些欄位皆空才刪")], group="列"))
-    register(Operation("filter_rows", filter_rows, "篩選列",
+    register(Operation("filter_rows", filter_rows, "按條件保留或移除列",
                        [Param("column", "column", "欄位"),
                         Param("op", "choice", "條件", default="包含", choices=list(_FILTER_OPS)),
                         Param("value", "text", "值", required=False)], group="列"))
 
-    register(Operation("find_duplicates_in_column", find_duplicates_in_column, "檢查某欄重複值",
+    register(Operation("find_duplicates_in_column", find_duplicates_in_column, "找出欄位中重複出現的列",
                        [Param("column", "column", "欄位"),
                         Param("which", "choice", "顯示", default="重複的", choices=["重複的", "不重複的"])],
                        result="query", group="分析"))
-    register(Operation("compare_two_columns", compare_two_columns, "兩欄位比對",
+    register(Operation("compare_two_columns", compare_two_columns, "對比兩欄位找出差異的列",
                        [Param("col1", "column", "欄位1"), Param("col2", "column", "欄位2"),
                         Param("which", "choice", "顯示", default="不同", choices=["不同", "相同"])],
                        result="query", group="分析"))
 
-    register(Operation("leave_group_extreme", leave_group_extreme, "保留分組極值",
+    register(Operation("leave_group_extreme", leave_group_extreme, "分組後各組僅保留最大/最小值",
                        [Param("group_by", "columns", "分組欄位"),
                         Param("column", "column", "比較欄位（數值）"),
                         Param("which", "choice", "保留", default="max", choices=["max", "min"])],
                        group="清理"))
 
-    register(Operation("aggregate_with_separator", aggregate_with_separator, "合併濃縮資料",
+    register(Operation("aggregate_with_separator", aggregate_with_separator, "按欄位分組並合併同組資料",
                        [Param("group_by", "columns", "分組欄位"),
                         Param("agg_columns", "columns", "要合併的欄位"),
                         Param("separator", "text", "分隔符號", default=",")],
                        group="重塑", help="aggregate"))
-    register(Operation("pivot", pivot, "建立透視表",
+    register(Operation("pivot", pivot, "按行列分組統計",
                        [Param("index", "columns", "索引欄"),
                         Param("columns", "column", "欄位欄"),
                         Param("values", "column", "值欄"),
@@ -249,14 +249,14 @@ def _reg():
                               choices=["sum", "mean", "count", "max", "min"])],
                        group="重塑", help="pivot"))
 
-    register(Operation("merge_append", merge_append, "合併資料表（另一檔）",
+    register(Operation("merge_append", merge_append, "用鍵值或按順序合併另一份資料",
                        [Param("other", "table", "另一份資料"),
                         Param("mode", "choice", "方式", default="append_direct",
                               choices=["append_direct", "append_inner", "append_outer",
                                        "inner", "left", "right", "outer"]),
                         Param("on", "columns", "join 鍵（左,右；append 免填）", required=False)],
                        group="雙表"))
-    register(Operation("delete_rows_by_reference", delete_rows_by_reference, "依另一份資料刪列",
+    register(Operation("delete_rows_by_reference", delete_rows_by_reference, "依另一份資料刪除相符的列",
                        [Param("other", "table", "參考資料"),
                         Param("mode", "choice", "比對方式", default="指定欄位相同",
                               choices=["整列完全相同", "指定欄位相同"]),

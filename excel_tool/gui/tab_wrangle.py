@@ -20,6 +20,7 @@ from ..core.operations import sort_values_multi, clean_by_conditions, _FILTER_OP
 from . import loaders, dialogs, help_content
 
 FONT = ("Microsoft JhengHei", 10)
+OP_BUTTON_FONT = ("Microsoft JhengHei", 8)
 # operation groups shown as button clusters, in this order
 GROUP_ORDER = ["欄位", "列", "清理", "分析", "重塑", "雙表"]
 
@@ -50,13 +51,26 @@ class WrangleTab(ttk.Frame):
     def _build_op_bar(self):
         outer = tk.Frame(self)
         outer.pack(side="top", fill="x", padx=6)
-        canvas = tk.Canvas(outer, height=92, highlightthickness=0)
-        canvas.pack(side="top", fill="x")
+        
+        # 1. 建立 Canvas (稍微調高一點到 115，讓 3 列按鈕與排版更寬裕舒適)
+        canvas = tk.Canvas(outer, height=115, highlightthickness=0)
+        
+        # 2. 建立水平與垂直捲軸
         hbar = ttk.Scrollbar(outer, orient="horizontal", command=canvas.xview)
+        vbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        
+        # 3. 排版
+        vbar.pack(side="right", fill="y")
         hbar.pack(side="bottom", fill="x")
-        canvas.configure(xscrollcommand=hbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        
+        # 4. 綁定捲軸
+        canvas.configure(xscrollcommand=hbar.set, yscrollcommand=vbar.set)
+        
+        # 5. 把 inner 塞進 canvas
         inner = tk.Frame(canvas)
         canvas.create_window((0, 0), window=inner, anchor="nw")
+        
         inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
 
         # registry ops grouped
@@ -64,23 +78,31 @@ class WrangleTab(ttk.Frame):
         for op in REGISTRY.values():
             by_group.setdefault(op.group, []).append(op)
 
+        # ── 關鍵修改：利用 Grid 讓按鈕在群組內橫向/縱向交錯排列 ──
+        MAX_ROWS = 3  # 每個群組內，垂直方向最多只放 3 個按鈕，超過就開新的一欄 (Column)
+        
         for group in GROUP_ORDER:
             ops = by_group.get(group)
             if not ops:
                 continue
-            cluster = tk.LabelFrame(inner, text=group, font=FONT, padx=3, pady=2)
-            cluster.pack(side="left", fill="y", padx=3, pady=3)
-            for op in ops:
-                b = tk.Button(cluster, text=op.label, font=FONT,
+            
+            cluster = tk.LabelFrame(inner, text=group, font=FONT, padx=6, pady=4)
+            cluster.pack(side="left", fill="y", padx=4, pady=3)
+            
+            # 使用 enumerate 計算按鈕順序，並動態轉換成網格座標 (row, column)
+            for idx, op in enumerate(ops):
+                r = idx % MAX_ROWS     # 列座標：0, 1, 2, 0, 1, 2...
+                c = idx // MAX_ROWS    # 欄座標：0, 0, 0, 1, 1, 1...
+                
+                b = tk.Button(cluster, text=op.label, font=OP_BUTTON_FONT, padx=3, pady=2,
                               command=lambda o=op: self._run_op(o))
-                b.pack(fill="x", pady=1)
+                # 使用 grid 進行網格排版，padx 與 pady 讓按鈕間有舒適空隙
+                b.grid(row=r, column=c, padx=3, pady=2, sticky="ew")
                 b.bind("<Button-3>", lambda e, o=op: help_content.show_help(self, o))
-
-        # bespoke tools
-        special = tk.LabelFrame(inner, text="專用", font=FONT, padx=3, pady=2)
-        special.pack(side="left", fill="y", padx=3, pady=3)
-        tk.Button(special, text="↕ 多欄排序", font=FONT, command=self._sort_dialog).pack(fill="x", pady=1)
-        tk.Button(special, text="🔧 條件清理", font=FONT, command=self._condition_dialog).pack(fill="x", pady=1)
+                
+            # 讓 cluster 內部所有生成的自動欄位（Columns）都能均勻分配寬度
+            for col_idx in range((len(ops) - 1) // MAX_ROWS + 1):
+                cluster.columnconfigure(col_idx, weight=1, uniform=f"col_{group}")
 
     def _build_table(self):
         holder = tk.Frame(self)
