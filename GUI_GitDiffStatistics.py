@@ -1,12 +1,15 @@
+import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 try:
     from . import git_utils
     from . import file_categories
+    from . import snapshot_utils
 except Exception:
     import git_utils
     import file_categories
+    import snapshot_utils
 
 # ══════════════════════════════════════════════
 #  Helpers
@@ -58,6 +61,7 @@ CHIP_BG_HV  = "#c7d2fe"
 MINI_BG     = "#e5e7eb"
 MINI_BG_HV  = "#d1d5db"
 SASH_BG     = "#94a3b8"
+TAB_BG      = "#e2e8f0"
 
 FF   = "Segoe UI"
 MONO = "Consolas"
@@ -126,6 +130,13 @@ def _apply_styles() -> None:
           background=[("selected", SEL_BG)],
           foreground=[("selected", "#ffffff")])
 
+    s.configure("TNotebook", background=BG, borderwidth=0, tabmargins=(8, 8, 8, 0))
+    s.configure("TNotebook.Tab", background=TAB_BG, foreground=TEXT_DIM,
+                font=(FF, 10, "bold"), padding=(18, 9), borderwidth=0)
+    s.map("TNotebook.Tab",
+          background=[("selected", CARD_BG)],
+          foreground=[("selected", ACCENT)])
+
     s.configure("SBar.TLabel",
                 background="#e2e8f0", foreground=TEXT_DIM,
                 font=(FF, 9), padding=(10, 3))
@@ -147,30 +158,21 @@ def _make_card(parent, label: str, var: tk.StringVar) -> ttk.Frame:
 
 
 # ══════════════════════════════════════════════
-#  Main UI builder
+#  Compute panel (shared by the Git tab and the Snapshot tab)
 # ══════════════════════════════════════════════
 
-def build_ui(root: tk.Tk) -> tk.Tk:
-    root.title("diff_showcaser — Git Diff Statistics — v1.1.0")
-    root.configure(bg=BG)
-    root.minsize(1120, 820)
-    root.columnconfigure(0, weight=1)
-    root.rowconfigure(1, weight=1)
+def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str) -> None:
+    """Build one full tab's content: input row, filters, cards, split view.
 
-    _apply_styles()
+    mode == "git": compare two commits in a git repo (git_utils).
+    mode == "fs":  compare two plain folders on disk (snapshot_utils), for
+                   projects that aren't under version control.
+    """
+    parent.columnconfigure(0, weight=1)
+    parent.rowconfigure(0, weight=1)
 
-    # ── Header bar ──────────────────────────────────
-    hdr = ttk.Frame(root, style="Hdr.TFrame", padding=(24, 14))
-    hdr.grid(row=0, column=0, sticky="ew")
-    ttk.Label(hdr, text="🔍  diff_showcaser", style="Hdr.TLabel"
-              ).grid(row=0, column=0, sticky="w")
-    ttk.Label(hdr,
-              text="Compare two Git commits · see line changes & byte deltas per file type",
-              style="HdrS.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 0))
-
-    # ── Main content ────────────────────────────────
-    main = ttk.Frame(root, padding=(20, 14))
-    main.grid(row=1, column=0, sticky="nsew")
+    main = ttk.Frame(parent, padding=(20, 14))
+    main.grid(row=0, column=0, sticky="nsew")
     main.columnconfigure(0, weight=1)
     main.rowconfigure(5, weight=1)
 
@@ -178,25 +180,47 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     inp = ttk.Frame(main)
     inp.grid(row=0, column=0, sticky="ew", pady=(0, 6))
 
-    ttk.Label(inp, text="Repository", font=FONT_LABEL).grid(row=0, column=0, sticky="w", padx=(0, 6))
-    repo_e = ttk.Entry(inp, width=40, font=(MONO, 10))
-    repo_e.grid(row=0, column=1, sticky="w", padx=(0, 8))
-    def _browse_repo():
-        path = filedialog.askdirectory(title="Select Git repository")
-        if path:
-            repo_e.delete(0, "end")
-            repo_e.insert(0, path)
-    ttk.Button(inp, text="Browse", command=_browse_repo).grid(row=0, column=2, padx=(0, 12))
+    if mode == "git":
+        ttk.Label(inp, text="Repository", font=FONT_LABEL).grid(row=0, column=0, sticky="w", padx=(0, 6))
+        repo_e = ttk.Entry(inp, width=40, font=(MONO, 10))
+        repo_e.grid(row=0, column=1, sticky="w", padx=(0, 8))
+        def _browse_repo():
+            path = filedialog.askdirectory(title="Select Git repository")
+            if path:
+                repo_e.delete(0, "end")
+                repo_e.insert(0, path)
+        ttk.Button(inp, text="Browse", command=_browse_repo).grid(row=0, column=2, padx=(0, 12))
 
-    ttk.Label(inp, text="Init commit", font=FONT_LABEL
-              ).grid(row=0, column=3, sticky="w", padx=(0, 6))
-    init_e = ttk.Entry(inp, width=36, font=(MONO, 10))
-    init_e.grid(row=0, column=4, sticky="w", padx=(0, 20))
+        ttk.Label(inp, text="Init commit", font=FONT_LABEL
+                  ).grid(row=0, column=3, sticky="w", padx=(0, 6))
+        init_e = ttk.Entry(inp, width=36, font=(MONO, 10))
+        init_e.grid(row=0, column=4, sticky="w", padx=(0, 20))
 
-    ttk.Label(inp, text="Latest commit", font=FONT_LABEL
-              ).grid(row=0, column=5, sticky="w", padx=(0, 6))
-    latest_e = ttk.Entry(inp, width=36, font=(MONO, 10))
-    latest_e.grid(row=0, column=6, sticky="w", padx=(0, 20))
+        ttk.Label(inp, text="Latest commit", font=FONT_LABEL
+                  ).grid(row=0, column=5, sticky="w", padx=(0, 6))
+        latest_e = ttk.Entry(inp, width=36, font=(MONO, 10))
+        latest_e.grid(row=0, column=6, sticky="w", padx=(0, 20))
+    else:
+        ttk.Label(inp, text="Init 資料夾", font=FONT_LABEL).grid(row=0, column=0, sticky="w", padx=(0, 6))
+        init_e = ttk.Entry(inp, width=32, font=(MONO, 10))
+        init_e.grid(row=0, column=1, sticky="w", padx=(0, 6))
+        def _browse_init():
+            path = filedialog.askdirectory(title="選擇 Init 資料夾（較早的快照）")
+            if path:
+                init_e.delete(0, "end")
+                init_e.insert(0, path)
+        ttk.Button(inp, text="Browse", command=_browse_init).grid(row=0, column=2, padx=(0, 16))
+
+        ttk.Label(inp, text="Latest 資料夾", font=FONT_LABEL
+                  ).grid(row=0, column=3, sticky="w", padx=(0, 6))
+        latest_e = ttk.Entry(inp, width=32, font=(MONO, 10))
+        latest_e.grid(row=0, column=4, sticky="w", padx=(0, 6))
+        def _browse_latest():
+            path = filedialog.askdirectory(title="選擇 Latest 資料夾（較新的快照）")
+            if path:
+                latest_e.delete(0, "end")
+                latest_e.insert(0, path)
+        ttk.Button(inp, text="Browse", command=_browse_latest).grid(row=0, column=5, padx=(0, 20))
 
     btn = ttk.Button(inp, text="▶  Compute", style="Accent.TButton")
     btn.grid(row=0, column=7)
@@ -371,16 +395,11 @@ def build_ui(root: tk.Tk) -> tk.Tk:
 
     split.add(sum_frm, minsize=90, height=170, stretch="always")
 
-    # ── Status bar ──────────────────────────────────
-    status_var = tk.StringVar(value="Ready")
-    ttk.Label(root, textvariable=status_var, style="SBar.TLabel", anchor="w"
-              ).grid(row=2, column=0, sticky="ew")
-
     # ── Compute logic ───────────────────────────────
     last_agg = {}
 
     def render_from_selection(selected_exts: set):
-        """Render cards, table and summary using filtered ext set (no new git calls)."""
+        """Render cards, table and summary using filtered ext set (no new calls)."""
         by_ext_local = {k: v for k, v in last_agg["by_ext"].items() if k in selected_exts}
 
         # compute totals
@@ -436,6 +455,8 @@ def build_ui(root: tk.Tk) -> tk.Tk:
             w(DIV, "dim")
             w(f"  時間範圍      ", "dim"); w(f"{init_iso}  →  {latest_iso}\n", "acc")
             w(f"  持續時間      ", "dim"); w(f"{dur_h}\n", "bold")
+            if last_agg.get("time_is_estimated"):
+                w("  （＊依檔案最後修改時間估算，非精確時間戳記）\n", "dim")
 
         w(DIV, "dim")
         w(f"  總共變動檔案   ", "dim"); w(f"{shown_files}\n", "bold")
@@ -508,18 +529,28 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     def run():
         init   = init_e.get().strip()
         latest = latest_e.get().strip()
-        repo = repo_e.get().strip() or None
-        if not init or not latest:
-            messagebox.showwarning("Input missing",
-                                   "請輸入 Init 與 Latest commit hash 或 ref")
-            return
+
+        if mode == "git":
+            repo = repo_e.get().strip() or None
+            if not init or not latest:
+                messagebox.showwarning("Input missing",
+                                       "請輸入 Init 與 Latest commit hash 或 ref")
+                return
+        else:
+            if not init or not latest or not os.path.isdir(init) or not os.path.isdir(latest):
+                messagebox.showwarning("Input missing",
+                                       "請選擇有效的 Init 與 Latest 資料夾路徑")
+                return
 
         btn.state(["disabled"])
         status_var.set("Computing …")
-        root.update_idletasks()
+        main.update_idletasks()
 
         try:
-            agg = git_utils.aggregate_by_extension(init, latest, repo_path=repo)
+            if mode == "git":
+                agg = git_utils.aggregate_by_extension(init, latest, repo_path=repo)
+            else:
+                agg = snapshot_utils.aggregate_by_extension(init, latest)
         except Exception as exc:
             status_var.set("Error")
             messagebox.showerror("Error", str(exc))
@@ -552,6 +583,47 @@ def build_ui(root: tk.Tk) -> tk.Tk:
         )
 
     btn.configure(command=run)
+
+
+# ══════════════════════════════════════════════
+#  Main UI builder
+# ══════════════════════════════════════════════
+
+def build_ui(root: tk.Tk) -> tk.Tk:
+    root.title("diff_showcaser — Git Diff Statistics — v1.2.0")
+    root.configure(bg=BG)
+    root.minsize(1120, 860)
+    root.columnconfigure(0, weight=1)
+    root.rowconfigure(1, weight=1)
+
+    _apply_styles()
+
+    # ── Header bar ──────────────────────────────────
+    hdr = ttk.Frame(root, style="Hdr.TFrame", padding=(24, 14))
+    hdr.grid(row=0, column=0, sticky="ew")
+    ttk.Label(hdr, text="🔍  diff_showcaser", style="Hdr.TLabel"
+              ).grid(row=0, column=0, sticky="w")
+    ttk.Label(hdr,
+              text="Compare two snapshots · see line changes & byte deltas per file type",
+              style="HdrS.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 0))
+
+    # ── Status bar (shared across tabs) ─────────────
+    status_var = tk.StringVar(value="Ready")
+    ttk.Label(root, textvariable=status_var, style="SBar.TLabel", anchor="w"
+              ).grid(row=2, column=0, sticky="ew")
+
+    # ── Tabs ─────────────────────────────────────────
+    notebook = ttk.Notebook(root)
+    notebook.grid(row=1, column=0, sticky="nsew")
+
+    tab_git = ttk.Frame(notebook)
+    tab_fs  = ttk.Frame(notebook)
+    notebook.add(tab_git, text="Git 版控比較")
+    notebook.add(tab_fs,  text="資料夾快照估算（無版控）")
+
+    _build_compute_panel(tab_git, status_var, mode="git")
+    _build_compute_panel(tab_fs,  status_var, mode="fs")
+
     return root
 
 

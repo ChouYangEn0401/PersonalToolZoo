@@ -10,7 +10,12 @@
 python -m diff_showcaser
 ```
 
-輸入 `init_commit` 與 `latest_commit`（可以是 branch 名稱或 commit hash），按 `Compute`。
+視窗分成兩個分頁：
+
+- **Git 版控比較**：輸入 `init_commit` 與 `latest_commit`（可以是 branch 名稱或 commit hash），按 `Compute`。
+- **資料夾快照估算（無版控）**：專案沒有版控時使用。選擇 `Init 資料夾` 與 `Latest 資料夾`（兩個時間點的專案副本），工具會自行走訪並比對兩邊檔案（逐行 diff + 位元組大小），效果與 Git 分頁相同，但時間範圍是用「資料夾內檔案的最後修改時間」推估，而非精確的 commit 時間戳記。
+
+兩個分頁的版面與統計欄位完全一致，只有資料來源不同。
 
 顯示：
 - 每種副檔名的檔案數、加上/刪除行數、淨行數、近似位元組差異（若可得）與範例檔案。
