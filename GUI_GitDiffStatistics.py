@@ -3,8 +3,10 @@ from tkinter import ttk, messagebox, filedialog
 
 try:
     from . import git_utils
+    from . import file_categories
 except Exception:
     import git_utils
+    import file_categories
 
 # ══════════════════════════════════════════════
 #  Helpers
@@ -51,6 +53,11 @@ TEXT_WHITE  = "#f1f5f9"
 TEXT_SUB    = "#94a3b8"
 TXT_BG      = "#1e293b"
 TXT_FG      = "#e2e8f0"
+CHIP_BG     = "#e0e7ff"
+CHIP_BG_HV  = "#c7d2fe"
+MINI_BG     = "#e5e7eb"
+MINI_BG_HV  = "#d1d5db"
+SASH_BG     = "#94a3b8"
 
 FF   = "Segoe UI"
 MONO = "Consolas"
@@ -86,6 +93,18 @@ def _apply_styles() -> None:
           background=[("active", ACCENT_HV), ("pressed", "#3730a3"), ("disabled", "#c7d2fe")],
           foreground=[("active", "#ffffff"), ("disabled", "#a5b4fc")])
 
+    s.configure("Preset.TButton", font=(FF, 9, "bold"),
+                background=CHIP_BG, foreground=ACCENT,
+                padding=(14, 6), relief="flat", borderwidth=0)
+    s.map("Preset.TButton",
+          background=[("active", CHIP_BG_HV), ("pressed", "#a5b4fc"), ("disabled", "#eef0f4")],
+          foreground=[("disabled", "#b7bcc7")])
+
+    s.configure("Mini.TButton", font=(FF, 8),
+                background=MINI_BG, foreground=TEXT_DIM,
+                padding=(6, 2), relief="flat", borderwidth=0)
+    s.map("Mini.TButton", background=[("active", MINI_BG_HV)])
+
     s.configure("Hdr.TFrame",  background=BG_HDR)
     s.configure("Hdr.TLabel",  background=BG_HDR, foreground=TEXT_WHITE, font=FONT_TITLE)
     s.configure("HdrS.TLabel", background=BG_HDR, foreground=TEXT_SUB,   font=FONT_HDR_SUB)
@@ -93,6 +112,9 @@ def _apply_styles() -> None:
     s.configure("Card.TFrame",  background=CARD_BG, relief="flat")
     s.configure("CardV.TLabel", background=CARD_BG, foreground=ACCENT,   font=FONT_STAT)
     s.configure("CardL.TLabel", background=CARD_BG, foreground=TEXT_DIM, font=FONT_STAT_LB)
+
+    s.configure("CatHdr.TLabel",   background=BG, foreground=TEXT_MAIN, font=(FF, 9, "bold"))
+    s.configure("CatCount.TLabel", background=BG, foreground=TEXT_DIM,  font=(FF, 8))
 
     s.configure("Treeview",
                 background=ROW_ODD, fieldbackground=ROW_ODD,
@@ -129,9 +151,9 @@ def _make_card(parent, label: str, var: tk.StringVar) -> ttk.Frame:
 # ══════════════════════════════════════════════
 
 def build_ui(root: tk.Tk) -> tk.Tk:
-    root.title("diff_showcaser — Git Diff Statistics — v1.0.0")
+    root.title("diff_showcaser — Git Diff Statistics — v1.1.0")
     root.configure(bg=BG)
-    root.minsize(1060, 740)
+    root.minsize(1120, 820)
     root.columnconfigure(0, weight=1)
     root.rowconfigure(1, weight=1)
 
@@ -150,8 +172,7 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     main = ttk.Frame(root, padding=(20, 14))
     main.grid(row=1, column=0, sticky="nsew")
     main.columnconfigure(0, weight=1)
-    main.rowconfigure(3, weight=3)
-    main.rowconfigure(4, weight=1)
+    main.rowconfigure(5, weight=1)
 
     # ── Input row ───────────────────────────────────
     inp = ttk.Frame(main)
@@ -180,37 +201,75 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     btn = ttk.Button(inp, text="▶  Compute", style="Accent.TButton")
     btn.grid(row=0, column=7)
 
-    # ── Filter panel (checkbox list populated after compute) ─────
+    # ── Preset filter buttons ───────────────────────
+    preset_row = ttk.Frame(main)
+    preset_row.grid(row=1, column=0, sticky="ew", pady=(0, 6))
+    ttk.Label(preset_row, text="快速篩選：", font=FONT_LABEL).pack(side="left", padx=(0, 8))
+
+    DEFAULT_PRESET = "code"
+    preset_btns = []  # enabled once a diff has been computed
+
+    # ── Filter panel (categorised checkbox list, populated after compute) ──
     filter_panel = ttk.Frame(main)
-    filter_panel.grid(row=1, column=0, sticky="ew", pady=(0, 8))
-    ttk.Label(filter_panel, text="Extensions (uncheck to exclude)", font=FONT_LABEL).grid(row=0, column=0, sticky="w")
-    # horizontal scroll area for many extensions (full-width)
+    filter_panel.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+    ttk.Label(filter_panel, text="檔案篩選（依類別勾選，取消勾選以排除）", font=FONT_LABEL
+              ).grid(row=0, column=0, sticky="w")
     filter_panel.columnconfigure(0, weight=1)
-    cb_canvas = tk.Canvas(filter_panel, height=32, bg=BG, highlightthickness=0)
-    cb_frame = ttk.Frame(cb_canvas)
-    cb_hsb = ttk.Scrollbar(filter_panel, orient="horizontal", command=cb_canvas.xview)
-    win_id = cb_canvas.create_window((0, 0), window=cb_frame, anchor="nw")
-    cb_canvas.grid(row=1, column=0, sticky="ew")
-    cb_canvas.configure(xscrollcommand=cb_hsb.set)
-    cb_hsb.grid(row=2, column=0, sticky="ew")
-    cb_frame.bind("<Configure>", lambda e: cb_canvas.configure(scrollregion=cb_canvas.bbox("all")))
-    # make inner window width follow content when wider than canvas, otherwise fill canvas
-    def _on_canvas_config(e):
-        try:
-            reqw = cb_frame.winfo_reqwidth()
-            target = reqw if reqw > e.width else e.width
-            cb_canvas.itemconfig(win_id, width=target)
-        except Exception:
-            pass
-    cb_canvas.bind("<Configure>", _on_canvas_config)
-    ext_vars = {}  # ext -> BooleanVar
+
+    FILTER_HEIGHT = 190
+    filt_canvas = tk.Canvas(filter_panel, height=FILTER_HEIGHT, bg=BG, highlightthickness=0)
+    filt_inner = ttk.Frame(filt_canvas)
+    filt_vsb = ttk.Scrollbar(filter_panel, orient="vertical", command=filt_canvas.yview)
+    filt_win = filt_canvas.create_window((0, 0), window=filt_inner, anchor="nw")
+    filt_canvas.grid(row=1, column=0, sticky="ew")
+    filt_canvas.configure(yscrollcommand=filt_vsb.set)
+    filt_vsb.grid(row=1, column=1, sticky="ns")
+    filt_inner.bind("<Configure>",
+                     lambda _e: filt_canvas.configure(scrollregion=filt_canvas.bbox("all")))
+    def _on_filt_canvas_config(e):
+        filt_canvas.itemconfig(filt_win, width=e.width)
+    filt_canvas.bind("<Configure>", _on_filt_canvas_config)
+
+    def _filt_mousewheel(e):
+        filt_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+    filt_canvas.bind("<Enter>", lambda _e: filt_canvas.bind_all("<MouseWheel>", _filt_mousewheel))
+    filt_canvas.bind("<Leave>", lambda _e: filt_canvas.unbind_all("<MouseWheel>"))
+
+    ext_vars = {}  # bucket_key -> BooleanVar
+    _suspend = {"on": False}
+
+    def _current_checked() -> set:
+        return set(k for k, v in ext_vars.items() if v.get())
+
+    def _apply_selection(keys_to_check) -> None:
+        """Bulk-set checkbox state and re-render exactly once."""
+        keys_to_check = set(keys_to_check)
+        _suspend["on"] = True
+        for k, var in ext_vars.items():
+            var.set(k in keys_to_check)
+        _suspend["on"] = False
+        render_from_selection(keys_to_check & set(ext_vars.keys()))
+
+    def _make_preset_handler(preset_key):
+        def _handler():
+            if not ext_vars:
+                return
+            _apply_selection(file_categories.resolve_preset(preset_key, ext_vars.keys()))
+        return _handler
+
+    for preset_key, preset_label in file_categories.PRESETS:
+        b = ttk.Button(preset_row, text=preset_label, style="Preset.TButton",
+                       command=_make_preset_handler(preset_key))
+        b.pack(side="left", padx=(0, 6))
+        b.state(["disabled"])
+        preset_btns.append(b)
 
     ttk.Separator(main, orient="horizontal").grid(
-        row=2, column=0, sticky="ew", pady=10)
+        row=3, column=0, sticky="ew", pady=10)
 
     # ── Stat cards ──────────────────────────────────
     cards_frm = ttk.Frame(main)
-    cards_frm.grid(row=2, column=0, sticky="ew", pady=(0, 12))
+    cards_frm.grid(row=4, column=0, sticky="ew", pady=(0, 12))
 
     v_total   = tk.StringVar(value="—")
     v_types   = tk.StringVar(value="—")
@@ -235,15 +294,21 @@ def build_ui(root: tk.Tk) -> tk.Tk:
         cards_frm.columnconfigure(col, weight=1)
         cards_frm.rowconfigure(0, weight=0)
 
-    # ── Treeview ────────────────────────────────────
-    tv_frm = ttk.Frame(main)
-    tv_frm.grid(row=3, column=0, sticky="nsew")
+    # ── Treeview + Summary (draggable split) ────────
+    split = tk.PanedWindow(main, orient="vertical", sashrelief="raised",
+                            sashwidth=10, sashpad=2, bg=SASH_BG,
+                            showhandle=True, handlesize=16,
+                            bd=0, opaqueresize=True)
+    split.grid(row=5, column=0, sticky="nsew")
+
+    tv_frm = ttk.Frame(split)
     tv_frm.columnconfigure(0, weight=1)
     tv_frm.rowconfigure(0, weight=1)
 
-    cols = ("ext", "files", "binary_f", "added", "deleted", "net", "bytes", "sample")
+    cols = ("ext", "cat", "files", "binary_f", "added", "deleted", "net", "bytes", "sample")
     hdrs = {
         "ext":      "副檔名",
+        "cat":      "分類",
         "files":    "檔案總數",
         "binary_f": "Binary",
         "added":    "＋新增行",
@@ -253,12 +318,12 @@ def build_ui(root: tk.Tk) -> tk.Tk:
         "sample":   "範例檔案",
     }
     widths = {
-        "ext": 105, "files": 70, "binary_f": 68,
-        "added": 88, "deleted": 88, "net": 88,
-        "bytes": 118, "sample": 0,
+        "ext": 95, "cat": 110, "files": 68, "binary_f": 60,
+        "added": 82, "deleted": 82, "net": 82,
+        "bytes": 110, "sample": 0,
     }
     anchors = {
-        "ext": "w", "files": "e", "binary_f": "e",
+        "ext": "w", "cat": "w", "files": "e", "binary_f": "e",
         "added": "e", "deleted": "e", "net": "e",
         "bytes": "e", "sample": "w",
     }
@@ -281,9 +346,10 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     vsb.grid(row=0, column=1, sticky="ns")
     hsb.grid(row=1, column=0, sticky="ew")
 
+    split.add(tv_frm, minsize=160, height=320, stretch="always")
+
     # ── Summary text ────────────────────────────────
-    sum_frm = ttk.Frame(main)
-    sum_frm.grid(row=4, column=0, sticky="nsew", pady=(10, 0))
+    sum_frm = ttk.Frame(split)
     sum_frm.columnconfigure(0, weight=1)
     sum_frm.rowconfigure(0, weight=1)
 
@@ -303,6 +369,8 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     summary_txt.tag_configure("bold", font=(MONO, 9, "bold"), foreground="#e2e8f0")
     summary_txt.tag_configure("acc",  foreground="#818cf8")
 
+    split.add(sum_frm, minsize=90, height=170, stretch="always")
+
     # ── Status bar ──────────────────────────────────
     status_var = tk.StringVar(value="Ready")
     ttk.Label(root, textvariable=status_var, style="SBar.TLabel", anchor="w"
@@ -321,9 +389,10 @@ def build_ui(root: tk.Tk) -> tk.Tk:
         total_bytes  = sum(v["bytes_change"] for v in by_ext_local.values())
         total_binary = sum(v["binary"]       for v in by_ext_local.values())
         net_lines    = total_added - total_del
+        shown_files  = sum(v["files"]        for v in by_ext_local.values())
 
         # update cards
-        v_total  .set(str(last_agg["total_files"]))
+        v_total  .set(str(shown_files))
         v_types  .set(str(len(by_ext_local)))
         v_added  .set(f"+{total_added:,}")
         v_deleted.set(f"-{total_del:,}")
@@ -336,8 +405,10 @@ def build_ui(root: tk.Tk) -> tk.Tk:
         for i, (ext, v) in enumerate(sorted(by_ext_local.items(), key=lambda x: -x[1]["files"])):
             net = v["added"] - v["deleted"]
             tag = "odd" if i % 2 == 0 else "even"
+            cat_label = file_categories.CATEGORIES[file_categories.categorize(ext)]["label"]
             tree.insert("", "end", tags=(tag,), values=(
                 ext,
+                cat_label,
                 v["files"],
                 v["binary"] if v["binary"] else "",
                 v["added"],
@@ -367,7 +438,7 @@ def build_ui(root: tk.Tk) -> tk.Tk:
             w(f"  持續時間      ", "dim"); w(f"{dur_h}\n", "bold")
 
         w(DIV, "dim")
-        w(f"  總共變動檔案   ", "dim"); w(f"{last_agg['total_files']}\n", "bold")
+        w(f"  總共變動檔案   ", "dim"); w(f"{shown_files}\n", "bold")
         w(f"  副檔名種類     ", "dim"); w(f"{len(by_ext_local)}\n", "bold")
         w(f"  Binary 檔案    ", "dim"); w(f"{total_binary}\n", "bold")
         w("\n")
@@ -388,6 +459,51 @@ def build_ui(root: tk.Tk) -> tk.Tk:
 
         w(DIV, "dim")
         summary_txt.configure(state="disabled")
+
+    def _rebuild_filter_panel(agg):
+        for wdg in filt_inner.winfo_children():
+            wdg.destroy()
+        ext_vars.clear()
+        filt_inner.columnconfigure(0, weight=1)
+
+        cat_groups = file_categories.group_by_category(agg["by_ext"])
+        ncols = max(4, (filt_canvas.winfo_width() or 1000) // 130)
+
+        for r, (_cat_key, ginfo) in enumerate(cat_groups):
+            block = ttk.Frame(filt_inner, padding=(4, 4))
+            block.grid(row=r, column=0, sticky="ew")
+
+            hdr_row = ttk.Frame(block)
+            hdr_row.pack(fill="x", anchor="w")
+            ttk.Label(hdr_row, text=ginfo["label"], style="CatHdr.TLabel").pack(side="left")
+            ttk.Label(hdr_row, text=f"  {len(ginfo['members'])} 種．{ginfo['files']} 檔案",
+                      style="CatCount.TLabel").pack(side="left")
+
+            members = list(ginfo["members"])
+            def _select_all(members=members):
+                _apply_selection(_current_checked() | set(members))
+            def _select_none(members=members):
+                _apply_selection(_current_checked() - set(members))
+            ttk.Button(hdr_row, text="全選", style="Mini.TButton",
+                       command=_select_all).pack(side="left", padx=(10, 2))
+            ttk.Button(hdr_row, text="清空", style="Mini.TButton",
+                       command=_select_none).pack(side="left")
+
+            grid_frm = ttk.Frame(block)
+            grid_frm.pack(fill="x", anchor="w", pady=(2, 4))
+            for i, ext in enumerate(sorted(members, key=lambda e: -agg["by_ext"][e]["files"])):
+                var = tk.BooleanVar(value=True)
+                cnt = agg["by_ext"][ext]["files"]
+                cb = ttk.Checkbutton(grid_frm, text=f"{ext} ({cnt})", variable=var)
+                cb.grid(row=i // ncols, column=i % ncols, sticky="w", padx=(2, 14), pady=1)
+                ext_vars[ext] = var
+
+        def on_cb_change(*_):
+            if _suspend["on"]:
+                return
+            render_from_selection(_current_checked())
+        for var in ext_vars.values():
+            var.trace_add("write", on_cb_change)
 
     def run():
         init   = init_e.get().strip()
@@ -416,24 +532,14 @@ def build_ui(root: tk.Tk) -> tk.Tk:
         last_agg["init_ref"] = init
         last_agg["latest_ref"] = latest
 
-        # rebuild checkbox list
-        for wdg in cb_frame.winfo_children():
-            wdg.destroy()
-        ext_vars.clear()
-        for i, (ext, v) in enumerate(sorted(agg["by_ext"].items(), key=lambda x: -x[1]["files"])):
-            var = tk.BooleanVar(value=True)
-            cb = ttk.Checkbutton(cb_frame, text=f"{ext}  ({v['files']})", variable=var)
-            cb.grid(row=0, column=i, padx=(6, 4), pady=4)
-            ext_vars[ext] = var
+        _rebuild_filter_panel(agg)
 
-        # initial full render
-        render_from_selection(set(ext_vars.keys()))
+        # apply the default preset instead of "select everything"
+        default_keys = file_categories.resolve_preset(DEFAULT_PRESET, ext_vars.keys())
+        _apply_selection(default_keys)
 
-        # live update on checkbox change
-        def on_cb_change(*_):
-            render_from_selection(set(k for k, var in ext_vars.items() if var.get()))
-        for var in ext_vars.values():
-            var.trace_add("write", on_cb_change)
+        for b in preset_btns:
+            b.state(["!disabled"])
 
         btn.state(["!disabled"])
         total_added = sum(v["added"]   for v in agg["by_ext"].values())

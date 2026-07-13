@@ -99,7 +99,7 @@ def aggregate_by_extension(init: str, latest: str, repo_path: str = None) -> Dic
         if size_i is not None or size_l is not None:
             bytes_change = (size_l or 0) - (size_i or 0)
 
-        ext = os.path.splitext(path)[1].lower() or "(no_ext)"
+        ext = os.path.splitext(path)[1].lower() or os.path.basename(path)
         rec = {"path": path, "ext": ext, "added": added, "deleted": deleted, "binary": binary, "bytes_change": bytes_change}
         files.append(rec)
 

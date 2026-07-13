@@ -2,4 +2,4 @@
 Run with: python -m diff_showcaser
 """
 
-__all__ = ["git_utils", "gui"]
+__all__ = ["git_utils", "file_categories", "gui"]
