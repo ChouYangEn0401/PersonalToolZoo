@@ -16,7 +16,7 @@ except Exception:
 # ══════════════════════════════════════════════
 
 def _fmt_bytes(n: int) -> str:
-    """Format bytes with +/- sign."""
+    """Format a byte delta with +/- sign."""
     if n == 0:
         return "0 B"
     sign = "+" if n > 0 else "-"
@@ -27,6 +27,17 @@ def _fmt_bytes(n: int) -> str:
             return f"{sign}{fmt} {unit}"
         val /= 1024.0
     return f"{sign}{val:.1f} TB"
+
+
+def _fmt_bytes_abs(n: int) -> str:
+    """Format an absolute byte count (no +/- sign)."""
+    val = float(n)
+    for unit in ["B", "KB", "MB", "GB"]:
+        if val < 1024.0:
+            fmt = f"{val:.0f}" if unit == "B" else f"{val:.1f}"
+            return f"{fmt} {unit}"
+        val /= 1024.0
+    return f"{val:.1f} TB"
 
 
 def _fmt_net(n: int) -> str:
@@ -164,9 +175,12 @@ def _make_card(parent, label: str, var: tk.StringVar) -> ttk.Frame:
 def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str) -> None:
     """Build one full tab's content: input row, filters, cards, split view.
 
-    mode == "git": compare two commits in a git repo (git_utils).
-    mode == "fs":  compare two plain folders on disk (snapshot_utils), for
-                   projects that aren't under version control.
+    mode == "git": diff between two commits in a git repo (git_utils) —
+                   shows added/deleted/net lines and byte deltas.
+    mode == "fs":  census of a single folder on disk right now
+                   (snapshot_utils) — for projects with no version control,
+                   so there is no "before" to diff against. Shows total
+                   lines and total bytes per category instead of deltas.
     """
     parent.columnconfigure(0, weight=1)
     parent.rowconfigure(0, weight=1)
@@ -200,30 +214,23 @@ def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str)
                   ).grid(row=0, column=5, sticky="w", padx=(0, 6))
         latest_e = ttk.Entry(inp, width=36, font=(MONO, 10))
         latest_e.grid(row=0, column=6, sticky="w", padx=(0, 20))
+
+        btn = ttk.Button(inp, text="▶  Compute", style="Accent.TButton")
+        btn.grid(row=0, column=7)
     else:
-        ttk.Label(inp, text="Init 資料夾", font=FONT_LABEL).grid(row=0, column=0, sticky="w", padx=(0, 6))
-        init_e = ttk.Entry(inp, width=32, font=(MONO, 10))
-        init_e.grid(row=0, column=1, sticky="w", padx=(0, 6))
-        def _browse_init():
-            path = filedialog.askdirectory(title="選擇 Init 資料夾（較早的快照）")
+        ttk.Label(inp, text="資料夾", font=FONT_LABEL).grid(row=0, column=0, sticky="w", padx=(0, 6))
+        folder_e = ttk.Entry(inp, width=70, font=(MONO, 10))
+        folder_e.grid(row=0, column=1, sticky="ew", padx=(0, 8))
+        inp.columnconfigure(1, weight=1)
+        def _browse_folder():
+            path = filedialog.askdirectory(title="選擇要統計的資料夾")
             if path:
-                init_e.delete(0, "end")
-                init_e.insert(0, path)
-        ttk.Button(inp, text="Browse", command=_browse_init).grid(row=0, column=2, padx=(0, 16))
+                folder_e.delete(0, "end")
+                folder_e.insert(0, path)
+        ttk.Button(inp, text="Browse", command=_browse_folder).grid(row=0, column=2, padx=(0, 16))
 
-        ttk.Label(inp, text="Latest 資料夾", font=FONT_LABEL
-                  ).grid(row=0, column=3, sticky="w", padx=(0, 6))
-        latest_e = ttk.Entry(inp, width=32, font=(MONO, 10))
-        latest_e.grid(row=0, column=4, sticky="w", padx=(0, 6))
-        def _browse_latest():
-            path = filedialog.askdirectory(title="選擇 Latest 資料夾（較新的快照）")
-            if path:
-                latest_e.delete(0, "end")
-                latest_e.insert(0, path)
-        ttk.Button(inp, text="Browse", command=_browse_latest).grid(row=0, column=5, padx=(0, 20))
-
-    btn = ttk.Button(inp, text="▶  Compute", style="Accent.TButton")
-    btn.grid(row=0, column=7)
+        btn = ttk.Button(inp, text="▶  Compute", style="Accent.TButton")
+        btn.grid(row=0, column=3)
 
     # ── Preset filter buttons ───────────────────────
     preset_row = ttk.Frame(main)
@@ -231,7 +238,7 @@ def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str)
     ttk.Label(preset_row, text="快速篩選：", font=FONT_LABEL).pack(side="left", padx=(0, 8))
 
     DEFAULT_PRESET = "code"
-    preset_btns = []  # enabled once a diff has been computed
+    preset_btns = []  # enabled once a result has been computed
 
     # ── Filter panel (categorised checkbox list, populated after compute) ──
     filter_panel = ttk.Frame(main)
@@ -297,21 +304,32 @@ def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str)
 
     v_total   = tk.StringVar(value="—")
     v_types   = tk.StringVar(value="—")
-    v_added   = tk.StringVar(value="—")
-    v_deleted = tk.StringVar(value="—")
-    v_net     = tk.StringVar(value="—")
-    v_bytes   = tk.StringVar(value="—")
     v_binary  = tk.StringVar(value="—")
 
-    card_defs = [
-        ("總檔案數",    v_total),
-        ("副檔名種類",  v_types),
-        ("新增行（+）", v_added),
-        ("刪除行（-）", v_deleted),
-        ("淨變動行",    v_net),
-        ("位元組變動",  v_bytes),
-        ("Binary 檔數", v_binary),
-    ]
+    if mode == "git":
+        v_added   = tk.StringVar(value="—")
+        v_deleted = tk.StringVar(value="—")
+        v_net     = tk.StringVar(value="—")
+        v_bytes   = tk.StringVar(value="—")
+        card_defs = [
+            ("總檔案數",    v_total),
+            ("副檔名種類",  v_types),
+            ("新增行（+）", v_added),
+            ("刪除行（-）", v_deleted),
+            ("淨變動行",    v_net),
+            ("位元組變動",  v_bytes),
+            ("Binary 檔數", v_binary),
+        ]
+    else:
+        v_lines = tk.StringVar(value="—")
+        v_size  = tk.StringVar(value="—")
+        card_defs = [
+            ("總檔案數",    v_total),
+            ("副檔名種類",  v_types),
+            ("總行數",      v_lines),
+            ("總大小",      v_size),
+            ("Binary 檔數", v_binary),
+        ]
     for col, (lbl, var) in enumerate(card_defs):
         c = _make_card(cards_frm, lbl, var)
         c.grid(row=0, column=col, padx=(0, 8), sticky="nsew")
@@ -329,28 +347,35 @@ def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str)
     tv_frm.columnconfigure(0, weight=1)
     tv_frm.rowconfigure(0, weight=1)
 
-    cols = ("ext", "cat", "files", "binary_f", "added", "deleted", "net", "bytes", "sample")
-    hdrs = {
-        "ext":      "副檔名",
-        "cat":      "分類",
-        "files":    "檔案總數",
-        "binary_f": "Binary",
-        "added":    "＋新增行",
-        "deleted":  "－刪除行",
-        "net":      "淨變動",
-        "bytes":    "位元組差異",
-        "sample":   "範例檔案",
-    }
-    widths = {
-        "ext": 95, "cat": 110, "files": 68, "binary_f": 60,
-        "added": 82, "deleted": 82, "net": 82,
-        "bytes": 110, "sample": 0,
-    }
-    anchors = {
-        "ext": "w", "cat": "w", "files": "e", "binary_f": "e",
-        "added": "e", "deleted": "e", "net": "e",
-        "bytes": "e", "sample": "w",
-    }
+    if mode == "git":
+        cols = ("ext", "cat", "files", "binary_f", "added", "deleted", "net", "bytes", "sample")
+        hdrs = {
+            "ext": "副檔名", "cat": "分類", "files": "檔案總數", "binary_f": "Binary",
+            "added": "＋新增行", "deleted": "－刪除行", "net": "淨變動",
+            "bytes": "位元組差異", "sample": "範例檔案",
+        }
+        widths = {
+            "ext": 95, "cat": 110, "files": 68, "binary_f": 60,
+            "added": 82, "deleted": 82, "net": 82, "bytes": 110, "sample": 0,
+        }
+        anchors = {
+            "ext": "w", "cat": "w", "files": "e", "binary_f": "e",
+            "added": "e", "deleted": "e", "net": "e", "bytes": "e", "sample": "w",
+        }
+    else:
+        cols = ("ext", "cat", "files", "binary_f", "lines", "bytes", "sample")
+        hdrs = {
+            "ext": "副檔名", "cat": "分類", "files": "檔案總數", "binary_f": "Binary",
+            "lines": "總行數", "bytes": "總大小", "sample": "範例檔案",
+        }
+        widths = {
+            "ext": 95, "cat": 110, "files": 68, "binary_f": 60,
+            "lines": 90, "bytes": 100, "sample": 0,
+        }
+        anchors = {
+            "ext": "w", "cat": "w", "files": "e", "binary_f": "e",
+            "lines": "e", "bytes": "e", "sample": "w",
+        }
 
     tree = ttk.Treeview(tv_frm, columns=cols, show="headings",
                         height=8, selectmode="browse")
@@ -402,40 +427,42 @@ def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str)
         """Render cards, table and summary using filtered ext set (no new calls)."""
         by_ext_local = {k: v for k, v in last_agg["by_ext"].items() if k in selected_exts}
 
-        # compute totals
-        total_added  = sum(v["added"]       for v in by_ext_local.values())
-        total_del    = sum(v["deleted"]      for v in by_ext_local.values())
-        total_bytes  = sum(v["bytes_change"] for v in by_ext_local.values())
-        total_binary = sum(v["binary"]       for v in by_ext_local.values())
-        net_lines    = total_added - total_del
-        shown_files  = sum(v["files"]        for v in by_ext_local.values())
+        shown_files  = sum(v["files"]  for v in by_ext_local.values())
+        total_binary = sum(v["binary"] for v in by_ext_local.values())
 
-        # update cards
-        v_total  .set(str(shown_files))
-        v_types  .set(str(len(by_ext_local)))
-        v_added  .set(f"+{total_added:,}")
-        v_deleted.set(f"-{total_del:,}")
-        v_net    .set(_fmt_net(net_lines))
-        v_bytes  .set(_fmt_bytes(total_bytes))
-        v_binary .set(str(total_binary))
+        v_total .set(str(shown_files))
+        v_types .set(str(len(by_ext_local)))
+        v_binary.set(str(total_binary))
+
+        if mode == "git":
+            total_added = sum(v["added"]       for v in by_ext_local.values())
+            total_del   = sum(v["deleted"]      for v in by_ext_local.values())
+            total_bytes = sum(v["bytes_change"] for v in by_ext_local.values())
+            net_lines   = total_added - total_del
+            v_added  .set(f"+{total_added:,}")
+            v_deleted.set(f"-{total_del:,}")
+            v_net    .set(_fmt_net(net_lines))
+            v_bytes  .set(_fmt_bytes(total_bytes))
+        else:
+            total_lines = sum(v["lines"] for v in by_ext_local.values())
+            total_size  = sum(v["bytes"] for v in by_ext_local.values())
+            v_lines.set(f"{total_lines:,}")
+            v_size .set(_fmt_bytes_abs(total_size))
 
         # fill table
         tree.delete(*tree.get_children())
         for i, (ext, v) in enumerate(sorted(by_ext_local.items(), key=lambda x: -x[1]["files"])):
-            net = v["added"] - v["deleted"]
             tag = "odd" if i % 2 == 0 else "even"
             cat_label = file_categories.CATEGORIES[file_categories.categorize(ext)]["label"]
-            tree.insert("", "end", tags=(tag,), values=(
-                ext,
-                cat_label,
-                v["files"],
-                v["binary"] if v["binary"] else "",
-                v["added"],
-                v["deleted"],
-                _fmt_net(net),
-                _fmt_bytes(v["bytes_change"]),
-                ", ".join(v["sample"]),
-            ))
+            if mode == "git":
+                net = v["added"] - v["deleted"]
+                values = (ext, cat_label, v["files"], v["binary"] if v["binary"] else "",
+                          v["added"], v["deleted"], _fmt_net(net),
+                          _fmt_bytes(v["bytes_change"]), ", ".join(v["sample"]))
+            else:
+                values = (ext, cat_label, v["files"], v["binary"] if v["binary"] else "",
+                          f"{v['lines']:,}", _fmt_bytes_abs(v["bytes"]), ", ".join(v["sample"]))
+            tree.insert("", "end", tags=(tag,), values=values)
 
         # update summary text
         summary_txt.configure(state="normal")
@@ -444,31 +471,41 @@ def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str)
             summary_txt.insert("end", text, tag)
         DIV = "─" * 78 + "\n"
         w(DIV, "dim")
-        w("  diff  ", "bold")
-        w(last_agg.get("init_ref", ""), "acc"); w("  →  ", "dim"); w(last_agg.get("latest_ref", "") + "\n", "acc")
+        if mode == "git":
+            w("  diff  ", "bold")
+            w(last_agg.get("init_ref", ""), "acc"); w("  →  ", "dim"); w(last_agg.get("latest_ref", "") + "\n", "acc")
 
-        # time range if available
-        init_iso   = last_agg.get("init_time") or ""
-        latest_iso = last_agg.get("latest_time") or ""
-        dur_h      = last_agg.get("duration_human") or ""
-        if init_iso and latest_iso:
-            w(DIV, "dim")
-            w(f"  時間範圍      ", "dim"); w(f"{init_iso}  →  {latest_iso}\n", "acc")
-            w(f"  持續時間      ", "dim"); w(f"{dur_h}\n", "bold")
-            if last_agg.get("time_is_estimated"):
-                w("  （＊依檔案最後修改時間估算，非精確時間戳記）\n", "dim")
+            init_iso   = last_agg.get("init_time") or ""
+            latest_iso = last_agg.get("latest_time") or ""
+            dur_h      = last_agg.get("duration_human") or ""
+            if init_iso and latest_iso:
+                w(DIV, "dim")
+                w(f"  時間範圍      ", "dim"); w(f"{init_iso}  →  {latest_iso}\n", "acc")
+                w(f"  持續時間      ", "dim"); w(f"{dur_h}\n", "bold")
+        else:
+            w("  snapshot  ", "bold")
+            w(last_agg.get("folder_ref", "") + "\n", "acc")
+
+            scan_time = last_agg.get("scan_time") or ""
+            if scan_time:
+                w(DIV, "dim")
+                w(f"  掃描時間      ", "dim"); w(f"{scan_time}\n", "acc")
 
         w(DIV, "dim")
-        w(f"  總共變動檔案   ", "dim"); w(f"{shown_files}\n", "bold")
+        w(f"  總共檔案數     ", "dim"); w(f"{shown_files}\n", "bold")
         w(f"  副檔名種類     ", "dim"); w(f"{len(by_ext_local)}\n", "bold")
         w(f"  Binary 檔案    ", "dim"); w(f"{total_binary}\n", "bold")
         w("\n")
-        w(f"  新增行（+）    ", "dim"); w(f"+{total_added:,}\n", "grn")
-        w(f"  刪除行（-）    ", "dim"); w(f"-{total_del:,}\n",   "red")
-        w(f"  淨變動         ", "dim")
-        w(f"{_fmt_net(net_lines)}\n", "grn" if net_lines >= 0 else "red")
-        w("\n")
-        w(f"  位元組變動合計  ", "dim"); w(f"{_fmt_bytes(total_bytes)}\n", "bold")
+        if mode == "git":
+            w(f"  新增行（+）    ", "dim"); w(f"+{total_added:,}\n", "grn")
+            w(f"  刪除行（-）    ", "dim"); w(f"-{total_del:,}\n",   "red")
+            w(f"  淨變動         ", "dim")
+            w(f"{_fmt_net(net_lines)}\n", "grn" if net_lines >= 0 else "red")
+            w("\n")
+            w(f"  位元組變動合計  ", "dim"); w(f"{_fmt_bytes(total_bytes)}\n", "bold")
+        else:
+            w(f"  總行數         ", "dim"); w(f"{total_lines:,}\n", "bold")
+            w(f"  總大小         ", "dim"); w(f"{_fmt_bytes_abs(total_size)}\n", "bold")
 
         # show excluded extensions
         all_exts = set(last_agg["by_ext"].keys())
@@ -527,19 +564,18 @@ def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str)
             var.trace_add("write", on_cb_change)
 
     def run():
-        init   = init_e.get().strip()
-        latest = latest_e.get().strip()
-
         if mode == "git":
+            init   = init_e.get().strip()
+            latest = latest_e.get().strip()
             repo = repo_e.get().strip() or None
             if not init or not latest:
                 messagebox.showwarning("Input missing",
                                        "請輸入 Init 與 Latest commit hash 或 ref")
                 return
         else:
-            if not init or not latest or not os.path.isdir(init) or not os.path.isdir(latest):
-                messagebox.showwarning("Input missing",
-                                       "請選擇有效的 Init 與 Latest 資料夾路徑")
+            folder = folder_e.get().strip()
+            if not folder or not os.path.isdir(folder):
+                messagebox.showwarning("Input missing", "請選擇有效的資料夾路徑")
                 return
 
         btn.state(["disabled"])
@@ -550,7 +586,7 @@ def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str)
             if mode == "git":
                 agg = git_utils.aggregate_by_extension(init, latest, repo_path=repo)
             else:
-                agg = snapshot_utils.aggregate_by_extension(init, latest)
+                agg = snapshot_utils.scan_by_extension(folder)
         except Exception as exc:
             status_var.set("Error")
             messagebox.showerror("Error", str(exc))
@@ -560,8 +596,11 @@ def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str)
         # cache aggregation
         last_agg.clear()
         last_agg.update(agg)
-        last_agg["init_ref"] = init
-        last_agg["latest_ref"] = latest
+        if mode == "git":
+            last_agg["init_ref"] = init
+            last_agg["latest_ref"] = latest
+        else:
+            last_agg["folder_ref"] = folder
 
         _rebuild_filter_panel(agg)
 
@@ -573,14 +612,23 @@ def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str)
             b.state(["!disabled"])
 
         btn.state(["!disabled"])
-        total_added = sum(v["added"]   for v in agg["by_ext"].values())
-        total_del   = sum(v["deleted"] for v in agg["by_ext"].values())
-        total_bytes = sum(v["bytes_change"] for v in agg["by_ext"].values())
-        status_var.set(
-            f"Done — {agg['total_files']} files  |  "
-            f"+{total_added:,} / -{total_del:,} lines  |  "
-            f"{_fmt_bytes(total_bytes)}"
-        )
+        if mode == "git":
+            total_added = sum(v["added"]   for v in agg["by_ext"].values())
+            total_del   = sum(v["deleted"] for v in agg["by_ext"].values())
+            total_bytes = sum(v["bytes_change"] for v in agg["by_ext"].values())
+            status_var.set(
+                f"Done — {agg['total_files']} files  |  "
+                f"+{total_added:,} / -{total_del:,} lines  |  "
+                f"{_fmt_bytes(total_bytes)}"
+            )
+        else:
+            total_lines = sum(v["lines"] for v in agg["by_ext"].values())
+            total_size  = sum(v["bytes"] for v in agg["by_ext"].values())
+            status_var.set(
+                f"Done — {agg['total_files']} files  |  "
+                f"{total_lines:,} lines  |  "
+                f"{_fmt_bytes_abs(total_size)}"
+            )
 
     btn.configure(command=run)
 
@@ -590,7 +638,7 @@ def _build_compute_panel(parent: ttk.Frame, status_var: tk.StringVar, mode: str)
 # ══════════════════════════════════════════════
 
 def build_ui(root: tk.Tk) -> tk.Tk:
-    root.title("diff_showcaser — Git Diff Statistics — v1.2.0")
+    root.title("diff_showcaser — Git Diff Statistics — v1.3.0")
     root.configure(bg=BG)
     root.minsize(1120, 860)
     root.columnconfigure(0, weight=1)
@@ -604,7 +652,7 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     ttk.Label(hdr, text="🔍  diff_showcaser", style="Hdr.TLabel"
               ).grid(row=0, column=0, sticky="w")
     ttk.Label(hdr,
-              text="Compare two snapshots · see line changes & byte deltas per file type",
+              text="Git diff between two commits, or census a single folder · line & byte stats per file type",
               style="HdrS.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 0))
 
     # ── Status bar (shared across tabs) ─────────────
@@ -619,7 +667,7 @@ def build_ui(root: tk.Tk) -> tk.Tk:
     tab_git = ttk.Frame(notebook)
     tab_fs  = ttk.Frame(notebook)
     notebook.add(tab_git, text="Git 版控比較")
-    notebook.add(tab_fs,  text="資料夾快照估算（無版控）")
+    notebook.add(tab_fs,  text="資料夾快照（當下統計）")
 
     _build_compute_panel(tab_git, status_var, mode="git")
     _build_compute_panel(tab_fs,  status_var, mode="fs")
