@@ -1,0 +1,374 @@
+key,zh-tw,zh-cn,en
+_meta.display_name,繁體中文,简体中文,English
+app.title,Git Helper Pro - 進階Git版控小工具,Git Helper Pro - 高级Git版本管理工具,Git Helper Pro - Advanced Git Management Tool
+toolbar.new_project,+ 開啟新專案分頁,+ 打开新项目标签页,+ Open New Project Tab
+toolbar.language_label,語言：,语言：,Language:
+display.adog_title,Git Adog 圖表:,Git Adog 图表:,Git Adog Graph:
+display.terminal_title,執行輸出:,执行输出:,Output:
+display.refresh_btn,🔄 刷新,🔄 刷新,🔄 Refresh
+display.reflog_btn,🕒 Reflog,🕒 Reflog,🕒 Reflog
+quick.group_title,⚡ 快速執行,⚡ 快速执行,⚡ Quick Execute
+quick.execute_btn,執行,执行,Run
+group.rebase_control,🧩 Rebase 流程控制,🧩 Rebase 流程控制,🧩 Rebase Flow Control
+group.merge,🔗 Merge 合併,🔗 Merge 合并,🔗 Merge
+group.cherry_pick,🍒 Cherry-pick,🍒 Cherry-pick,🍒 Cherry-pick
+group.reset,⏪ Reset 回退,⏪ Reset 回退,⏪ Reset
+group.commit,📝 提交與暫存,📝 提交与暂存,📝 Commit & Stage
+group.push,✈️ 遠端推送,✈️ 远端推送,✈️ Remote Push
+group.stash,📦 Stash 緩衝區,📦 Stash 缓冲区,📦 Stash
+group.branch,🌿 Branch 分支管理,🌿 Branch 分支管理,🌿 Branch Management
+group.tag,🏷️ Tag 標籤管理,🏷️ Tag 标签管理,🏷️ Tag Management
+group.tools,🔍 狀態與工具,🔍 状态与工具,🔍 Status & Tools
+group.remote,🌐 Fetch / Pull,🌐 Fetch / Pull,🌐 Fetch / Pull
+btn.rebase_interactive,📝 互動模式 [-i],📝 交互模式 [-i],📝 Interactive [-i]
+btn.rebase_head4,-i HEAD~4,-i HEAD~4,-i HEAD~4
+btn.rebase_head8,-i HEAD~8,-i HEAD~8,-i HEAD~8
+btn.rebase_head14,-i HEAD~14,-i HEAD~14,-i HEAD~14
+btn.rebase_branch,📍 指定位置,📍 指定位置,📍 Target Branch
+btn.rebase_onto,🧬 [--onto],🧬 [--onto],🧬 [--onto]
+btn.continue,⏩ Continue,⏩ Continue,⏩ Continue
+btn.abort,🛑 Abort,🛑 Abort,🛑 Abort
+btn.skip,⏭️ Skip,⏭️ Skip,⏭️ Skip
+btn.merge_branch,🔗 Merge 分支,🔗 Merge 分支,🔗 Merge Branch
+btn.cherry_pick_hash,🍒 Cherry-pick Hash,🍒 Cherry-pick Hash,🍒 Cherry-pick Hash
+btn.restore_from_commit,🔄 從 Hash 還原檔案,🔄 从 Hash 还原文件,🔄 Restore from Hash
+btn.soft_head1,Soft HEAD~1,Soft HEAD~1,Soft HEAD~1
+btn.soft_head2,Soft HEAD~2,Soft HEAD~2,Soft HEAD~2
+btn.soft_reset,🧨 Soft (保留變更),🧨 Soft (保留变更),🧨 Soft (Keep Changes)
+btn.hard_reset,💣 Hard (捨棄變更),💣 Hard (丢弃变更),💣 Hard (Discard Changes)
+btn.fixup,🩹 Fixup (f),🩹 Fixup (f),🩹 Fixup (f)
+btn.squash,📦 Squash (s),📦 Squash (s),📦 Squash (s)
+btn.fast_commit,⚡ FastCommit (stash),⚡ FastCommit (stash),⚡ FastCommit (stash)
+btn.add_files,➕ Add 選擇檔案,➕ Add 选择文件,➕ Add Files
+btn.commit_msg,💬 Commit -m,💬 Commit -m,💬 Commit -m
+btn.amend,✏️ Amend,✏️ Amend,✏️ Amend
+btn.push,🛰️ Push,🛰️ Push,🛰️ Push
+btn.force_push,💥 Force Push,💥 Force Push,💥 Force Push
+btn.push_tags,🏷️ Push Tags,🏷️ Push Tags,🏷️ Push Tags
+btn.push_panel,🚀 Push Panel,🚀 Push Panel,🚀 Push Panel
+btn.fetch,🌐 Fetch,🌐 Fetch,🌐 Fetch
+btn.pull,⬇️ Pull,⬇️ Pull,⬇️ Pull
+btn.stash_list,📚 Stash List,📚 Stash List,📚 Stash List
+btn.stash_pop,📤 Stash Pop,📤 Stash Pop,📤 Stash Pop
+btn.stash_save,📥 Stash Save,📥 Stash Save,📥 Stash Save
+btn.stash_clear,🧹 Stash Clear,🧹 Stash Clear,🧹 Stash Clear
+btn.stash_drop,🗑️ Stash Drop,🗑️ Stash Drop,🗑️ Stash Drop
+btn.branch_list,📋 List,📋 List,📋 List
+btn.branch_create,📌 Create,📌 Create,📌 Create
+btn.prune,🧹 Prune,🧹 Prune,🧹 Prune
+btn.delete_branch,🗑️ Delete Branch,🗑️ Delete Branch,🗑️ Delete Branch
+btn.rename_branch,✏️ Rename,✏️ 重命名,✏️ Rename
+btn.tag_list,📋 List Tags,📋 List Tags,📋 List Tags
+btn.tag_create,📌 Create Tag,📌 Create Tag,📌 Create Tag
+btn.delete_tag,🗑️ Delete Tag,🗑️ Delete Tag,🗑️ Delete Tag
+btn.rename_tag,✏️ Move Tag,✏️ 移动 Tag,✏️ Move Tag
+btn.delete_panel,🗑️ Delete Panel,🗑️ Delete Panel,🗑️ Delete Panel
+btn.status,📢 Status,📢 Status,📢 Status
+btn.checkouts,📂 Checkouts,📂 Checkouts,📂 Checkouts
+btn.diff,📜 Diff,📜 Diff,📜 Diff
+btn.clean_fd,🗑️ Clean -fd,🗑️ Clean -fd,🗑️ Clean -fd
+confirm.stash_clear,清空 stash,清空 stash,Clear all stash
+confirm.stash_drop,刪除 stash,删除 stash,Drop stash entry
+confirm.clean_fd,清理未追蹤檔案,清理未跟踪文件,Clean untracked files
+msg.invalid_repo,無效的 Git 儲存庫,无效的 Git 仓库,Invalid Git repository
+msg.error_title,錯誤,错误,Error
+msg.undefined_cmd,未定義的指令: {key},未定义的指令: {key},Undefined command: {key}
+msg.run_error_title,執行失敗,执行失败,Execution Failed
+msg.run_error_msg,執行指令時發生錯誤，請查看 Terminal 日誌。,执行指令时发生错误，请查看 Terminal 日志。,Failed to execute command. Check the Terminal log.
+msg.done,完成,完成,Done
+msg.confirm_delete_title,確認刪除,确认删除,Confirm Delete
+msg.warning_title,警告,警告,Warning
+msg.info_title,提示,提示,Info
+msg.switch_success,已切換到: {target},已切换到: {target},Switched to: {target}
+msg.switch_fail_title,切換失敗,切换失败,Switch Failed
+msg.switch_fail_msg,切換分支失敗：\n{stderr},切换分支失败：\n{stderr},Branch switch failed:\n{stderr}
+msg.checkout_error,執行 checkout 時發生錯誤，請查看 Terminal 日誌。,执行 checkout 时发生错误，请查看 Terminal 日志。,Checkout failed. Check the Terminal log.
+msg.operation_aborted,操作中止,操作中止,Operation Aborted
+msg.stage_empty,暫存區 (Stage) 目前沒有任何檔案！\n請先使用 'Add 選擇檔案' 將變更加入暫存。,暂存区 (Stage) 目前没有任何文件！\n请先使用 Add 选择文件 将变更加入暂存。,Staging area (Stage) currently has no files!\nPlease use Add to stage files first.
+dialog.shared.info_section,📌 指令說明,📌 指令说明,📌 Instructions
+dialog.shared.branch_section,🌿 目前分支,🌿 当前分支,🌿 Current Branch
+dialog.shared.params_section,⚙️ 參數設定,⚙️ 参数设置,⚙️ Parameters
+dialog.shared.preview_section,📋 指令預覽,📋 指令预览,📋 Command Preview
+dialog.shared.refresh_btn,↻ Refresh,↻ 刷新,↻ Refresh
+dialog.shared.execute_btn,✓ 執行,✓ 执行,✓ Execute
+dialog.shared.cancel_btn,✗ 取消,✗ 取消,✗ Cancel
+dialog.shared.no_repo,(未選擇),(未选择),(none selected)
+dialog.shared.unknown_branch,(unknown),(unknown),(unknown)
+dialog.shared.missing_param_title,參數缺失,参数缺失,Missing Parameter
+dialog.shared.no_action_title,未選擇操作,未选择操作,No Action Selected
+dialog.params.title_fmt,設定參數 - {cmd},设置参数 - {cmd},Set Parameters - {cmd}
+dialog.params.header,請填寫指令參數,请填写指令参数,Fill in command parameters
+dialog.params.submit_btn,✓ 執行,✓ 执行,✓ Execute
+dialog.params.cancel_btn,✗ 取消,✗ 取消,✗ Cancel
+dialog.params.incomplete_title,參數不完整,参数不完整,Incomplete Parameters
+dialog.params.incomplete_msg,請填寫所有標記 * 的必填欄位！,请填写所有标记 * 的必填字段！,Please fill in all required * fields!
+dialog.checkouts.title,Checkouts,Checkouts,Checkouts
+dialog.checkouts.tab_switch,🔁 Checkout (分支/Tag/Commit),🔁 Checkout (分支/Tag/Commit),🔁 Checkout (Branch/Tag/Commit)
+dialog.checkouts.tab_file,🗂️ Checkout File,🗂️ Checkout File,🗂️ Checkout File
+dialog.checkouts.desc1,git checkout <target>      切換到分支、tag 或 commit,git checkout <target>      切换到分支、tag 或 commit,git checkout <target>      Switch to branch tag or commit
+dialog.checkouts.desc2,git checkout -b <name>     建立新分支並立刻切換過去,git checkout -b <name>     新建分支并立刻切换过去,git checkout -b <name>     Create and switch to new branch
+dialog.checkouts.desc3,支援：本地 branch、origin/branch、tag、commit hash,支持：本地 branch、origin/branch、tag、commit hash,Supports: local branch origin/branch tag commit hash
+dialog.checkouts.search_section,🔍 搜尋目標,🔍 搜索目标,🔍 Search Target
+dialog.checkouts.filter_hint,即時過濾：輸入關鍵字篩選 branch / origin/branch / tag / hash,即时过滤：输入关键字筛选 branch / origin/branch / tag / hash,Filter: type keyword to search branch / origin/branch / tag / hash
+dialog.checkouts.new_branch_cb,建立新分支 (-b),新建分支 (-b),Create new branch (-b)
+dialog.checkouts.execute_btn,✓ 執行 Checkout,✓ 执行 Checkout,✓ Execute Checkout
+dialog.checkouts.missing_msg,請輸入或選擇分支、tag 或 commit hash,请输入或选择分支、tag 或 commit hash,Please enter or select a branch tag or commit hash
+dialog.checkouts.success_msg,已切換到: {target},已切换到: {target},Switched to: {target}
+dialog.checkouts.fail_title,切換失敗,切换失败,Checkout Failed
+dialog.checkouts.fail_msg,切換失敗：\n{stderr},切换失败：\n{stderr},Checkout failed:\n{stderr}
+dialog.checkouts.file_desc1,git checkout <commit/branch> -- <file>,git checkout <commit/branch> -- <file>,git checkout <commit/branch> -- <file>
+dialog.checkouts.file_desc2,從特定 commit 或 branch 還原特定檔案（留空來源 = 從 HEAD 還原）,从特定 commit 或 branch 还原特定文件（留空来源 = 从 HEAD 还原）,Restore a specific file from a commit or branch (empty = HEAD)
+dialog.checkouts.source_label,來源 Commit/Branch,来源 Commit/Branch,Source Commit/Branch
+dialog.checkouts.source_hint,留空或填 HEAD = 從最新狀態還原,留空或填 HEAD = 从最新状态还原,Leave empty or use HEAD to restore from latest state
+dialog.checkouts.file_label,檔案路徑 *,文件路径 *,File Path *
+dialog.checkouts.file_execute,✓ 執行 Checkout File,✓ 执行 Checkout File,✓ Execute Checkout File
+dialog.checkouts.file_missing,請輸入或選擇檔案路徑,请输入或选择文件路径,Please enter or select a file path
+dialog.checkouts.file_success,已從 {src} 還原: {file},已从 {src} 还原: {file},Restored from {src}: {file}
+dialog.checkouts.file_fail_title,還原失敗,还原失败,Restore Failed
+dialog.checkouts.file_fail_msg,還原失敗：\n{stderr},还原失败：\n{stderr},Restore failed:\n{stderr}
+dialog.danger.title,⚠️ 危險操作確認,⚠️ 危险操作确认,⚠️ Dangerous Operation Confirmation
+dialog.danger.icon,⚠️,⚠️,⚠️
+dialog.danger.prompt,確定要執行危險操作嗎？\n\n操作: {action},确定要执行危险操作吗？\n\n操作: {action},Are you sure?\n\nAction: {action}
+dialog.danger.no_ask,1 分鐘內不再詢問,1 分钟内不再询问,Do not ask again for 1 minute
+dialog.danger.confirm_btn,✓ 確定執行,✓ 确定执行,✓ Confirm
+dialog.danger.cancel_btn,✗ 取消,✗ 取消,✗ Cancel
+dialog.danger.time_label,確認後暫時跳過：,确认后暂时跳过：,Skip confirmation for:
+dialog.danger.time_1min,1 分鐘,1 分钟,1 Minute
+dialog.danger.time_5min,5 分鐘,5 分钟,5 Minutes
+dialog.danger.time_15min,15 分鐘,15 分钟,15 Minutes
+dialog.danger.time_30min,30 分鐘,30 分钟,30 Minutes
+dialog.danger.rebase_title,⚠️ Rebase 危險操作確認,⚠️ Rebase 危险操作确认,⚠️ Rebase — Danger Confirmation
+dialog.danger.rebase_warn,Rebase 將重寫提交歷史，此操作難以完全撤銷。\n確保你了解影響範圍，且遠端尚未有其他人使用此分支。,Rebase 将重写提交历史，此操作难以完全撤销。\n确保你了解影响范围，且远端尚未有其他人使用此分支。,Rebase rewrites commit history and is hard to fully undo.\nMake sure you understand the scope and no one else uses this branch remotely.
+dialog.danger.reset_title,⚠️ Reset 危險操作確認,⚠️ Reset 危险操作确认,⚠️ Reset — Danger Confirmation
+dialog.danger.reset_warn,Hard Reset 將永久丟棄所有未提交的工作區變更與暫存內容。\n此操作無法撤銷，請確認你已備份重要資料。,Hard Reset 将永久丢弃所有未提交的工作区变更与暂存内容。\n此操作无法撤销，请确认你已备份重要数据。,Hard Reset permanently discards all uncommitted changes and staged content.\nThis cannot be undone. Make sure you have backed up important data.
+dialog.danger.delete_branch_title,⚠️ 刪除分支確認,⚠️ 删除分支确认,⚠️ Delete Branch Confirmation
+dialog.danger.delete_branch_warn,刪除分支後，相關的提交記錄可能難以找回（特別是已推送至遠端的分支）。\n請確認分支不再需要或已合併至目標分支。,删除分支后，相关的提交记录可能难以找回（特别是已推送至远端的分支）。\n请确认分支不再需要或已合并至目标分支。,Deleted branches may be hard to recover (especially if pushed to remote).\nConfirm the branch is no longer needed or has been merged.
+dialog.danger.force_push_title,⚠️ Force Push 確認,⚠️ Force Push 确认,⚠️ Force Push Confirmation
+dialog.danger.force_push_warn,Force Push 將強制覆蓋遠端提交歷史，可能使其他協作者的本地分支失效。\n建議優先使用 --force-with-lease 以降低風險。,Force Push 将强制覆盖远端提交历史，可能使其他协作者的本地分支失效。\n建议优先使用 --force-with-lease 以降低风险。,Force Push will overwrite remote commit history and may break collaborators' local branches.\nConsider using --force-with-lease to reduce risk.
+dialog.danger.operation_label,操作：,操作：,Operation:
+dialog.merge.title,Merge 合併分支,Merge 合并分支,Merge Branch
+dialog.merge.header_cmd,git merge <來源分支>  [--no-ff | --squash | --ff-only],git merge <来源分支>  [--no-ff | --squash | --ff-only],git merge <source>  [--no-ff | --squash | --ff-only]
+dialog.merge.general_desc,將指定分支的提交合併進目前所在的分支,将指定分支的提交合并进当前分支,Merge commits from the specified branch into the current branch
+dialog.merge.desc1,git merge <branch>              Git 自行決定策略,git merge <branch>              Git 自行决定策略,git merge <branch>              Git decides merge strategy
+dialog.merge.desc2,git merge --no-ff <branch>      強制產生 merge commit,git merge --no-ff <branch>      强制产生 merge commit,git merge --no-ff <branch>      Force a merge commit
+dialog.merge.desc3,git merge --squash <branch>     壓縮成一筆，需手動 commit,git merge --squash <branch>     压缩成一笔，需手动 commit,git merge --squash <branch>     Squash commits manual commit needed
+dialog.merge.desc4,git merge --ff-only <branch>    只允許 fast-forward,git merge --ff-only <branch>    只允许 fast-forward,git merge --ff-only <branch>    Fast-forward only; fails otherwise
+dialog.merge.branch_hint,Merge 操作將合入這個分支,Merge 操作将合入这个分支,Merge operation will merge into this branch
+dialog.merge.source_label,來源分支 / Commit *,来源分支 / Commit *,Source Branch / Commit *
+dialog.merge.source_hint,輸入或選擇要合入的來源分支,输入或选择要合入的来源分支,Enter or select the source branch to merge in
+dialog.merge.source_hint2,要合併進來的分支（合進目前分支）,要合并进来的分支（合进当前分支）,Branch to merge in (merges into current branch)
+dialog.merge.switch_btn,↪ 先切換到此分支,↪ 先切换到此分支,↪ Switch to this branch first
+dialog.merge.mode_label,合併模式,合并模式,Merge mode
+dialog.merge.mode_default,一般 (預設),一般（默认）,Default (auto)
+dialog.merge.mode_noff,--no-ff (強制 merge commit),--no-ff（强制 merge commit）,--no-ff (force merge commit)
+dialog.merge.mode_squash,--squash (壓縮後手動 commit),--squash（压缩后手动 commit）,--squash (squash then commit manually)
+dialog.merge.mode_ffonly,--ff-only (只允許 fast-forward),--ff-only（只允许 fast-forward）,--ff-only (fast-forward only)
+dialog.merge.mode_default_radio,一般 (預設),一般（默认）,Default (auto)
+dialog.merge.mode_noff_radio,強制 merge commit,强制 merge commit,Force merge commit
+dialog.merge.mode_squash_radio,壓縮 commit (squash),压缩 commit (squash),Squash commit
+dialog.merge.mode_ffonly_radio,僅 fast-forward,仅 fast-forward,Fast-forward only
+dialog.merge.mode_default_hint,Git 自行決定合並方式,Git 自行决定合并方式,Git decides: fast-forward if possible else merge commit
+dialog.merge.mode_noff_hint,保留分支歷史，推薦 feature → main,保留分支历史，推荐 feature -> main,Keeps branch history recommended for feature -> main
+dialog.merge.mode_squash_hint,壓成一筆需手動 commit,压成一笔需手动 commit,Squash into one manual commit required
+dialog.merge.mode_ffonly_hint,無法 FF 則失敗，嚴格線性,无法 FF 则失败，严格线性,Fails if FF not possible strict linear history
+dialog.merge.execute_btn,✓ 執行 Merge,✓ 执行 Merge,✓ Execute Merge
+dialog.merge.continue_btn,▶️ Continue,▶️ Continue,▶️ Continue
+dialog.merge.abort_btn,🛑 Abort,🛑 Abort,🛑 Abort
+dialog.merge.missing_source,請填寫來源分支,请填写来源分支,Please enter the source branch
+dialog.merge.switch_missing,來源分支欄位為空，請先填寫要切換的分支,来源分支字段为空，请先填写要切换的分支,Source branch field is empty. Please fill it in first.
+dialog.merge.switch_fail_title,切換失敗,切换失败,Switch Failed
+dialog.merge.switch_fail_msg,切換分支失敗：\n{stderr},切换分支失败：\n{stderr},Branch switch failed:\n{stderr}
+dialog.merge.switch_success,已切換到: {target},已切换到: {target},Switched to: {target}
+dialog.merge.incomplete_msg,請選擇來源分支或輸入 commit hash！,请选择来源分支或输入 commit hash！,Please select a source branch or enter a commit hash!
+dialog.rebase_onto.title,Rebase --onto,Rebase --onto,Rebase --onto
+dialog.rebase_onto.desc1,git rebase --onto <newbase> <upstream> [<branch>],git rebase --onto <newbase> <upstream> [<branch>],git rebase --onto <newbase> <upstream> [<branch>]
+dialog.rebase_onto.desc2,把 upstream 之後（不含）到 branch 之間的 commit，搬到 newbase 的上面,把 upstream 之后（不含）到 branch 之间的 commit，搬到 newbase 的上面,Moves commits after upstream (exclusive) up to branch onto newbase
+dialog.rebase_onto.desc3,範例：只把 feature 最後 3 個 commit 搬到 main → newbase=main，upstream=HEAD~3,示例：只把 feature 最后 3 个 commit 搬到 main -> newbase=main，upstream=HEAD~3,Example: Move last 3 commits of feature onto main -> newbase=main upstream=HEAD~3
+dialog.rebase_onto.branch_hint,rebase 操作會套用到這個分支上（或 Branch 欄指定的分支）,rebase 操作会套用到这个分支上（或 Branch 栏指定的分支）,Rebase applies to this branch (or the Branch field below)
+dialog.rebase_onto.newbase_label,New Base *,New Base *,New Base *
+dialog.rebase_onto.newbase_hint,commit 要搬到哪裡的上面（目標基底，例如：main、dev、某個 hash）,commit 要搬到哪里的上面（目标基底，例如：main、dev、某个 hash）,Where commits should land (target base) e.g. main dev hash
+dialog.rebase_onto.upstream_label,Upstream *,Upstream *,Upstream *
+dialog.rebase_onto.upstream_hint,搬移起點（不含此點）：此點之後的 commit 才會被搬移（例如：HEAD~3、某個 hash）,搬移起点（不含此点）：此点之后的 commit 才会被搬移（例如：HEAD~3）,Start point (exclusive): commits after this will be moved e.g. HEAD~3
+dialog.rebase_onto.branch_label,Branch,Branch,Branch
+dialog.rebase_onto.branch_field_hint,要搬移的分支（留空 = 使用當前分支 HEAD）,要搬移的分支（留空 = 使用当前分支 HEAD）,Branch to rebase (empty = current HEAD)
+dialog.rebase_onto.switch_btn,↪ 先切換到此分支,↪ 先切换到此分支,↪ Switch to this branch first
+dialog.rebase_onto.execute_btn,✓ 執行 Rebase --onto,✓ 执行 Rebase --onto,✓ Execute Rebase --onto
+dialog.rebase_onto.missing_msg,New Base 與 Upstream 為必填欄位！,New Base 与 Upstream 为必填字段！,New Base and Upstream are required fields!
+dialog.rebase_onto.switch_field_empty,Branch 欄位為空，請先填寫要切換的分支,Branch 字段为空，请先填写要切换的分支,Branch field is empty. Please fill it in first.
+dialog.delete_branch.title,Delete Branch,Delete Branch,Delete Branch
+dialog.delete_branch.name_label,分支名稱 *（可多個，空格分隔）,分支名称 *（可多个，空格分隔）,Branch Name * (multiple separated by spaces)
+dialog.delete_branch.del_local_cb,Delete local branch,删除本地分支,Delete local branch
+dialog.delete_branch.del_remote_cb,Delete remote branch,删除远端分支,Delete remote branch
+dialog.delete_branch.remote_label,遠端名稱：,远端名称：,Remote name:
+dialog.delete_branch.execute_btn,🗑️ 執行刪除,🗑️ 执行删除,🗑️ Execute Delete
+dialog.delete_branch.missing_msg,請輸入分支名稱,请输入分支名称,Please enter a branch name
+dialog.delete_branch.no_action_msg,請至少勾選 Delete local 或 Delete remote,请至少勾选删除本地或删除远端,Please select at least Delete local or Delete remote
+dialog.delete_branch.confirm_msg,確定要執行以下操作？\n{preview},确定要执行以下操作？\n{preview},Are you sure you want to execute the following?\n{preview}
+dialog.delete_branch.done_msg,刪除操作已執行（請查看 Terminal 日誌確認結果）,删除操作已执行（请查看 Terminal 日志确认结果）,Delete operation executed (check Terminal log for results)
+dialog.delete_tag.title,Delete Tag,Delete Tag,Delete Tag
+dialog.delete_tag.name_label,Tag 名稱 *（可多個，空格分隔）,Tag 名称 *（可多个，空格分隔）,Tag Name * (multiple separated by spaces)
+dialog.delete_tag.del_local_cb,Delete local tag,删除本地 Tag,Delete local tag
+dialog.delete_tag.del_remote_cb,Delete remote tag,删除远端 Tag,Delete remote tag
+dialog.delete_tag.remote_label,遠端名稱：,远端名称：,Remote name:
+dialog.delete_tag.execute_btn,🗑️ 執行刪除,🗑️ 执行删除,🗑️ Execute Delete
+dialog.delete_tag.missing_msg,請輸入 Tag 名稱,请输入 Tag 名称,Please enter a tag name
+dialog.delete_tag.no_action_msg,請至少勾選 Delete local 或 Delete remote,请至少勾选删除本地或删除远端,Please select at least Delete local or Delete remote
+dialog.delete_tag.confirm_msg,確定要執行以下操作？\n{preview},确定要执行以下操作？\n{preview},Are you sure you want to execute the following?\n{preview}
+dialog.delete_tag.done_msg,刪除操作已執行（請查看 Terminal 日誌確認結果）,删除操作已执行（请查看 Terminal 日志确认结果）,Delete operation executed (check Terminal log for results)
+dialog.rename_branch.title,重命名分支,重命名分支,Rename Branch
+dialog.rename_branch.old_label,原分支名稱 *,原分支名称 *,Old Branch Name *
+dialog.rename_branch.new_label,新分支名稱 *,新分支名称 *,New Branch Name *
+dialog.rename_branch.remote_label,遠端名稱:,远端名称:,Remote:
+dialog.rename_branch.update_remote_cb,同步更新遠端（Push 新 + Delete 舊）,同步更新远端（Push 新 + Delete 旧）,Update Remote (Push new + Delete old)
+dialog.rename_branch.execute_btn,✓ 執行重命名,✓ 执行重命名,✓ Execute Rename
+dialog.rename_branch.old_required,請輸入原始分支名稱,请输入原始分支名称,Please enter old branch name
+dialog.rename_branch.new_required,請輸入新分支名稱,请输入新分支名称,Please enter new branch name
+dialog.rename_branch.done_msg,分支重命名完成（請查看 Terminal 確認結果）,分支重命名完成（请查看 Terminal 确认结果）,Rename completed (check Terminal)
+dialog.rename_branch.warn_remote,⚠️ 此分支在遠端也存在，建議勾選「同步更新遠端」。,⚠️ 此分支在远端也存在，建议勾选「同步更新远端」。,⚠️ This branch exists on remote. Consider enabling "Update Remote".
+dialog.rename_branch.preview_local,本地重命名: git branch -m {old} {new},本地重命名: git branch -m {old} {new},Local rename: git branch -m {old} {new}
+dialog.rename_branch.preview_remote,遠端更新: push {new} → delete {old} @ {remote},远端更新: push {new} → delete {old} @ {remote},Remote update: push {new} → delete {old} @ {remote}
+dialog.rename_tag.title,移動 / 重命名 Tag,移动 / 重命名 Tag,Move / Rename Tag
+dialog.rename_tag.old_label,原 Tag 名稱 *,原 Tag 名称 *,Old Tag Name *
+dialog.rename_tag.new_label,新 Tag 名稱 *,新 Tag 名称 *,New Tag Name *
+dialog.rename_tag.remote_label,遠端名稱:,远端名称:,Remote:
+dialog.rename_tag.update_remote_cb,同步更新遠端（Push 新 + Delete 舊）,同步更新远端（Push 新 + Delete 旧）,Update Remote (Push new + Delete old)
+dialog.rename_tag.execute_btn,✓ 執行移動 Tag,✓ 执行移动 Tag,✓ Execute Move Tag
+dialog.rename_tag.old_required,請輸入原始 Tag 名稱,请输入原始 Tag 名称,Please enter old tag name
+dialog.rename_tag.new_required,請輸入新 Tag 名稱,请输入新 Tag 名称,Please enter new tag name
+dialog.rename_tag.done_msg,Tag 移動完成（請查看 Terminal 確認結果）,Tag 移动完成（请查看 Terminal 确认结果）,Move completed (check Terminal)
+dialog.rename_tag.warn_remote,⚠️ 此 Tag 在遠端也存在，建議勾選「同步更新遠端」。,⚠️ 此 Tag 在远端也存在，建议勾选「同步更新远端」。,⚠️ This tag exists on remote. Consider enabling "Update Remote".
+dialog.push_panel.title,🚀 Push Panel,🚀 Push Panel,🚀 Push Panel
+dialog.push_panel.remote_label,遠端名稱:,远端名称:,Remote:
+dialog.push_panel.branches_section,📌 Local Branches,📌 本地分支,📌 Local Branches
+dialog.push_panel.tags_section,🏷️ Tags,🏷️ Tags,🏷️ Tags
+dialog.push_panel.force_col_header,Force,Force,Force
+dialog.push_panel.execute_btn,🚀 執行 Push,🚀 执行 Push,🚀 Execute Push
+dialog.push_panel.no_selection,請至少選擇一個分支或 Tag,请至少选择一个分支或 Tag,Please select at least one item
+dialog.push_panel.done_msg,Push 已執行（請查看 Terminal）,Push 已执行（请查看 Terminal）,Push executed (check Terminal)
+dialog.push_panel.force_lease_hint,Force = --force-with-lease（安全強推）,Force = --force-with-lease（安全强推）,Force = --force-with-lease (safe force push)
+dialog.push_panel.select_all_btn,全選,全选,Select All
+dialog.push_panel.deselect_btn,清除,清除,Deselect
+dialog.push_panel.refresh_btn,🔄 刷新,🔄 刷新,🔄 Refresh
+dialog.delete_panel.title,🗑️ Delete Panel,🗑️ Delete Panel,🗑️ Delete Panel
+dialog.delete_panel.tab_local_branch,🌿 Local Branch,🌿 本地分支,🌿 Local Branch
+dialog.delete_panel.tab_remote_branch,☁️ Remote Branch,☁️ 远端分支,☁️ Remote Branch
+dialog.delete_panel.tab_local_tag,🏷️ Local Tag,🏷️ 本地 Tag,🏷️ Local Tag
+dialog.delete_panel.tab_remote_tag,☁️🏷️ Remote Tag,☁️🏷️ 远端 Tag,☁️🏷️ Remote Tag
+dialog.delete_panel.search_hint,搜尋 (Tab=選擇) → 新增到待刪清單,搜索 (Tab=选择) → 新增到待删列表,Search (Tab=select) → add to delete list
+dialog.delete_panel.remote_label,遠端名稱:,远端名称:,Remote:
+dialog.delete_panel.execute_btn,🗑️ 執行刪除選中項目,🗑️ 执行删除选中项目,🗑️ Delete Selected Items
+dialog.delete_panel.no_selection,請至少勾選一個項目,请至少勾选一个项目,Please select at least one item
+dialog.delete_panel.confirm_msg,確定要刪除以下項目？\n\n{items},确定要删除以下项目？\n\n{items},Delete the following?\n\n{items}
+dialog.delete_panel.done_msg,刪除操作已執行（請查看 Terminal）,删除操作已执行（请查看 Terminal）,Delete executed (check Terminal)
+dialog.delete_panel.pending_label,待刪清單,待删列表,Delete Queue
+dialog.delete_panel.clear_btn,清空清單,清空列表,Clear List
+tab.close,關閉分頁,关闭标签页,Close Tab
+tab.move_left,← 向左移,← 向左移,← Move Left
+tab.move_right,→ 向右移,→ 向右移,→ Move Right
+autocomplete.hint,Tab: 清單向下移一格（循環到首項）\nShift+Tab: 清單向上移一格（循環到末項）\nSpace: 確認目前反白項目，填入 Entry，關閉清單\nEnter: 同 Space\n滑鼠單擊: 直接確認\nEscape / FocusOut: 隱藏清單,Tab: 清单向下移一格（循环到首项）\nShift+Tab: 清单向上移一格（循环到末项）\nSpace: 确认当前高亮项目，填入 Entry，关闭清单\nEnter: 同 Space\n鼠标单击: 直接确认\nEscape / FocusOut: 隐藏清单,Tab: Move down in list (wraps)\nShift+Tab: Move up in list (wraps)\nSpace: Confirm highlighted item\nEnter: Same as Space\nMouse click: Confirm directly\nEscape / FocusOut: Hide list
+dialog.file_selector.title,檔案管理 - 精確狀態管理,文件管理 - 状态管理,File Management - Status Manager
+dialog.file_selector.no_changes_title,提示,提示,Info
+dialog.file_selector.no_changes,目前沒有任何變更,目前没有任何变更,No changes detected
+dialog.file_selector.staged_count,暫存區 (Staged): {count},暂存区 (Staged): {count},Staged: {count}
+dialog.file_selector.unstaged_count,待處理 (Unstaged): {count},待处理 (Unstaged): {count},Unstaged: {count}
+dialog.file_selector.file_list_section,檔案變更列表,文件变更列表,File Changes
+dialog.file_selector.status_partial,部分暫存,部分暂存,Partial
+dialog.file_selector.status_untracked,未追蹤,未跟踪,Untracked
+dialog.file_selector.status_staged,已暫存,已暂存,Staged
+dialog.file_selector.status_modified,修改中,修改中,Modified
+dialog.file_selector.status_deleted,已刪除,已删除,Deleted
+dialog.file_selector.status_unknown,未知,未知,Unknown
+dialog.file_selector.commit_section,操作訊息,操作消息,Commit Message
+dialog.file_selector.select_files_warning,請選擇檔案,请选择文件,Please select files
+dialog.file_selector.commit_msg_required,Commit 必須填寫訊息,Commit 必须填写消息,Commit message is required
+dialog.file_selector.add_commit_btn,✓ Add + Commit,✓ Add + Commit,✓ Add + Commit
+dialog.file_selector.add_only_btn,➕ 僅 Add,➕ 仅 Add,➕ Add Only
+dialog.file_selector.stash_btn,📦 Stash 選中,📦 Stash 选中,📦 Stash Selected
+dialog.file_selector.select_all_btn,全選,全选,Select All
+dialog.file_selector.deselect_all_btn,清空,清空,Deselect
+dialog.file_selector.error_read,狀態讀取失敗: {err},状态读取失败: {err},Failed to read status: {err}
+dialog.restore.hash_required,必須提供 Commit Hash,必须提供 Commit Hash,Commit Hash is required
+dialog.restore.title,還原自: {hash},还原文件自: {hash},Restore from: {hash}
+dialog.restore.header,📂 從 Commit [{hash}] 提取檔案內容,📂 从 Commit [{hash}] 提取文件内容,📂 Extract files from Commit [{hash}]
+dialog.restore.overwrite_warning,注意：這會直接覆蓋工作區檔案，且不會自動 Commit。,注意：这会直接覆盖工作区文件，且不会自动 Commit。,Warning: This will overwrite working directory files without creating a commit.
+dialog.restore.file_list_section,該次提交的變更檔案,该次提交的变更文件,Files Changed in This Commit
+dialog.restore.no_files_error,找不到 Commit [{hash}] 的檔案變更。\n請確認 Hash 是否正確（例如：a1b2c3d）。,找不到 Commit [{hash}] 的文件变更。\n请确认 Hash 是否正确（例如：a1b2c3d）。,No file changes found for Commit [{hash}].\nPlease verify the hash is correct (e.g. a1b2c3d).
+dialog.restore.confirm_title,確認還原,确认还原,Confirm Restore
+dialog.restore.confirm_msg,確定要將選中的 {count} 個檔案還原到 {hash} 的狀態？\n\n這只會修改檔案內容，不會切換分支，也不會產生 Commit。,确定要将选中的 {count} 个文件还原到 {hash} 的状态？\n\n这只会修改文件内容，不会切换分支，也不会产生 Commit。,Restore {count} selected file(s) to the state of {hash}?\n\nThis only modifies file contents without switching branches or creating a commit.
+dialog.restore.done_msg,已成功提取 {count} 個檔案內容。\n請在工作區確認變更。,已成功提取 {count} 个文件内容。\n请在工作区确认变更。,Successfully extracted {count} file(s).\nPlease verify the changes in your working directory.
+dialog.restore.extract_btn,⏮️ 提取內容至工作區,⏮️ 提取内容至工作区,⏮️ Extract to Working Directory
+dialog.restore.read_error,讀取失敗: {err},读取失败: {err},Read failed: {err}
+dialog.restore.select_warning,請至少勾選一個檔案,请至少勾选一个文件,Please select at least one file
+dialog.preview.title,預覽: {filename},预览: {filename},Preview: {filename}
+dialog.preview.header,檔案: {filepath} (移出文字區域或按右鍵關閉),文件: {filepath} (移出文字区域或按右键关闭),File: {filepath} (move away or right-click to close)
+executor.no_commits,尚無 Commit 記錄,目前尚无 Commit 记录,No commits yet
+executor.reflog_header,--- REFLOG HISTORY ---,--- REFLOG HISTORY ---,--- REFLOG HISTORY ---
+executor.stage_check_error,[ERROR] 檢查暫存區失敗: {err},[ERROR] 检查暂存区失败: {err},[ERROR] Stage check failed: {err}
+cmd.checkout_branch.name,建立並切換分支,新建并切换分支,Create and Switch Branch
+cmd.checkout_branch.param.branch,新分支名稱,新分支名称,New Branch Name
+cmd.checkout_branch.param.create,建立新分支 (-b),新建分支 (-b),Create New Branch (-b)
+cmd.rebase_branch.name,Rebase 到分支,Rebase 到分支,Rebase to Branch
+cmd.rebase_branch.param.branch,目標分支,目标分支,Target Branch
+cmd.rebase_interactive.name,Rebase 互動模式,Rebase Interactive,Rebase Interactive
+cmd.rebase_interactive.param.commit,起始 Commit (HEAD~N 或 Hash),起始 Commit (HEAD~N 或 Hash),Start Commit (HEAD~N or Hash)
+cmd.rebase_interactive.param.interactive,互動模式 (-i),交互模式 (-i),Interactive Mode (-i)
+cmd.cherry_pick.name,Cherry-pick,Cherry-pick,Cherry-pick
+cmd.cherry_pick.param.commit,Commit Hash (可多個，空格分隔),Commit Hash (可多个，空格分隔),Commit Hash (multiple space-separated)
+cmd.cherry_pick.param.no_commit,不自動提交 (-n),不自动提交 (-n),Do not auto-commit (-n)
+cmd.restore_file.name,從特定 Commit 還原檔案,从特定提交还原文件,Restore File from Commit
+cmd.restore_file.param.commit,Commit Hash,Commit Hash,Commit Hash
+cmd.reset_soft.name,Soft Reset,Soft Reset,Soft Reset
+cmd.reset_soft.param.commit,目標 Commit (HEAD~N 或 Hash),目标 Commit (HEAD~N 或 Hash),Target Commit (HEAD~N or Hash)
+cmd.reset_soft.param.soft,Soft 模式 (保留變更),Soft 模式 (保留修改),Soft Mode (Keep Changes)
+cmd.reset_hard.name,Hard Reset,Hard Reset,Hard Reset
+cmd.reset_hard.param.commit,目標 Commit (HEAD~N 或 Hash),目标 Commit (HEAD~N 或 Hash),Target Commit (HEAD~N or Hash)
+cmd.reset_hard.param.hard,Hard 模式 (捨棄所有變更),Hard 模式 (丢弃所有修改),Hard Mode (Discard All Changes)
+cmd.stash_commit.name,Stash → Commit Squash,Stash -> Commit Squash,Stash to Commit Squash
+cmd.stash_commit.param.message,Commit 訊息 (預設: WIP),Commit 消息 (默认: WIP),Commit Message (default: WIP)
+cmd.commit_message.name,Commit 訊息,Commit 消息,Commit Message
+cmd.commit_message.param.message,Commit 訊息,Commit 消息,Commit Message
+cmd.commit_amend.name,Commit Amend,Commit Amend,Commit Amend
+cmd.commit_amend.param.message,Commit 訊息 (留空則不改),Commit 消息 (留空则不改),Commit Message (leave empty to keep)
+cmd.commit_amend.param.amend,修改上次提交 (--amend),修改上次提交 (--amend),Amend Last Commit (--amend)
+cmd.commit_amend.param.no_edit,不修改訊息 (--no-edit),不修改消息 (--no-edit),Do not Edit Message (--no-edit)
+cmd.commit_squash.name,Squash Commit,Squash Commit,Squash Commit
+cmd.commit_squash.param.message,Squash 訊息,Squash 消息,Squash Message
+cmd.force_push.name,Force Push,Force Push,Force Push
+cmd.force_push.param.remote,遠端名稱,远端名称,Remote Name
+cmd.force_push.param.branch,分支名稱 (留空=當前),分支名称 (留空=当前),Branch Name (empty = current)
+cmd.force_push.param.force,強制推送 (-f),强制推送 (-f),Force Push (-f)
+cmd.force_push.param.force_with_lease,安全強推 (--force-with-lease),安全强推 (--force-with-lease),Safe Force Push (--force-with-lease)
+cmd.delete_branch.name,Delete Branch,Delete Branch,Delete Branch
+cmd.delete_branch.param.branch,分支名稱 (可多個，空格分隔),分支名称 (可多个，空格分隔),Branch Name (multiple space-separated)
+cmd.delete_branch.param.force_delete,強制刪除 (-D),强制删除 (-D),Force Delete (-D)
+cmd.delete_remote_branch.name,Delete Remote Branch,Delete Remote Branch,Delete Remote Branch
+cmd.delete_remote_branch.param.remote,遠端名稱,远端名称,Remote Name
+cmd.delete_remote_branch.param.branch,分支名稱,分支名称,Branch Name
+cmd.delete_remote_branch.param.delete,刪除遠端分支 (--delete),删除远端分支 (--delete),Delete Remote Branch (--delete)
+cmd.prune.name,Prune Branches,Prune Branches,Prune Branches
+cmd.prune.param.remote,遠端名稱,远端名称,Remote Name
+cmd.prune.param.dry_run,僅預覽 (--dry-run),仅预览 (--dry-run),Preview Only (--dry-run)
+cmd.checkout.name,Checkout (分支/Commit),Checkout (分支/Commit),Checkout (Branch/Commit)
+cmd.checkout.param.branch,分支或 Commit (branch 或 hash),分支或 Commit (branch 或 hash),Branch or Commit (branch or hash)
+cmd.checkout.param.create,建立新分支 (-b),新建分支 (-b),Create New Branch (-b)
+cmd.create_tag.name,Create Tag,Create Tag,Create Tag
+cmd.create_tag.param.tag,Tag 名稱,Tag 名称,Tag Name
+cmd.create_tag.param.message,Tag 訊息 (-m),Tag 消息 (-m),Tag Message (-m)
+cmd.create_tag.param.commit,指定 Commit (留空=HEAD),指定 Commit (留空=HEAD),Target Commit (empty = HEAD)
+cmd.delete_tag.name,Delete Tag,Delete Tag,Delete Tag
+cmd.delete_tag.param.tag,Tag 名稱 (可多個，空格分隔),Tag 名称 (可多个，空格分隔),Tag Name (multiple space-separated)
+cmd.delete_tag.param.delete,刪除標籤 (-d),删除标签 (-d),Delete Tag (-d)
+cmd.delete_remote_tag.name,刪除遠端標籤,删除远端标签,Delete Remote Tag
+cmd.delete_remote_tag.param.remote,遠端名稱,远端名称,Remote Name
+cmd.delete_remote_tag.param.tag,Tag 名稱,Tag 名称,Tag Name
+cmd.delete_remote_tag.param.delete,刪除 (--delete),删除 (--delete),Delete (--delete)
+cmd.checkout_file.name,Checkout File,Checkout File,Checkout File
+cmd.checkout_file.param.source,來源 (Commit/Branch，留空=HEAD),来源 (Commit/Branch，留空=HEAD),Source (Commit/Branch empty = HEAD)
+cmd.checkout_file.param.file,檔案路徑,文件路径,File Path
+btn.reverse_commit,⏮️ Reverse Commit,⏮️ Reverse Commit,⏮️ Reverse Commit
+dialog.revert.title,⏮️ Reverse Commit (git revert),⏮️ Reverse Commit (git revert),⏮️ Reverse Commit (git revert)
+dialog.revert.desc,建立一個新的 commit，其內容是指定 commit 的完全反向操作。\n原歷史不會被改動，適合已推送的分支。,建立一个新的 commit，其内容是指定 commit 的完全反向操作。\n原历史不会被改动，适合已推送的分支。,Creates a new commit that is the exact inverse of the specified commit.\nDoes not rewrite history — safe for pushed branches.
+dialog.revert.commit_label,要反轉的 Commit *,要反转的 Commit *,Commit to Reverse *
+dialog.revert.no_commit_cb,--no-commit（僅暫存反向變更，不自動建立 commit）,--no-commit（仅暂存反向变更，不自动建立 commit）,--no-commit (stage reverse changes only; do not auto-commit)
+dialog.revert.execute_btn,⏮️ 執行 Revert,⏮️ 执行 Revert,⏮️ Execute Revert
+dialog.revert.missing_commit,請選擇或輸入要反轉的 Commit Hash,请选择或输入要反转的 Commit Hash,Please select or enter the Commit Hash to revert
