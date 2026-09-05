@@ -7,7 +7,7 @@
 
 | 工具 | 說明 | 版本 | 原始碼 |
 |---|---|---|---|
-| _(整理中)_ | | | |
+| **Git Helper Pro** | Git 指令 GUI 助手：多專案分頁、危險指令攔截、rebase/merge/stash 引導、繁中／簡中／英三語切換 | v1.6.4 | [tools/git-helper-pro/](tools/git-helper-pro/) |
 
 ## 快速開始
 
