@@ -1,0 +1,3 @@
+# Git Helper Pro 執行時依賴
+# 只用 Python 標準庫（tkinter / subprocess / json / csv），不需要額外套件。
+# build 工具鏈請看根目錄的 requirements-dev.txt。

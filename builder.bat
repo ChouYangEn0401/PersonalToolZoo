@@ -1,1 +1,0 @@
-.venv\Scripts\python.exe -m PyInstaller GUI__GitHelperPro.spec

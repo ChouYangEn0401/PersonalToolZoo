@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     從 tools\_template 生一個新工具骨架。
 

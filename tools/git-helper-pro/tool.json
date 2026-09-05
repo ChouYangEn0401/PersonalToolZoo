@@ -1,0 +1,10 @@
+{
+  "name": "GUI__GitHelperPro",
+  "entry": "GUI__GitHelperPro.py",
+  "console": true,
+  "version_from": "src/version.py",
+  "include": [
+    "language",
+    "language_config.json"
+  ]
+}

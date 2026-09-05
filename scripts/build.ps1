@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     PersonalToolZoo 統一 builder。
 
