@@ -1,0 +1,11 @@
+# 全 repo 共用的 build 工具鏈。各工具「執行時」的依賴請寫在 tools/<name>/requirements.txt。
+#
+#   py -3.11 -m venv .venv
+#   .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+#
+altgraph==0.17.5
+packaging==26.0
+pefile==2024.8.26
+pyinstaller==6.18.0
+pyinstaller-hooks-contrib==2026.0
+pywin32-ctypes==0.2.3

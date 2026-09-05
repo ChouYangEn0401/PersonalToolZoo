@@ -1,0 +1,16 @@
+{
+  "name": "__TOOL_NAME__",
+  "entry": "main.py",
+  "console": false,
+
+  "_comment_version": "從工具自己的版本檔讀 __version__，會變成 exe 檔名後綴 (vX.Y.Z)。不需要就整行刪掉。",
+  "version_from": "version.py",
+
+  "_comment_include": "要一起打包進 exe 的資料檔/資料夾（相對工具資料夾）。",
+  "include": [],
+
+  "_comment_extra": "PyInstaller 抓不到的依賴才需要填。",
+  "collect_all": [],
+  "hiddenimports": [],
+  "excludes": []
+}
