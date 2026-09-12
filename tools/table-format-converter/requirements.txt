@@ -1,0 +1,4 @@
+# Table Format Converter 執行時依賴
+# 只用 tkinter/csv/io/re 等標準庫；openpyxl 是可選依賴，
+# 只有按下「存成 .xlsx」時才需要，未安裝時程式會提示而不會壞掉。
+openpyxl>=3.1.0
