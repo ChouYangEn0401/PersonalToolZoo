@@ -1,0 +1,6 @@
+{
+  "name": "GUI__Encrypter",
+  "entry": "crypto_tool/GUI__Encrypter.py",
+  "console": false,
+  "version_from": "crypto_tool/_version.py"
+}
