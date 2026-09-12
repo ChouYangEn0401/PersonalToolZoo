@@ -8,6 +8,7 @@
 | 工具 | 說明 | 版本 | 原始碼 |
 |---|---|---|---|
 | **Git Helper Pro** | Git 指令 GUI 助手：多專案分頁、危險指令攔截、rebase/merge/stash 引導、繁中／簡中／英三語切換 | v1.6.4 | [tools/git-helper-pro/](tools/git-helper-pro/) |
+| **Encrypter** | 檔案／文字加密 GUI，自訂 `.isd` 格式，支援多種演算法與 Mixture（多階段）加密模式 | v0.3.0 | [tools/encrypter/](tools/encrypter/) |
 
 ## 快速開始
 
@@ -26,11 +27,18 @@ py -3.11 -m venv .venv
 .\scripts\build.ps1 -All
 ```
 
-某個工具還需要額外的執行時依賴，就再裝它自己的：
+某個工具需要額外的第三方套件，不要裝進共用的根目錄 `.venv`——
+給它自己開一個乾淨的 venv，`build.ps1` 會自動優先找 `tools\<tool-name>\.venv`：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r tools\<tool-name>\requirements.txt
+py -3.11 -m venv tools\<tool-name>\.venv
+.\tools\<tool-name>\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt -r tools\<tool-name>\requirements.txt
+.\scripts\build.ps1 <tool-name>
 ```
+
+這樣每個工具的依賴版本互不干擾，某個工具需要 pandas 1.x、另一個需要 2.x
+也不會打架。只用標準庫、沒有額外依賴的工具（例如 Git Helper Pro）才共用根目錄的
+`.venv` 就好，不用每個都開一份。
 
 ## 開一個新工具
 
@@ -51,7 +59,7 @@ py -3.11 -m venv .venv
 PersonalToolZoo/
 ├─ README.md               ← 你正在看的導覽頁
 ├─ requirements-dev.txt    ← 共用 build 工具鏈（pyinstaller 等）
-├─ .venv/                  ← 共用虛擬環境
+├─ .venv/                  ← 共用虛擬環境（只給無額外依賴的工具用）
 ├─ scripts/
 │  ├─ tool.spec            ← 全 repo 唯一一份 PyInstaller spec
 │  ├─ build.ps1            ← 統一 builder
@@ -62,6 +70,7 @@ PersonalToolZoo/
 │     ├─ tool.json         ← 這個工具的 build 設定
 │     ├─ README.md
 │     ├─ requirements.txt  ← 執行時依賴
+│     ├─ .venv/            ← （選用）這個工具專屬的隔離環境
 │     └─ main.py, ...
 └─ dist/<tool-name>/       ← 打包產物
 ```
