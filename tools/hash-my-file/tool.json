@@ -1,0 +1,5 @@
+{
+  "name": "HashMyFile",
+  "entry": "HashMyFile.py",
+  "console": true
+}

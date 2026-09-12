@@ -1,0 +1,2 @@
+# HashMyFile 執行時依賴
+tkinterdnd2>=0.3.0
