@@ -1,0 +1,3 @@
+# Git Diff Statistics 執行時依賴
+# 只用標準庫（tkinter / subprocess / shlex / datetime），不需要額外套件。
+# build 工具鏈請看根目錄的 requirements-dev.txt。

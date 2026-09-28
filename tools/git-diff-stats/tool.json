@@ -1,0 +1,5 @@
+{
+  "name": "GUI_GitDiffStatistics",
+  "entry": "GUI_GitDiffStatistics.py",
+  "console": true
+}
