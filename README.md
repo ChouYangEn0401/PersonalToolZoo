@@ -12,6 +12,7 @@
 | **Table Format Converter** | 貼上 Tab 分隔或 Markdown 表格即時預覽，一鍵輸出 MD／Tab／CSV／XLSX | v1.0.0 | [tools/table-format-converter/](tools/table-format-converter/) |
 | **HashMyFile** | 拖放檔案計算 MD5／SHA-1／SHA-256，內容相同的檔案自動標色比對 | v0.1.0 | [tools/hash-my-file/](tools/hash-my-file/) |
 | **Advanced Excel Tool** | 分頁式 Excel 工作台：核心整理（可疊加／undo）、多檔合併、diff 比較＋AB 審核 | v0.1.0 | [tools/excel-tool/](tools/excel-tool/) |
+| **Git Diff Statistics** | 指定兩個 commit／branch，統計各副檔名的檔案數與增刪行數 | — | [tools/git-diff-stats/](tools/git-diff-stats/) |
 
 ## 快速開始
 
@@ -114,5 +115,22 @@ spec 裡所有路徑都以它為基準解析，**完全不依賴當下的工作�
 原因是 build 腳本裡的路徑寫死成相對於工作目錄（`os.path.abspath('.')`），
 工具一搬進子資料夾就找不到檔案。
 
-`tool.json` + 共用 spec 的做法解掉了這個限制，所有工具已整併回 `master`。
-各工具原本的 branch 保留作為封存，開發歷史完整保存在 commit 紀錄裡。
+`tool.json` + 共用 spec 的做法解掉了這個限制，工具已整併回 `master`。
+各工具原本的 branch 保留作為封存，開發歷史完整保存在 commit 紀錄裡
+（每個工具都是 merge → 搬資料夾 → 換 build file → 更新本頁 四個 commit）。
+
+### 整併的判準
+
+一個工具要被收進 `master`，它在原分支上必須已經「收尾」——
+最後一個 commit 是 build／build settings（通常伴隨版本號更新），代表作者確認可用。
+所以有幾支是刻意只收到一半，或整支沒收：
+
+| 分支 | 狀況 |
+|---|---|
+| `feat/git_command_gui_helper/dev` | 未收（收尾是 `[BU]` 不是 build）。裡面有一組 **`fetch` / `pull` 指令設定從沒進主線**，之後想補的話從這裡撈。 |
+| `feat/hash_my_file_gui/all_platform` | 只收到 tag `HashMyFile_v0.1.0`。tag 之後那個「只留重複檔」的 feat commit 還沒收尾，未收。 |
+| `feat/git_diff_shower` | 只收到 BUILD 點 `0aba850`。之後的 filter 分類、no-git snapshot 分頁、snapshot 修正三個 commit 還沒收尾，未收。 |
+| `feat/shell_converter/all_platform` | 未收，tag 自己標了 `shell_converter__failed`。 |
+| `temp-save` | 未收，內容是 stash。 |
+
+要把上面任何一段補進來，就照同一套四步流程再跑一輪。
