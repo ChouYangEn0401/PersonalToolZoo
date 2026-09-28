@@ -11,6 +11,7 @@
 | **Encrypter** | 檔案／文字加密 GUI，自訂 `.isd` 格式，支援多種演算法與 Mixture（多階段）加密模式 | v0.3.0 | [tools/encrypter/](tools/encrypter/) |
 | **Table Format Converter** | 貼上 Tab 分隔或 Markdown 表格即時預覽，一鍵輸出 MD／Tab／CSV／XLSX | v1.0.0 | [tools/table-format-converter/](tools/table-format-converter/) |
 | **HashMyFile** | 拖放檔案計算 MD5／SHA-1／SHA-256，內容相同的檔案自動標色比對 | v0.1.0 | [tools/hash-my-file/](tools/hash-my-file/) |
+| **Advanced Excel Tool** | 分頁式 Excel 工作台：核心整理（可疊加／undo）、多檔合併、diff 比較＋AB 審核 | v0.1.0 | [tools/excel-tool/](tools/excel-tool/) |
 
 ## 快速開始
 
