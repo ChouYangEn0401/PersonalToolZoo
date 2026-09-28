@@ -1,0 +1,9 @@
+# Advanced Excel Tool 執行時依賴
+#
+# infinity-treeview 是作者自己的套件，沒有發布到 PyPI，直接指向 GitHub 來源並
+# 釘在 release tag 上，確保換機器也裝得起來（原本 README 寫的是本機 wheel 路徑，
+# 那個路徑只在原作者機器上存在）。它本身會帶進 pandas>=2.0。
+infinity-treeview @ git+https://github.com/ChouYangEn0401/Python-Infinity-Treeview.git@release_0.2.0
+pandas>=2.0
+openpyxl>=3.1
+tkinterdnd2>=0.3.0

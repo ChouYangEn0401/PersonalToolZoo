@@ -1,0 +1,7 @@
+{
+  "name": "GUI_AdvancedExcelTool",
+  "entry": "GUI_AdvancedExcelTool.py",
+  "console": false,
+  "version_from": "excel_tool/__init__.py",
+  "collect_all": ["infinity_treeview"]
+}
