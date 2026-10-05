@@ -1,153 +1,24 @@
-"""Quick Converter — 拖放即轉換的快速檔案轉換工具 (GUI2)."""
+"""⚡ 快速拖放：選好轉換規則後把檔案或資料夾拖進來，結果產生在原檔案旁邊。
+
+源自獨立的 GUI__QuickConverter.py（Quick Converter）；現在是主視窗的第一個分頁，
+主題切換由主視窗統一處理。轉換邏輯在 core/quick.py。
+"""
 
 import os
-import uuid
 import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 from collections import defaultdict
 
-import sv_ttk
+from core.quick import PRESETS, _CATEGORY_LABELS, _get_output_ext, convert_single
+from gui.tabs.base_tab import BaseTab
 
 # ── Drag-and-drop support via tkinterdnd2 ────────────────────────────────────
 try:
-    from tkinterdnd2 import TkinterDnD, DND_FILES
+    from tkinterdnd2 import DND_FILES
     _DND_AVAILABLE = True
 except ImportError:
     _DND_AVAILABLE = False
-
-# ── Core converters ──────────────────────────────────────────────────────────
-from core.image_converter import (
-    convert_image,
-    SUPPORTED_INPUT_EXTENSIONS as IMG_INPUT_EXT,
-    SUPPORTED_OUTPUT_FORMATS as IMG_OUTPUT_FMTS,
-)
-from core.video_converter import (
-    convert_video,
-    INPUT_VIDEO_EXTENSIONS as VID_INPUT_EXT,
-    VIDEO_FORMATS as VID_OUTPUT_FMTS,
-)
-from core.table_converter import excel_to_format, tables_to_excel
-from core.pdf_extractor import pdf_to_text, pdf_to_docx, pdf_to_pptx
-from core.pdf_maker import images_to_pdf, SUPPORTED_EXTENSIONS as PDF_IMG_EXT
-
-# ═════════════════════════════════════════════════════════════════════════════
-# Presets registry
-# ═════════════════════════════════════════════════════════════════════════════
-
-PRESETS: dict[str, dict] = {}
-
-_CATEGORY_LABELS = {
-    "image":          "🖼 圖片",
-    "image_to_pdf":   "🖼 圖片",
-    "video":          "🎬 影片 / 音訊",
-    "excel_to_table": "📊 表格",
-    "table_to_excel": "📊 表格",
-    "pdf_extract":    "📋 PDF",
-}
-
-
-def _register_presets():
-    for fmt, info in IMG_OUTPUT_FMTS.items():
-        PRESETS[f"圖片 → {fmt} ({info['ext']})"] = {
-            "input_ext": IMG_INPUT_EXT, "output_fmt": fmt, "category": "image",
-        }
-    PRESETS["圖片 → PDF"] = {
-        "input_ext": PDF_IMG_EXT, "output_fmt": "PDF", "category": "image_to_pdf",
-    }
-    for fmt, info in VID_OUTPUT_FMTS.items():
-        PRESETS[f"影片 → {fmt} ({info['ext']})"] = {
-            "input_ext": VID_INPUT_EXT, "output_fmt": fmt, "category": "video",
-        }
-    PRESETS["Excel → CSV"] = {
-        "input_ext": {".xlsx", ".xls"}, "output_fmt": "csv", "category": "excel_to_table",
-    }
-    PRESETS["Excel → Parquet"] = {
-        "input_ext": {".xlsx", ".xls"}, "output_fmt": "parquet", "category": "excel_to_table",
-    }
-    PRESETS["CSV/Parquet → Excel"] = {
-        "input_ext": {".csv", ".parquet"}, "output_fmt": "xlsx", "category": "table_to_excel",
-    }
-    PRESETS["PDF → TXT"] = {
-        "input_ext": {".pdf"}, "output_fmt": "txt", "category": "pdf_extract",
-    }
-    PRESETS["PDF → DOCX"] = {
-        "input_ext": {".pdf"}, "output_fmt": "docx", "category": "pdf_extract",
-    }
-    PRESETS["PDF → PPTX"] = {
-        "input_ext": {".pdf"}, "output_fmt": "pptx", "category": "pdf_extract",
-    }
-
-
-_register_presets()
-
-# ═════════════════════════════════════════════════════════════════════════════
-# Conversion helpers
-# ═════════════════════════════════════════════════════════════════════════════
-
-
-def _get_output_ext(preset: dict) -> str:
-    cat, fmt = preset["category"], preset["output_fmt"]
-    if cat == "image":          return IMG_OUTPUT_FMTS[fmt]["ext"]
-    if cat == "video":          return VID_OUTPUT_FMTS[fmt]["ext"]
-    if cat == "excel_to_table": return ""
-    if cat == "table_to_excel": return ".xlsx"
-    if cat == "pdf_extract":    return f".{fmt}"
-    if cat == "image_to_pdf":   return ".pdf"
-    return ""
-
-
-def _resolve_output_path(input_path: str, ext: str, overwrite: bool) -> str:
-    base = os.path.splitext(input_path)[0]
-    out = base + ext
-    if os.path.exists(out) and not overwrite:
-        out = f"{base}_{uuid.uuid4().hex[:6]}{ext}"
-    return out
-
-
-def convert_single(input_path: str, preset: dict, overwrite: bool) -> list[str]:
-    """Convert one file using *preset*. Returns list of output paths."""
-    cat, fmt = preset["category"], preset["output_fmt"]
-    out_dir = os.path.dirname(input_path)
-
-    if cat == "image":
-        ext = IMG_OUTPUT_FMTS[fmt]["ext"]
-        out = _resolve_output_path(input_path, ext, overwrite)
-        result = convert_image(input_path, out_dir, fmt)
-        if result != out:
-            if os.path.exists(out):
-                os.remove(out)
-            os.rename(result, out)
-        return [out]
-
-    if cat == "image_to_pdf":
-        out = _resolve_output_path(input_path, ".pdf", overwrite)
-        images_to_pdf([input_path], out)
-        return [out]
-
-    if cat == "video":
-        ext = VID_OUTPUT_FMTS[fmt]["ext"]
-        out = _resolve_output_path(input_path, ext, overwrite)
-        result = convert_video(input_path, out_dir, fmt)
-        if result != out:
-            if os.path.exists(out):
-                os.remove(out)
-            os.rename(result, out)
-        return [out]
-
-    if cat == "excel_to_table":
-        return excel_to_format(input_path, out_dir, fmt)
-
-    if cat == "table_to_excel":
-        return tables_to_excel([input_path], out_dir)
-
-    if cat == "pdf_extract":
-        out = _resolve_output_path(input_path, f".{fmt}", overwrite)
-        {"txt": pdf_to_text, "docx": pdf_to_docx, "pptx": pdf_to_pptx}[fmt](input_path, out)
-        return [out]
-
-    return []
-
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Mismatch Dialog — shown when dropped files don't match any current rule
@@ -263,25 +134,13 @@ class MismatchDialog(tk.Toplevel):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class QuickConverterApp:
-    WINDOW_TITLE = "⚡ Quick Converter — 快速拖放轉換"
+class QuickTab(BaseTab):
+    """⚡ 快速拖放分頁。"""
 
-    def __init__(self):
-        if _DND_AVAILABLE:
-            self.root = TkinterDnD.Tk()
-        else:
-            self.root = tk.Tk()
-
-        self.root.title(self.WINDOW_TITLE)
-        self.root.geometry("720x660")
-        self.root.minsize(600, 560)
-
-        self._dark_mode = False
-        sv_ttk.set_theme("light")
-
+    def __init__(self, parent, root):
+        super().__init__(parent, root)
         self._overwrite = tk.BooleanVar(value=False)
         self._conflict_ask = tk.BooleanVar(value=True)
-        self._running = False
         self._rules: list[str] = []  # ordered list of active preset names
 
         self._build_ui()
@@ -289,18 +148,7 @@ class QuickConverterApp:
     # ── UI construction ───────────────────────────────────────────────────
 
     def _build_ui(self):
-        # Header
-        header = ttk.Frame(self.root)
-        header.pack(fill="x", padx=12, pady=(10, 0))
-        ttk.Label(header, text="⚡ Quick Converter", font=("Segoe UI", 14, "bold")).pack(side="left")
-        self._theme_btn = ttk.Button(
-            header, text="🌙  深色模式", command=self._toggle_theme, width=12,
-        )
-        self._theme_btn.pack(side="right")
-        ttk.Separator(self.root, orient="horizontal").pack(fill="x", padx=12, pady=(8, 0))
-
-        body = ttk.Frame(self.root, padding=12)
-        body.pack(fill="both", expand=True)
+        body = self
 
         # ── Rules list ──────────────────────────────────────────────────
         rules_frm = ttk.LabelFrame(body, text="轉換規則（可加入多條，同時對不同格式生效）", padding=8)
@@ -377,12 +225,15 @@ class QuickConverterApp:
         )
         self._drop_label.pack(fill="both", expand=True)
 
-        if _DND_AVAILABLE:
+        try:
+            if not _DND_AVAILABLE:
+                raise tk.TclError("tkinterdnd2 not installed")
+            # 主視窗是 TkinterDnD.Tk() 才有拖放（它會把 tkdnd 載入 Tcl）；一般的 tk.Tk() 會丟 TclError
             self._drop_label.drop_target_register(DND_FILES)
             self._drop_label.dnd_bind("<<Drop>>", self._on_drop)
             self._drop_label.dnd_bind("<<DragEnter>>", self._on_drag_enter)
             self._drop_label.dnd_bind("<<DragLeave>>", self._on_drag_leave)
-        else:
+        except tk.TclError:
             self._drop_label.config(
                 text="⚠️  未安裝 tkinterdnd2\n\n請執行: pip install tkinterdnd2\n\n安裝後重啟即可使用拖放功能",
                 fg="red",
@@ -423,11 +274,6 @@ class QuickConverterApp:
 
     def _on_conflict_radio(self):
         self._overwrite_cb.config(state="disabled" if self._conflict_ask.get() else "normal")
-
-    def _toggle_theme(self):
-        self._dark_mode = not self._dark_mode
-        sv_ttk.set_theme("dark" if self._dark_mode else "light")
-        self._theme_btn.config(text=("☀  淺色模式" if self._dark_mode else "🌙  深色模式"))
 
     def _log(self, msg: str):
         self._log_text.config(state="normal")
@@ -606,17 +452,3 @@ class QuickConverterApp:
             self._running = False
 
         threading.Thread(target=do_convert, daemon=True).start()
-
-    # ── Run ───────────────────────────────────────────────────────────────
-
-    def run(self):
-        self.root.mainloop()
-
-
-def main():
-    app = QuickConverterApp()
-    app.run()
-
-
-if __name__ == "__main__":
-    main()
