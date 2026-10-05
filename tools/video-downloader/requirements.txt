@@ -1,0 +1,9 @@
+# Video Downloader 執行時依賴（打包工具在根目錄 requirements-dev.txt）
+
+# 下載引擎。[default] 會一起裝 yt-dlp-ejs（YouTube 解題用的 JS 元件）。
+# 網站常改版，yt-dlp 要常更新，所以上限給到 2028（它的版本號是日期）；到時候再往後調。
+yt-dlp[default]>=2026.8.19,<2028
+
+# GUI（本機網頁）
+fastapi>=0.115,<1
+uvicorn>=0.32,<1

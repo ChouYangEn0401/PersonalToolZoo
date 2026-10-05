@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Downloader</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬇️</text></svg>">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">⬇️</span>
+    <div><strong>Video Downloader</strong><small id="version"></small></div>
+  </div>
+  <div class="chips" id="env-chips"></div>
+  <button id="btn-settings" class="ghost">⚙ 設定</button>
+</header>
+
+<main class="layout">
+  <section class="left">
+    <div class="card" id="drop-zone">
+      <h2>新增下載</h2>
+      <textarea id="urls" rows="4" placeholder="貼上網址，一行一個——YouTube、Bilibili、X、IG、TikTok、Facebook…約 1800 個網站，也可以直接貼 .m3u8 / .mpd 串流網址。&#10;也可以把網址或連結直接拖進這個框。"></textarea>
+      <div class="button-row">
+        <button id="btn-paste" class="ghost">📋 貼上</button>
+        <button id="btn-probe">🔍 解析</button>
+        <button id="btn-quick" class="primary">⬇ 直接下載</button>
+      </div>
+      <div class="grid2">
+        <label>畫質 / 格式<select id="preset"></select></label>
+        <label id="custom-format-label" hidden>自訂 format 字串<input id="custom-format" placeholder="bv*[height&lt;=1440]+ba/b"></label>
+      </div>
+      <details class="advanced">
+        <summary>進階：檔名、串流 header</summary>
+        <label>檔名（只有一個網址時有效，不含副檔名）<input id="filename" placeholder="空白 = 影片標題"></label>
+        <label>額外的 HTTP header（直接下載 m3u8 時常需要 Referer）
+          <textarea id="headers" rows="3" placeholder="Referer: https://影片所在的頁面/&#10;User-Agent: …"></textarea>
+        </label>
+      </details>
+      <div class="muted small" id="out-hint"></div>
+    </div>
+
+    <div id="probe-results"></div>
+  </section>
+
+  <section class="right">
+    <nav class="tabs" id="tabs">
+      <button data-tab="queue" class="active">下載中 <span id="queue-count" class="count"></span></button>
+      <button data-tab="history">紀錄</button>
+    </nav>
+    <div id="queue" class="list"></div>
+    <div id="history" class="list" hidden></div>
+  </section>
+</main>
+
+<dialog id="dlg-settings">
+  <form method="dialog" id="settings-form">
+    <h2>設定</h2>
+    <fieldset>
+      <legend>存放位置與檔名</legend>
+      <label>下載到<input id="s-output" placeholder=""></label>
+      <label>檔名範本（yt-dlp 語法）<input id="s-template"></label>
+      <div class="muted small">例如 <code>%(uploader)s/%(title)s.%(ext)s</code> 會依頻道分資料夾。</div>
+    </fieldset>
+    <fieldset>
+      <legend>下載</legend>
+      <div class="grid3">
+        <label>預設畫質<select id="s-preset"></select></label>
+        <label>同時下載幾支<input id="s-concurrent" type="number" min="1" max="8"></label>
+        <label>分段同時抓幾段<input id="s-fragments" type="number" min="1" max="32"></label>
+      </div>
+      <div class="grid2">
+        <label>限速（例如 5M，空白不限）<input id="s-rate"></label>
+        <label>Proxy（選填）<input id="s-proxy" placeholder="http://127.0.0.1:7890"></label>
+      </div>
+      <label>需要登入的影片：用哪個瀏覽器的登入狀態
+        <select id="s-cookies"><option value="">不使用</option><option>firefox</option><option>chrome</option><option>edge</option><option>brave</option></select>
+      </label>
+      <div class="muted small">Windows 上 Chrome / Edge 的 cookie 加密常讓 yt-dlp 讀不到，Firefox 最穩。</div>
+    </fieldset>
+    <fieldset>
+      <legend>字幕與附加資訊</legend>
+      <label class="check"><input type="checkbox" id="s-subs"> 下載字幕</label>
+      <label>字幕語言<input id="s-sublangs" placeholder="zh-TW,zh-Hant,zh,en"></label>
+      <label class="check"><input type="checkbox" id="s-autosubs"> 也抓自動產生的字幕</label>
+      <label class="check"><input type="checkbox" id="s-embedsubs"> 把字幕嵌入影片</label>
+      <label class="check"><input type="checkbox" id="s-metadata"> 寫入標題、頻道、章節等資訊</label>
+      <label class="check"><input type="checkbox" id="s-thumbnail"> 嵌入縮圖（封面）</label>
+    </fieldset>
+    <fieldset>
+      <legend>工具</legend>
+      <label>ffmpeg 位置（空白 = 自動找）<input id="s-ffmpeg" placeholder="C:\ffmpeg\bin"></label>
+      <div class="bookmarklet-row">
+        把這個按鈕拖到瀏覽器的書籤列：<a id="bookmarklet" class="bookmarklet">⬇ 送到下載器</a>
+        <div class="muted small">之後在任何影片頁按一下書籤，就會開啟這裡並自動解析該頁網址。</div>
+      </div>
+    </fieldset>
+    <div class="dialog-actions">
+      <button value="cancel" class="ghost">取消</button>
+      <button value="ok" class="primary">儲存</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" role="status"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
