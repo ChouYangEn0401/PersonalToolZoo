@@ -97,3 +97,24 @@ libs/toolzoo/ai/                # 共用：LLM 呼叫層、金鑰、模式庫（
 
 - 文字只在你按「轉換」時送給你選的服務商，本程式不記錄、不保存輸入與輸出。
 - 金鑰只存在本機（見上方「API 金鑰」）。
+
+---
+
+## 交接
+
+| 項目 | 內容 |
+|---|---|
+| 入口 | `GUI__BetterPrompt.py` |
+| 版本號 | `version.py` 的 `__version__` → exe 檔名 `GUI__BetterPrompt(vX.Y.Z).exe`、視窗標題 `Better Prompt ✦ AI Text Transformer vX.Y.Z` |
+| 環境 | 有第三方套件 → `tools\better-prompt\.venv` |
+| 依賴 | `customtkinter<6`、`openai<3`（OpenAI 與 Gemini）、`anthropic<2`（Claude；1.11 起 `fallbacks` 是正式參數） |
+| 共用程式 | `libs/toolzoo/ai`（LLM 呼叫層、金鑰、模式庫）——tool.json 的 `pathex` 指向 `../../libs`，進入點開頭也把它加進 `sys.path` |
+| 打包額外內容 | `include`: `model_recommendations.json`；`collect_all`: `customtkinter`（主題 JSON 與字型） |
+| 測試 | 程式本身無；共用層 `python -m unittest discover -s libs\tests` |
+| Release tag | `BetterPrompt_vX.Y.Z`（tool.json 的 tag_prefix） |
+
+### 注意事項
+
+- 模式的名稱是 `model_recommendations.json` 的 key，改 `libs/toolzoo/ai/text_modes.py` 的分類或子模式名稱時要一起改。
+- 改 `libs/toolzoo/ai` 也會影響 Video Notes，兩個工具都要重新 build 測過。
+- v1 的設定檔 `~/.better_prompt_settings.json` 只會被讀、不會被刪；金鑰搬進 keys.env 之後，那個檔可以手動刪掉。
