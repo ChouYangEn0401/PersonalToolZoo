@@ -3,5 +3,6 @@
   "entry": "GUI_AdvancedExcelTool.py",
   "console": false,
   "version_from": "excel_tool/__init__.py",
+  "tag_prefix": "ExcelTool",
   "collect_all": ["infinity_treeview"]
 }

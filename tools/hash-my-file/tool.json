@@ -1,5 +1,7 @@
 {
   "name": "HashMyFile",
   "entry": "HashMyFile.py",
-  "console": true
+  "console": true,
+  "version_from": "version.py",
+  "tag_prefix": "HashMyFile"
 }

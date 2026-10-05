@@ -1,5 +1,7 @@
 {
   "name": "GUI_GitDiffStatistics",
   "entry": "GUI_GitDiffStatistics.py",
-  "console": true
+  "console": true,
+  "version_from": "version.py",
+  "tag_prefix": "GitDiffStatistics"
 }

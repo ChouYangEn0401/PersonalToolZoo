@@ -1,5 +1,7 @@
 {
   "name": "GUI_TableFormatConverter",
   "entry": "GUI_TableFormatConverter.py",
-  "console": true
+  "console": true,
+  "version_from": "version.py",
+  "tag_prefix": "TableFormatConverter"
 }

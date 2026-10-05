@@ -8,6 +8,9 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
+# 版本號只寫在 version.py 一個地方：exe 檔名（tool.json 的 version_from）跟視窗標題都讀它
+from version import __version__
+
 
 def resource_path(*parts):
     """回傳打包後也正確的資料檔路徑。"""
@@ -18,7 +21,7 @@ def resource_path(*parts):
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("__TOOL_NAME__")
+        self.root.title(f"__TOOL_NAME__ v{__version__}")
         self.root.geometry("900x600")
 
         frame = ttk.Frame(root, padding=16)

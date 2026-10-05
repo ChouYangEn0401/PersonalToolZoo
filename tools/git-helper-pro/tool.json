@@ -3,6 +3,7 @@
   "entry": "GUI__GitHelperPro.py",
   "console": true,
   "version_from": "src/version.py",
+  "tag_prefix": "GitHelperPro",
   "include": [
     "language",
     "language_config.json"

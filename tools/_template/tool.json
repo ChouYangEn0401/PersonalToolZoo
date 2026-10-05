@@ -3,8 +3,11 @@
   "entry": "main.py",
   "console": false,
 
-  "_comment_version": "從工具自己的版本檔讀 __version__，會變成 exe 檔名後綴 (vX.Y.Z)。不需要就整行刪掉。",
+  "_comment_version": "必填。版本號唯一的來源：這個檔案裡的 __version__ = \"X.Y.Z\"。exe 檔名 <name>(vX.Y.Z).exe 跟程式視窗標題都讀它。改版本用 scripts\\bump-version.ps1 或 scripts\\release.ps1。",
   "version_from": "version.py",
+
+  "_comment_tag": "必填。release.ps1 打 tag 用的前綴：<tag_prefix>_vX.Y.Z",
+  "tag_prefix": "__TOOL_NAME__",
 
   "_comment_include": "要一起打包進 exe 的資料檔/資料夾（相對工具資料夾）。",
   "include": [],

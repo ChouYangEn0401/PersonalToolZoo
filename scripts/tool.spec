@@ -28,17 +28,21 @@ def tool_path(*parts):
 # 讓 entry script 的 import（例如 from src.core...）以工具資料夾為根
 sys.path.insert(0, TOOL_DIR)
 
-# ---- 版本號（可選）: 從工具自己的 version 檔讀 __version__ ----
-version = cfg.get("version", "")
-if cfg.get("version_from"):
-    _vf = tool_path(cfg["version_from"])
-    if os.path.isfile(_vf):
-        _ns = {}
-        with open(_vf, "r", encoding="utf-8") as _f:
-            exec(compile(_f.read(), _vf, "exec"), _ns)
-        version = _ns.get("__version__", version)
+# ---- 版本號（必填）: 唯一來源是 tool.json 的 version_from 指到的檔案裡的 __version__ ----
+# 程式的視窗標題也 import 同一個 __version__，所以改一個地方，檔名跟程式內顯示一起變。
+if not cfg.get("version_from"):
+    raise SystemExit(f"[tool.spec] {TOOL_DIR}\\tool.json 缺 version_from（版本號規則見根目錄 README）")
+_vf = tool_path(cfg["version_from"])
+if not os.path.isfile(_vf):
+    raise SystemExit(f"[tool.spec] version_from 指到的檔案不存在 -> {_vf}")
+_ns = {}
+with open(_vf, "r", encoding="utf-8") as _f:
+    exec(compile(_f.read(), _vf, "exec"), _ns)
+version = _ns.get("__version__")
+if not version:
+    raise SystemExit(f"[tool.spec] {_vf} 裡沒有 __version__")
 
-exe_name = cfg["name"] + (f"(v{version})" if version else "")
+exe_name = f"{cfg['name']}(v{version})"
 
 # ---- 要一起打包進 exe 的資料檔 / 資料夾 ----
 datas = []
