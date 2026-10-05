@@ -28,6 +28,13 @@ def tool_path(*parts):
 # 讓 entry script 的 import（例如 from src.core...）以工具資料夾為根
 sys.path.insert(0, TOOL_DIR)
 
+# ---- 額外的 import 路徑（可選）：例如 "pathex": ["../../libs"] 讓工具用到 repo 的共用套件 ----
+extra_paths = [os.path.normpath(tool_path(p)) for p in cfg.get("pathex", [])]
+for _p in extra_paths:
+    if not os.path.isdir(_p):
+        raise SystemExit(f"[tool.spec] pathex 指定的資料夾不存在 -> {_p}")
+    sys.path.insert(0, _p)
+
 # ---- 版本號（必填）: 唯一來源是 tool.json 的 version_from 指到的檔案裡的 __version__ ----
 # 程式的視窗標題也 import 同一個 __version__，所以改一個地方，檔名跟程式內顯示一起變。
 if not cfg.get("version_from"):
@@ -69,7 +76,7 @@ for pkg in cfg.get("collect_all", []):
 
 a = Analysis(
     [tool_path(cfg["entry"])],
-    pathex=[TOOL_DIR],
+    pathex=[TOOL_DIR] + extra_paths,
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
