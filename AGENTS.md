@@ -12,6 +12,13 @@
 ## 不能破壞的規則
 
 1. **工具之間互不依賴。** 不要跨 `tools/` 資料夾 import，不要把某個工具的執行時依賴放到根目錄。
+   兩個以上工具都要用、而且應該一起改的程式放 `libs/toolzoo/`（見 [libs/README.md](libs/README.md)）：
+   - 工具可以 import `libs`；**`libs` 不能 import 任何工具**。
+   - `libs` 沒有自己的 venv：它用到的第三方套件寫在**用到它的那個工具**的 `requirements.txt`。
+   - 用到 `libs` 的工具：`tool.json` 加 `"pathex": ["../../libs"]`，進入點開頭把 `libs` 加進 `sys.path`
+     （照 libs/README 的寫法），兩者缺一不可——前者給打包、後者給從原始碼執行。
+   - 改了 `libs` 就要把**每個**用到它的工具都重新 build 測過（目前：better-prompt、video-notes、video-downloader）。
+     `libs` 本身的測試：`python -m unittest discover -s libs\tests -v`。
 2. **環境規則**（定義在 `scripts/_common.ps1`）：
    - `requirements.txt` 有第三方套件 → `tools/<tool>/.venv`；只用標準庫 → 根目錄 `.venv`。
    - 加套件 = 改 `requirements.txt`，**不要**手動 `pip install` 進 venv。
@@ -89,6 +96,12 @@ README「歷史」列了還沒收的分支。收的時候照原本的四步，�
 ## 已知的坑
 
 - **工具名稱比對**：`git` 會同時符合 git-diff-stats 和 git-helper-pro → 會報歧義，請用 `diff`／`githelper`。
+  同理 `converter`（fast-file-converter／table-format-converter）→ 用 `fast`；`video` → 用 `notes`／`downloader`。
+- **web app 型的工具**（video-notes、video-downloader）：exe 一開就會開瀏覽器，冒煙測試也一樣。
+  不想跳瀏覽器時先設 `$env:TOOLZOO_NO_BROWSER = 1`。冒煙測試只看 exe 有沒有活著；要確認伺服器真的有回應，
+  打 `http://127.0.0.1:<port>/api/health`（video-notes 8766、video-downloader 8765）。
+- **yt-dlp 抓 YouTube 需要 JavaScript 執行環境**（deno／node／bun 其中一個），`libs/toolzoo/ytdlp.py` 會全部打開、有哪個用哪個。
+- **novel-reader 不要改回 pyttsx3**：2.99 在 Windows 上第二次 `runAndWait()` 就永遠卡住；現在直接呼叫 SAPI。
 - **PowerShell 的 `-match`／`-notmatch` 不分大小寫**：過濾輸出時 `'ok'` 也會濾掉結果表的 `OK` 行。
 - **增量 build**：輸入沒變時 PyInstaller 不重寫 exe（時間戳是舊的），產物要用 `Get-ToolInfo` 算出的檔名找，不要用時間戳。
 - **Git Helper Pro** 在開發模式切換語言會改寫有進版控的 `language_config.json`。
