@@ -1,0 +1,8 @@
+{
+  "name": "NovelReader",
+  "entry": "NovelReader.py",
+  "console": false,
+  "version_from": "version.py",
+  "tag_prefix": "NovelReader",
+  "hiddenimports": ["win32com.client", "pythoncom"]
+}

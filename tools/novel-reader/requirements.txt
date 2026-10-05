@@ -1,2 +1,4 @@
-gTTS==2.5.4
-pydub==0.25.1
+# Novel Reader 執行時依賴（打包工具在根目錄 requirements-dev.txt）
+pywin32>=306,<400  # Windows 內建語音（直接呼叫 SAPI 的 COM 物件；不用 pyttsx3，它第二次就卡死）
+pygame>=2.5,<3     # 播放、暫停
+gTTS>=2.5,<3       # Google 線上語音（源自 My Voice Assistant）；加速靠系統的 ffmpeg（atempo）
