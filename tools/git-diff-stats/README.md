@@ -4,11 +4,16 @@
 
 用法：
 
-- 在專案根目錄下執行（必須是 git 倉庫）
+只用標準庫，用 PersonalToolZoo 根目錄共用的 `.venv` 即可。在 repo 根目錄執行：
 
+```powershell
+.\.venv\Scripts\python.exe tools\git-diff-stats\GUI_GitDiffStatistics.py
+
+# 打包成 exe → dist\git-diff-stats\
+.\scripts\build.ps1 git-diff-stats -Smoke
 ```
-python -m diff_showcaser
-```
+
+啟動後在視窗裡選要分析的 git repo。
 
 輸入 `init_commit` 與 `latest_commit`（可以是 branch 名稱或 commit hash），按 `Compute`。
 

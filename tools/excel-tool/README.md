@@ -1,6 +1,6 @@
 # Advanced Excel Tool
 
-一個**分頁式 Excel 工具**，以 [`infinity_treeview`](https://pypi.org/project/infinity-treeview/)
+一個**分頁式 Excel 工具**，以 [`infinity_treeview`](https://github.com/ChouYangEn0401/Python-Infinity-Treeview)
 的虛擬捲動表格為核心，採 **MVC + 操作註冊表** 架構（GUI 與未來 CLI 共用同一批純運算）。
 
 三個工作台（依「進出表格數」分，各自獨立、無隱藏全域狀態）：
@@ -16,11 +16,20 @@
 
 ## 執行
 
-```bash
-pip install path/to/PythonInfinityTreeview/dist/infinity_treeview-0.2.0-py3-none-any.whl
-python GUI_AdvancedExcelTool.py           # GUI
-python -m excel_tool.cli list             # 列出可用操作（CLI 與 GUI 共用核心）
-python -m excel_tool.cli apply drop_columns --in a.xlsx --out b.xlsx --param columns=foo,bar
+以下都在 PersonalToolZoo repo 根目錄執行。依賴寫在 `tools/excel-tool/requirements.txt`：
+`infinity-treeview` 沒有發布到 PyPI，直接從 GitHub 的 `release_0.2.0` tag 安裝；
+pandas 釘在 2.x（原因見該檔註解）。
+
+```powershell
+.\scripts\setup-venv.ps1 excel-tool          # 建立隔離環境（只要一次，需要 git 與網路）
+
+cd tools\excel-tool
+.\.venv\Scripts\python.exe GUI_AdvancedExcelTool.py   # GUI
+.\.venv\Scripts\python.exe -m excel_tool.cli list     # 列出可用操作（CLI 與 GUI 共用核心）
+.\.venv\Scripts\python.exe -m excel_tool.cli apply drop_columns --in a.xlsx --out b.xlsx --param columns=foo,bar
+cd ..\..
+
+.\scripts\build.ps1 excel-tool -Smoke         # 打包成 exe → dist\excel-tool\
 ```
 
 ## 架構（MVC，btn → callback → 純運算）
@@ -34,28 +43,3 @@ excel_tool/
 └── cli.py           ← 以同一 registry 從命令列驅動
 GUI_AdvancedExcelTool.py  ← GUI 進入點
 ```
-
-# 使用說明書教學
-## 版本限定
-```commandline
-python 3.11 以上
-```
-
-## 環境預備
-請在專案 root folder 下，建立 `.env` 文件
-```text
-```
-請在專案 root folder 下，建立 以下資料夾 [``, ``, ``]
-
-## 使用方式
-### 簡單訪問服務流程 \[初階]
-```text
-```
-
-### 參數化訪問方式 \[中階]
-```text
-```
-
-## 其他補充說明
-...
-

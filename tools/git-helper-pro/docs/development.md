@@ -5,12 +5,13 @@
 ## 📦 檔案結構
 
 ```
-GitHelper/
+tools/git-helper-pro/
 ├── GUI__GitHelperPro.py          # 主程式（UI 整合、對話框邏輯）
-├── requirements.txt
+├── requirements.txt              # 只用標準庫，沒有第三方依賴
 ├── README.md
-├── builder.bat                   # 打包腳本
-├── language_config.json          # 語言偏好設定
+├── tool.json                     # build 設定（打包: repo 根目錄跑 .\scripts\build.ps1 git-helper-pro）
+├── ShowPanel.bat                 # 不打包、直接跑指令面板
+├── language_config.json          # 語言偏好設定（開發模式下切換語言會改寫這個檔）
 ├── language/
 │   ├── zh-tw.json                # 繁體中文（預設）
 │   ├── zh-cn.json                # 簡體中文
@@ -26,7 +27,7 @@ GitHelper/
 │       ├── command_panel.py      # 左側按鈕面板（配置驅動）
 │       ├── dialogs.py            # 通用參數對話框（含自動補全）
 │       └── danger_operation_blocker.py  # 危險操作確認管理
-└── data/                         # 工作目錄（輸出 / 暫存）
+└── tests/                        # 語言管理器測試
 ```
 
 ---

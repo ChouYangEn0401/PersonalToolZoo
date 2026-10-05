@@ -27,23 +27,26 @@
 
 ## 安裝
 
-```bash
+```powershell
 # 複製專案
 git clone https://github.com/ChouYangEn0401/PersonalToolZoo.git
 cd PersonalToolZoo
 
-# （選用）安裝 xlsx 支援
-pip install openpyxl
+# 建立這個工具的隔離環境（依 tools/table-format-converter/requirements.txt，含 openpyxl）
+.\scripts\setup-venv.ps1 table-format-converter
 ```
 
-> `requirements.txt` 目前列的是 PyInstaller 打包用的依賴，日常執行只需要上面的套件。
+> `requirements.txt` 只列執行時依賴；PyInstaller 等打包工具在根目錄的 `requirements-dev.txt`。
 
 ---
 
 ## 使用方式
 
-```bash
-python main.py
+```powershell
+.\tools\table-format-converter\.venv\Scripts\python.exe tools\table-format-converter\GUI_TableFormatConverter.py
+
+# 打包成 exe → dist\table-format-converter\
+.\scripts\build.ps1 table-format-converter -Smoke
 ```
 
 1. 把表格文字貼進上方輸入框（Tab 分隔或 Markdown 格式皆可）
@@ -78,11 +81,9 @@ Bob	設計	1002
 ## 專案結構
 
 ```
-PersonalToolZoo/
-├── main.py          # 主程式（GUI + 全部邏輯）
-├── requirements.txt # PyInstaller 打包依賴
-├── src/             # 預留的模組目錄（尚未使用）
-├── data/            # 資料目錄
-└── docs/            # 文件目錄
+tools/table-format-converter/
+├── GUI_TableFormatConverter.py  # 主程式（GUI + 全部邏輯）
+├── requirements.txt             # 執行時依賴（openpyxl）
+└── tool.json                    # build 設定（給 scripts/build.ps1 用）
 ```
 

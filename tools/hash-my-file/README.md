@@ -20,16 +20,19 @@
 
 ## 📦 安裝步驟
 
-1. **複製專案**
-```bash
-git clone [https://github.com/your-repo/hash-comparator.git](https://github.com/your-repo/hash-comparator.git)
-cd hash-comparator
+在 PersonalToolZoo repo 根目錄執行：
+```powershell
+# 建立這個工具的隔離環境（依 tools/hash-my-file/requirements.txt）
+.\scripts\setup-venv.ps1 hash-my-file
 ```
 
 ## 🚀 快速上手
 1. 執行程式： 
-```bash
-python main.py
+```powershell
+.\tools\hash-my-file\.venv\Scripts\python.exe tools\hash-my-file\HashMyFile.py
+
+# 打包成 exe → dist\hash-my-file\
+.\scripts\build.ps1 hash-my-file -Smoke
 ```
 2. 導入檔案：從檔案總管直接拖入一或多個檔案至視窗中。
 3. 比對策略：

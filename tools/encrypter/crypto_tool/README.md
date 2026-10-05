@@ -54,20 +54,19 @@
 
 ### 安裝步驟
 
-```bash
-# 1. 進入專案目錄
-cd crypto_tool
+在 PersonalToolZoo repo 根目錄執行：
 
-# 2. 安裝相依套件
-pip install -r requirements.txt
+```powershell
+# 1. 建立隔離環境並安裝相依套件（依 tools/encrypter/requirements.txt）
+.\scripts\setup-venv.ps1 encrypter
 
-# 3. 啟動程式
-python main.py
+# 2. 啟動程式
+.\tools\encrypter\.venv\Scripts\python.exe tools\encrypter\crypto_tool\GUI__Encrypter.py
 ```
 
 ### 相依套件
 - `pycryptodome` — 加密演算法庫
-- `ttkbootstrap` — 現代化 tkinter 主題
+- `ttkbootstrap` — 現代化 tkinter 主題（釘在 1.x；2.x 打包後會缺字型檔而無法啟動）
 - `tkinterdnd2` — 拖拉支援
 
 ---
