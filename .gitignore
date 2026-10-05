@@ -52,6 +52,9 @@ coverage.xml
 # VS Code settings (if you're using VS Code alongside PyCharm)
 .vscode/
 
+# Claude Code：.claude/skills 進版控，個人設定不進
+.claude/settings.local.json
+
 # Windows / OneDrive
 desktop.ini
 Thumbs.db
