@@ -44,33 +44,34 @@ def excel_to_format(
     Returns:
         List of absolute paths for every file written.
     """
-    xl = pd.ExcelFile(excel_path)
-    sheets = xl.sheet_names
     stem = Path(excel_path).stem
-    total = len(sheets)
     output_paths: list[str] = []
 
-    for i, sheet in enumerate(sheets, 1):
-        safe_sheet = _safe_filename_part(sheet)
-        fname = f"{stem}.[{safe_sheet}].{fmt}"
-        out_path = os.path.join(output_dir, fname)
+    # with：轉完就關檔。原本沒關，Windows 上原始的 Excel 會被鎖住（不能刪、不能改名）直到程式結束
+    with pd.ExcelFile(excel_path) as xl:
+        sheets = xl.sheet_names
+        total = len(sheets)
+        for i, sheet in enumerate(sheets, 1):
+            safe_sheet = _safe_filename_part(sheet)
+            fname = f"{stem}.[{safe_sheet}].{fmt}"
+            out_path = os.path.join(output_dir, fname)
 
-        if progress_cb:
-            progress_cb((i - 1) / total, f"讀取工作表：{sheet}")
+            if progress_cb:
+                progress_cb((i - 1) / total, f"讀取工作表：{sheet}")
 
-        df = xl.parse(sheet)
+            df = xl.parse(sheet)
 
-        if fmt == "csv":
-            df.to_csv(out_path, index=False, encoding="utf-8-sig")
-        elif fmt == "parquet":
-            df.to_parquet(out_path, index=False, engine="pyarrow")
-        else:
-            raise ValueError(f"Unsupported format: {fmt!r}")
+            if fmt == "csv":
+                df.to_csv(out_path, index=False, encoding="utf-8-sig")
+            elif fmt == "parquet":
+                df.to_parquet(out_path, index=False, engine="pyarrow")
+            else:
+                raise ValueError(f"Unsupported format: {fmt!r}")
 
-        output_paths.append(out_path)
+            output_paths.append(out_path)
 
-        if progress_cb:
-            progress_cb(i / total, f"已輸出：{fname}")
+            if progress_cb:
+                progress_cb(i / total, f"已輸出：{fname}")
 
     return output_paths
 
