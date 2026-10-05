@@ -1,0 +1,4 @@
+name = "每日新聞"
+description = "新聞快訊＋極簡：通勤時快速掃過"
+profile = "news"
+modifiers = ["brief"]

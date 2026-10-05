@@ -1,0 +1,9 @@
+name = "時間軸"
+icon = "⏱"
+order = 10
+description = "附上重點出現的時間點，方便回去看影片"
+needs_timestamps = true
+instructions = ["逐字稿每段開頭有 [mm:ss] 時間碼，請用它標出重點出現的時間。"]
+sections = """
+## 時間軸
+- [mm:ss] （這個時間點在講什麼；只列重要的轉折與重點，不要每段都列）"""

@@ -52,6 +52,9 @@ coverage.xml
 # VS Code settings (if you're using VS Code alongside PyCharm)
 .vscode/
 
+# 工具執行時產生的資料（下載的影音、逐字稿、筆記…），不進版控
+tools/video-notes/data/
+
 # Claude Code：.claude/skills 進版控，個人設定不進
 .claude/settings.local.json
 

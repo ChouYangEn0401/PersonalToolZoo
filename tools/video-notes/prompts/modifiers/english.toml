@@ -1,0 +1,5 @@
+name = "英文輸出"
+icon = "🌐"
+order = 70
+description = "筆記用英文撰寫"
+output_language = "English"

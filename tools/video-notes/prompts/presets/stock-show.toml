@@ -1,0 +1,4 @@
+name = "財經節目"
+description = "財經產業＋行動清單＋時間軸：看完知道該注意什麼"
+profile = "finance"
+modifiers = ["actions", "timeline"]

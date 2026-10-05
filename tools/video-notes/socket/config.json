@@ -1,0 +1,8 @@
+{
+  "_comment": "socket 模式：每支影片處理完，把結果用 HTTP POST（JSON）送到 url。enabled=true 時 CLI 每次都送；false 時要加 --post 才送。格式見 README「socket 模式」。",
+  "enabled": false,
+  "url": "http://127.0.0.1:8787/video-notes",
+  "timeout": 10,
+  "headers": {},
+  "include_transcript": false
+}
