@@ -1,324 +1,130 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Better Prompt — AI Text Transformer
-A beautiful GUI tool to transform text using the OpenAI API.
+貼上文字、選一個轉換模式，交給 LLM（OpenAI / Gemini / Claude）改寫。
+
+模式庫（MODES）與 LLM 呼叫層在 repo 的 libs/toolzoo/ai/，Video Notes 也用同一份。
 """
 
-import threading
 import json
 import os
+import sys
+import threading
 from pathlib import Path
 
-import customtkinter as ctk
-from tkinter import messagebox
-from tkinter import simpledialog
+# 從原始碼執行時讓 import 找得到 repo 的 libs/（打包時由 tool.json 的 pathex 處理）
+_LIBS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "libs")
+if not getattr(sys, "frozen", False) and os.path.isdir(_LIBS):
+    sys.path.insert(0, os.path.abspath(_LIBS))
 
-try:
-    from openai import OpenAI
-    OPENAI_AVAILABLE = True
-except ImportError:
-    OPENAI_AVAILABLE = False
+import customtkinter as ctk  # noqa: E402
+from tkinter import messagebox  # noqa: E402
+from tkinter import simpledialog  # noqa: E402
 
-from model_strategies import run_completion
+from toolzoo.ai import DEFAULT_MODELS, LLM, PROVIDERS, find_key, keys_file, save_key  # noqa: E402
+from toolzoo.ai.text_modes import MODES, build_messages, first_mode, preview  # noqa: E402
+from toolzoo.appdirs import tool_data_dir  # noqa: E402
+from version import __version__  # noqa: E402
 
 # ─── Appearance ───────────────────────────────────────────────────────────────
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-# ─── Persistent Settings ──────────────────────────────────────────────────────
-SETTINGS_FILE = Path.home() / ".better_prompt_settings.json"
-RECO_FILE = Path(__file__).parent / "model_recommendations.json"
 
-# ─── Mode & Prompt Definitions ────────────────────────────────────────────────
-MODES: dict = {
-    "✨ 文字精練": {
-        "color": "#4A9EFF",
-        "submodes": {
-            "基本整理": {
-                "desc": "整理語句，讓文字更流暢有條理",
-                "prompt": (
-                    "你是一位專業的文字編輯。"
-                    "請將以下文字整理得更精練、有條理，"
-                    "保留所有重要資訊，語句更流暢自然。"
-                    "不要增加原本沒有的內容，只做整理優化。\n\n"
-                    "待整理文字：\n{text}"
-                ),
-            },
-            "商務風格": {
-                "desc": "轉換為專業商務文字表達",
-                "prompt": (
-                    "你是一位專業的商業文書編輯。"
-                    "請將以下文字改寫成專業的商務風格，語言精練正式，"
-                    "適合在商業場合使用。\n\n原文：\n{text}"
-                ),
-            },
-            "學術風格": {
-                "desc": "轉換為嚴謹的學術語言",
-                "prompt": (
-                    "你是一位學術寫作專家。"
-                    "請將以下文字改寫成嚴謹的學術風格，"
-                    "用詞精準，邏輯清晰，適合學術論文使用。\n\n原文：\n{text}"
-                ),
-            },
-            "口語化": {
-                "desc": "轉換為自然親切的口語風格",
-                "prompt": (
-                    "你是一位擅長溝通的寫作者。"
-                    "請將以下文字改寫成自然流暢的口語風格，"
-                    "親切易讀，就像在跟朋友說話一樣。\n\n原文：\n{text}"
-                ),
-            },
-        },
-    },
-    "📋 精要摘要": {
-        "color": "#FF6B9D",
-        "submodes": {
-            "重點摘要": {
-                "desc": "提取文字的核心重點",
-                "prompt": (
-                    "你是一位專業的內容摘要專家。"
-                    "請將以下文字整理成清楚的重點摘要，"
-                    "提取最核心的資訊，去除冗餘內容。\n\n原文：\n{text}"
-                ),
-            },
-            "一句話摘要": {
-                "desc": "用 1-2 句話總結核心意思",
-                "prompt": (
-                    "請用最精簡的 1 到 2 句話，"
-                    "總結以下文字的核心意思，要能抓住最關鍵的訊息。\n\n原文：\n{text}"
-                ),
-            },
-            "條列式重點": {
-                "desc": "整理成清楚的條列式重點",
-                "prompt": (
-                    "請將以下文字整理成清楚的條列式重點（使用 • 符號），"
-                    "每點簡潔有力，涵蓋所有重要資訊。\n\n原文：\n{text}"
-                ),
-            },
-            "執行摘要": {
-                "desc": "適合給主管閱讀的執行摘要",
-                "prompt": (
-                    "請將以下內容整理成專業的執行摘要（Executive Summary），"
-                    "格式包含：核心結論、主要重點（條列）、建議行動。"
-                    "適合給決策者快速閱讀。\n\n原文：\n{text}"
-                ),
-            },
-        },
-    },
-    "🚀 Prompt 優化": {
-        "color": "#FF9F43",
-        "submodes": {
-            "ChatGPT Prompt": {
-                "desc": "優化成更有效的 AI Prompt",
-                "prompt": (
-                    "你是一位 Prompt 工程專家。"
-                    "請將以下描述優化成一個結構清晰、指令明確、效果更好的 ChatGPT/AI Prompt。"
-                    "要包含角色定義、任務說明、輸出要求等要素。\n\n原始描述：\n{text}"
-                ),
-            },
-            "程式碼說明": {
-                "desc": "優化技術和程式碼說明文字",
-                "prompt": (
-                    "你是一位資深軟體工程師。"
-                    "請將以下技術說明或程式碼描述優化成更清楚、結構更完整的技術文件，"
-                    "包含必要的細節和說明。\n\n原始說明：\n{text}"
-                ),
-            },
-            "AI 繪圖 Prompt": {
-                "desc": "轉換為 AI 繪圖專用英文 Prompt",
-                "prompt": (
-                    "You are an expert at creating prompts for AI image generation tools "
-                    "like Midjourney and Stable Diffusion. "
-                    "Convert the following description into an effective English image generation prompt. "
-                    "Include: subject details, art style, lighting, composition, quality modifiers "
-                    "(e.g. highly detailed, 8k, masterpiece). Output ONLY the prompt.\n\n"
-                    "Description: {text}"
-                ),
-            },
-            "技術規格說明": {
-                "desc": "整理成清楚的技術規格文件",
-                "prompt": (
-                    "你是一位技術專案管理專家。"
-                    "請將以下需求描述整理成清楚的技術規格說明，"
-                    "包含：功能說明、技術要求、驗收標準，適合給開發團隊使用。\n\n需求描述：\n{text}"
-                ),
-            },
-        },
-    },
-    "💡 發散思考": {
-        "color": "#A29BFE",
-        "submodes": {
-            "腦力激盪": {
-                "desc": "發散思考，列出多個可能方向",
-                "prompt": (
-                    "你是一位創意思考教練。"
-                    "請根據以下主題，進行發散性腦力激盪，"
-                    "列出 10 個以上不同方向的想法和可能性，鼓勵跳脫框架。\n\n主題：\n{text}"
-                ),
-            },
-            "文章發想": {
-                "desc": "發想文章結構、論點和內容方向",
-                "prompt": (
-                    "你是一位內容策略師。"
-                    "請根據以下主題，提供完整的文章結構建議："
-                    "包含引言角度、主要論點、支持論據、結論方向，"
-                    "以及可以增加深度的延伸觀點。\n\n主題：\n{text}"
-                ),
-            },
-            "繪圖 Prompt 發散": {
-                "desc": "發想多種繪圖風格和場景概念",
-                "prompt": (
-                    "你是一位視覺創意總監。"
-                    "根據以下描述，發想 6 到 8 個不同風格和構圖方向的 AI 繪圖概念，"
-                    "每個包含：場景描述、藝術風格、色調氛圍、構圖方式。\n\n原始概念：\n{text}"
-                ),
-            },
-            "創意點子": {
-                "desc": "提供創新解決方案和創意點子",
-                "prompt": (
-                    "你是一位創新顧問。"
-                    "針對以下問題，提供多個創新、有趣且實際可行的解決方案，"
-                    "從不同維度切入，鼓勵創意思考。\n\n問題 / 挑戰：\n{text}"
-                ),
-            },
-        },
-    },
-    "🔍 研究討論": {
-        "color": "#00CEC9",
-        "submodes": {
-            "多角度分析": {
-                "desc": "從多個角度深入分析主題",
-                "prompt": (
-                    "你是一位資深分析師。"
-                    "請從多個不同角度（支持方、反對方、中立方、各面向影響）"
-                    "深入分析以下主題，提供平衡且全面的觀點。\n\n分析主題：\n{text}"
-                ),
-            },
-            "資料補充": {
-                "desc": "補充背景知識和相關重要資訊",
-                "prompt": (
-                    "你是一位知識淵博的研究員。"
-                    "請根據以下內容，補充相關的背景知識、重要概念、成功案例和關鍵資訊，"
-                    "讓內容更完整豐富。\n\n原始內容：\n{text}"
-                ),
-            },
-            "反駁辯證": {
-                "desc": "提出反駁觀點，深化思考",
-                "prompt": (
-                    "你是一位批判性思考專家。"
-                    "針對以下論點，提出有力的反駁意見和不同觀點，"
-                    "幫助全面檢視這個論點的合理性與局限性。\n\n論點：\n{text}"
-                ),
-            },
-            "深度討論": {
-                "desc": "深入探討，提供專業見解與延伸",
-                "prompt": (
-                    "你是一位各領域通才專家。"
-                    "請針對以下主題進行深度討論："
-                    "提供專業見解、具體案例、延伸思考，以及對未來的啟示。\n\n討論主題：\n{text}"
-                ),
-            },
-        },
-    },
-    "📝 文件改寫": {
-        "color": "#FD79A8",
-        "submodes": {
-            "全面改寫": {
-                "desc": "保留意思，換全新表達方式",
-                "prompt": (
-                    "你是一位資深文字工作者。"
-                    "請將以下文字全面改寫，使用完全不同的表達方式，"
-                    "但保留所有核心意思和重要資訊，讓文字煥然一新。\n\n原文：\n{text}"
-                ),
-            },
-            "正式化": {
-                "desc": "提升文字的正式與專業程度",
-                "prompt": (
-                    "請將以下文字改寫成更正式、專業的版本，"
-                    "適合在正式場合、官方文件或職場環境中使用，語言精準莊重。\n\n原文：\n{text}"
-                ),
-            },
-            "簡化": {
-                "desc": "用更簡單易懂的語言表達",
-                "prompt": (
-                    "你是一位擅長化繁為簡的寫作者。"
-                    "請將以下文字改寫得更簡單易懂，使用日常語言表達，"
-                    "讓一般人都能輕鬆理解，不改變核心意思。\n\n原文：\n{text}"
-                ),
-            },
-            "擴展豐富": {
-                "desc": "增加細節和深度，豐富內容",
-                "prompt": (
-                    "你是一位內容創作專家。"
-                    "請將以下文字擴展豐富，增加相關細節、具體例子、背景說明和深度分析，"
-                    "讓內容更完整充實，保持主題聚焦。\n\n原文：\n{text}"
-                ),
-            },
-        },
-    },
+# ─── Paths ────────────────────────────────────────────────────────────────────
+
+def resource_path(*parts):
+    """打包後也正確的資料檔路徑（PyInstaller 會把資料解到 sys._MEIPASS）。"""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, *parts)
+
+
+def _app_dir() -> Path:
+    """exe（或腳本）所在的資料夾——使用者會把 .env 放在這裡。"""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+# 設定與「推薦模型」的編輯都寫到使用者資料夾：onefile exe 旁邊或 _MEIPASS 裡的檔案，關掉程式就沒了
+DATA_DIR = tool_data_dir("better-prompt")
+SETTINGS_FILE = DATA_DIR / "settings.json"
+RECO_FILE = DATA_DIR / "model_recommendations.json"
+DEFAULT_RECO_FILE = Path(resource_path("model_recommendations.json"))
+# v1 把設定（含明文 OpenAI 金鑰）存在家目錄；讀得到就沿用，不會刪它
+LEGACY_SETTINGS_FILE = Path.home() / ".better_prompt_settings.json"
+KEY_FILES = (_app_dir() / ".env",)
+
+# 還沒連上 API（拿不到帳號可用的模型清單）時，下拉選單先顯示這些
+FALLBACK_MODELS: dict[str, list[str]] = {
+    "openai": ["gpt-5.1", "gpt-4.1", "gpt-4.1-mini", "gpt-4o-mini"],
+    "gemini": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    "anthropic": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"],
 }
-
-DEFAULT_MODELS = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
 
 
 # ─── Settings Helpers ─────────────────────────────────────────────────────────
 
+def _read_json(path: Path) -> dict:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_json(path: Path, data: dict) -> None:
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except OSError:
+        pass
+
+
 def load_settings() -> dict:
-    try:
-        if SETTINGS_FILE.exists():
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {"api_key": "", "model": "gpt-4o-mini", "temperature": 0.7}
-
-
-def load_recommendations() -> dict:
-    try:
-        if RECO_FILE.exists():
-            with open(RECO_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
-
-
-def save_recommendations(recs: dict) -> None:
-    try:
-        with open(RECO_FILE, "w", encoding="utf-8") as f:
-            json.dump(recs, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-
-def read_dotenv(dotenv_path: Path) -> dict:
-    data = {}
-    if not dotenv_path.exists():
-        return data
-    try:
-        with open(dotenv_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" not in line:
-                    continue
-                k, v = line.split("=", 1)
-                k = k.strip()
-                v = v.strip().strip('"').strip("'")
-                data[k] = v
-    except Exception:
-        pass
-    return data
+    settings: dict = {"provider": "openai", "models": {}, "temperature": 0.7}
+    legacy = _read_json(LEGACY_SETTINGS_FILE)
+    if legacy.get("model"):
+        settings["models"]["openai"] = legacy["model"]
+    if "temperature" in legacy:
+        settings["temperature"] = legacy["temperature"]
+    settings.update({k: v for k, v in _read_json(SETTINGS_FILE).items() if k != "api_key"})
+    return settings
 
 
 def save_settings(settings: dict) -> None:
+    # 金鑰不放設定檔：統一由 toolzoo.ai.save_key 存到共用金鑰檔
+    _write_json(SETTINGS_FILE, {k: v for k, v in settings.items() if k != "api_key"})
+
+
+def legacy_api_key() -> str:
+    return str(_read_json(LEGACY_SETTINGS_FILE).get("api_key", "")).strip()
+
+
+def load_recommendations() -> dict:
+    return _read_json(RECO_FILE) if RECO_FILE.exists() else _read_json(DEFAULT_RECO_FILE)
+
+
+def save_recommendations(recs: dict) -> None:
+    _write_json(RECO_FILE, recs)
+
+
+def run_completion(llm: LLM, system: str, user: str, temperature: float,
+                   on_token, on_done, on_error) -> None:
+    """在背景執行緒呼叫 LLM。callback 也在背景執行緒被呼叫，更新 UI 請自己 self.after(0, ...)。
+
+    on_done 會拿到權威的完整輸出（Claude 拒答改由 fallback 模型接手時，跟串流內容可能不同）。
+    """
+    final: dict = {}
     try:
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+        for piece in llm.stream(system, user, temperature=temperature, final=final):
+            on_token(piece)
+    except Exception as exc:  # noqa: BLE001 — 任何錯誤都要顯示在畫面上，不能讓背景執行緒默默死掉
+        on_error(exc)
+        return
+    on_done(final.get("text"))
 
 
 # ─── Main Application ─────────────────────────────────────────────────────────
@@ -328,21 +134,14 @@ class BetterPromptApp(ctk.CTk):
         super().__init__()
         self.settings = load_settings()
         self.recommendations = load_recommendations()
-        # try to read .env in project root and merge API key if present
-        project_env = Path(__file__).parent / ".env"
-        env_vals = read_dotenv(project_env)
-        self._env_loaded_from: str | None = None
-        for key_name in ("OPENAI_API_KEY", "OPENAI_KEY", "API_KEY", "OPENAI_APIKEY", "OPENAIKEY"):
-            if key_name in env_vals and env_vals[key_name]:
-                if not self.settings.get("api_key"):
-                    self.settings["api_key"] = env_vals[key_name]
-                self._env_loaded_from = str(project_env)
-                break
-        self.client: "OpenAI | None" = None
-        self.available_models: list[str] = DEFAULT_MODELS.copy()
+        self.provider: str = self.settings.get("provider", "openai")
+        if self.provider not in PROVIDERS:
+            self.provider = "openai"
+        self._initial_key, self._key_source = self._find_key(self.provider)
+        self.llm: LLM | None = None
+        self.available_models: list[str] = FALLBACK_MODELS[self.provider].copy()
         self.is_processing = False
-        self.current_mode: str = list(MODES.keys())[0]
-        self.current_submode: str = list(MODES[self.current_mode]["submodes"].keys())[0]
+        self.current_mode, self.current_submode = first_mode()
 
         self._setup_window()
         self._build_ui()
@@ -352,7 +151,7 @@ class BetterPromptApp(ctk.CTk):
     # ── Window Setup ──────────────────────────────────────────────────────────
 
     def _setup_window(self) -> None:
-        self.title("Better Prompt  ✦  AI Text Transformer")
+        self.title(f"Better Prompt  ✦  AI Text Transformer  v{__version__}")
         self.geometry("1260x820")
         self.minsize(960, 680)
         self.update_idletasks()
@@ -374,10 +173,9 @@ class BetterPromptApp(ctk.CTk):
         self._build_main_area()
         self._build_statusbar()
         # Initialize first mode and submode now that main widgets (banner) exist
-        first_mode = list(MODES.keys())[0]
-        self._toggle_mode(first_mode)
-        first_sub = list(MODES[first_mode]["submodes"].keys())[0]
-        self._select_submode(first_mode, first_sub)
+        mode, sub = first_mode()
+        self._toggle_mode(mode)
+        self._select_submode(mode, sub)
 
     # ── Top Bar ───────────────────────────────────────────────────────────────
 
@@ -407,11 +205,18 @@ class BetterPromptApp(ctk.CTk):
         api = ctk.CTkFrame(bar, fg_color="transparent")
         api.grid(row=0, column=2, padx=22, pady=12, sticky="e")
 
+        self.provider_var = ctk.StringVar(value=PROVIDERS[self.provider])
+        ctk.CTkOptionMenu(
+            api, values=list(PROVIDERS.values()), variable=self.provider_var,
+            width=150, height=28, font=ctk.CTkFont(size=12),
+            command=self._on_provider_change,
+        ).pack(side="left", padx=(0, 10))
+
         ctk.CTkLabel(api, text="🔑", font=ctk.CTkFont(size=14)).pack(side="left")
-        self.api_key_var = ctk.StringVar(value=self.settings.get("api_key", ""))
+        self.api_key_var = ctk.StringVar(value=self._initial_key)
         self.api_key_entry = ctk.CTkEntry(
             api, textvariable=self.api_key_var,
-            width=210, show="•", placeholder_text="sk-...",
+            width=210, show="•", placeholder_text="API Key",
             font=ctk.CTkFont(size=12),
         )
         self.api_key_entry.pack(side="left", padx=(6, 4))
@@ -442,10 +247,10 @@ class BetterPromptApp(ctk.CTk):
             font=ctk.CTkFont(size=14),
         ).pack(side="left", padx=(0, 6))
 
-        # show small env-loaded indicator if key loaded from .env
-        if getattr(self, "_env_loaded_from", None):
-            self.env_label = ctk.CTkLabel(api, text="已自 .env 載入", font=ctk.CTkFont(size=10), text_color="#A3BE8C")
-            self.env_label.pack(side="left", padx=(0, 8))
+        # 金鑰是從哪裡讀到的（環境變數 / keys.env / .env / v1 設定檔）
+        self.key_source_lbl = ctk.CTkLabel(api, text="", font=ctk.CTkFont(size=10), text_color="#A3BE8C")
+        self.key_source_lbl.pack(side="left", padx=(0, 8))
+        self._show_key_source()
 
         self.connect_btn = ctk.CTkButton(
             api, text="連接 API", width=82, height=28,
@@ -462,9 +267,9 @@ class BetterPromptApp(ctk.CTk):
         self.api_status_lbl.pack(side="left", padx=(0, 14))
 
         ctk.CTkLabel(api, text="模型:", font=ctk.CTkFont(size=12)).pack(side="left", padx=(0, 5))
-        self.model_var = ctk.StringVar(value=self.settings.get("model", "gpt-4o-mini"))
+        self.model_var = ctk.StringVar(value=self._saved_model(self.provider))
         self.model_menu = ctk.CTkOptionMenu(
-            api, values=DEFAULT_MODELS, variable=self.model_var,
+            api, values=self.available_models, variable=self.model_var,
             width=150, height=28, font=ctk.CTkFont(size=12),
             command=self._on_model_change,
         )
@@ -495,7 +300,7 @@ class BetterPromptApp(ctk.CTk):
 
         row = 1
         for mode_name, mode_data in MODES.items():
-            color = mode_data["color"]
+            color = mode_data.color
 
             # Category header button
             hdr = ctk.CTkButton(
@@ -519,7 +324,7 @@ class BetterPromptApp(ctk.CTk):
             self.sub_frames[mode_name] = sub_frame
             self.sub_btns[mode_name] = {}
 
-            for sub_name, sub_data in mode_data["submodes"].items():
+            for sub_name in mode_data.submodes:
                 btn = ctk.CTkButton(
                     sub_frame, text=f"    • {sub_name}",
                     anchor="w", height=32,
@@ -819,9 +624,9 @@ class BetterPromptApp(ctk.CTk):
         ).pack(side="left")
 
         # Mode & submode dropdowns
-        first_mode = list(MODES.keys())[0]
-        first_subs = list(MODES[first_mode]["submodes"].keys())
-        mode_var = ctk.StringVar(value=first_mode)
+        first, _ = first_mode()
+        first_subs = list(MODES[first].submodes)
+        mode_var = ctk.StringVar(value=first)
         submode_var = ctk.StringVar(value=first_subs[0])
 
         submode_menu = ctk.CTkOptionMenu(
@@ -832,7 +637,7 @@ class BetterPromptApp(ctk.CTk):
         )
 
         def _on_mode_change(m: str, sm=submode_menu, sv=submode_var) -> None:
-            subs = list(MODES[m]["submodes"].keys())
+            subs = list(MODES[m].submodes)
             sm.configure(values=subs)
             sv.set(subs[0])
 
@@ -915,17 +720,12 @@ class BetterPromptApp(ctk.CTk):
         text = job["input_box"].get("1.0", "end-1c").strip()
         if not text:
             return
-        if not self.client:
+        if not self.llm:
             job["status_lbl"].configure(text="⚠️ 未連接", text_color="#FF9F43")
             return
 
-        mode = job["mode_var"].get()
-        submode = job["submode_var"].get()
-        submodes = MODES[mode]["submodes"]
-        if submode not in submodes:
-            submode = list(submodes.keys())[0]
-        prompt = submodes[submode]["prompt"].replace("{text}", text)
-        model = self.model_var.get()
+        system, user = build_messages(job["mode_var"].get(), job["submode_var"].get(), text)
+        llm = self.llm
         temperature = self.settings.get("temperature", 0.7)
 
         job["status_lbl"].configure(text="⏳ 執行中…", text_color="#FF9F43")
@@ -933,24 +733,19 @@ class BetterPromptApp(ctk.CTk):
         job["output_box"].delete("1.0", "end")
 
         def worker() -> None:
-            ob = job["output_box"]
             run_completion(
-                client=self.client,
-                model_id=model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=temperature,
-                on_token=lambda tok, _ob=ob: self.after(0, lambda t=tok, b=_ob: (b.insert("end", t), b.see("end"))),
-                on_done=lambda: self.after(0, lambda: job["status_lbl"].configure(text="✓ 完成", text_color="#4CAF50")),
-                on_error=lambda exc: self.after(0, lambda e=exc: job["status_lbl"].configure(text="❌ 錯誤", text_color="#FF6B6B")),
+                llm, system, user, temperature,
+                on_token=lambda tok: self.after(0, lambda t=tok: self._job_append(job, t)),
+                on_done=lambda final: self.after(0, lambda f=final: self._job_done(job, f)),
+                on_error=lambda exc: self.after(0, lambda e=exc: self._job_failed(job, e)),
             )
-            self.after(0, lambda: job["run_btn"].configure(state="normal"))
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _run_batch_all(self) -> None:
         if self._batch_running:
             return
-        if not self.client:
+        if not self.llm:
             messagebox.showwarning("未連接", "請先連接 API")
             return
 
@@ -960,13 +755,8 @@ class BetterPromptApp(ctk.CTk):
             text = job["input_box"].get("1.0", "end-1c").strip()
             if not text:
                 continue
-            mode = job["mode_var"].get()
-            submode = job["submode_var"].get()
-            submodes = MODES[mode]["submodes"]
-            if submode not in submodes:
-                submode = list(submodes.keys())[0]
-            prompt = submodes[submode]["prompt"].replace("{text}", text)
-            job_payloads.append({"job": job, "prompt": prompt})
+            system, user = build_messages(job["mode_var"].get(), job["submode_var"].get(), text)
+            job_payloads.append({"job": job, "system": system, "user": user})
 
         if not job_payloads:
             messagebox.showwarning("無任務", "請先在至少一個項目中輸入文字")
@@ -980,7 +770,7 @@ class BetterPromptApp(ctk.CTk):
 
         self._batch_running = True
         total = len(job_payloads)
-        model = self.model_var.get()
+        llm = self.llm
         temperature = self.settings.get("temperature", 0.7)
         self.batch_run_btn.configure(
             text="⏳ 執行中…", state="disabled",
@@ -991,19 +781,13 @@ class BetterPromptApp(ctk.CTk):
         def run_all() -> None:
             for i, payload in enumerate(job_payloads):
                 job = payload["job"]
-                prompt = payload["prompt"]
                 self.after(0, lambda j=job: j["status_lbl"].configure(text="⏳ 執行中…", text_color="#FF9F43"))
-                ob = job["output_box"]
                 run_completion(
-                    client=self.client,
-                    model_id=model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=temperature,
-                    on_token=lambda tok, _ob=ob: self.after(0, lambda t=tok, b=_ob: (b.insert("end", t), b.see("end"))),
-                    on_done=lambda j=job: self.after(0, lambda _j=j: _j["status_lbl"].configure(text="✓ 完成", text_color="#4CAF50")),
-                    on_error=lambda exc, j=job: self.after(0, lambda e=exc, _j=j: _j["status_lbl"].configure(text="❌ 錯誤", text_color="#FF6B6B")),
+                    llm, payload["system"], payload["user"], temperature,
+                    on_token=lambda tok, j=job: self.after(0, lambda t=tok, _j=j: self._job_append(_j, t)),
+                    on_done=lambda final, j=job: self.after(0, lambda f=final, _j=j: self._job_done(_j, f)),
+                    on_error=lambda exc, j=job: self.after(0, lambda e=exc, _j=j: self._job_failed(_j, e)),
                 )
-                self.after(0, lambda j=job: j["run_btn"].configure(state="normal"))
                 done = i + 1
                 self.after(0, lambda d=done, t=total: self.batch_status_lbl.configure(
                     text=f"{d} / {t}", text_color="#4A9EFF",
@@ -1019,6 +803,30 @@ class BetterPromptApp(ctk.CTk):
             ))
 
         threading.Thread(target=run_all, daemon=True).start()
+
+    # 下面三個都在 UI 執行緒被呼叫；工作列可能在執行中被使用者刪掉，所以先確認還在
+    def _job_append(self, job: dict, token: str) -> None:
+        if job["frame"].winfo_exists():
+            job["output_box"].insert("end", token)
+            job["output_box"].see("end")
+
+    def _job_done(self, job: dict, final_text: str | None) -> None:
+        if not job["frame"].winfo_exists():
+            return
+        box = job["output_box"]
+        if final_text is not None and final_text != box.get("1.0", "end-1c"):
+            box.delete("1.0", "end")
+            box.insert("end", final_text)
+        job["status_lbl"].configure(text="✓ 完成", text_color="#4CAF50")
+        job["run_btn"].configure(state="normal")
+
+    def _job_failed(self, job: dict, exc: Exception) -> None:
+        if not job["frame"].winfo_exists():
+            return
+        job["output_box"].delete("1.0", "end")
+        job["output_box"].insert("end", f"❌ API 呼叫失敗：\n{exc}")
+        job["status_lbl"].configure(text="❌ 錯誤", text_color="#FF6B6B")
+        job["run_btn"].configure(state="normal")
 
     # ── Status Bar ────────────────────────────────────────────────────────────
 
@@ -1061,8 +869,8 @@ class BetterPromptApp(ctk.CTk):
             btn.configure(text_color="#eee")
             self.current_mode = mode_name
             # auto-select first submode if current one doesn't belong to this mode
-            if self.current_submode not in MODES[mode_name]["submodes"]:
-                first_sub = list(MODES[mode_name]["submodes"].keys())[0]
+            if self.current_submode not in MODES[mode_name].submodes:
+                first_sub = next(iter(MODES[mode_name].submodes))
                 self._select_submode(mode_name, first_sub)
 
     def _select_submode(self, mode_name: str, sub_name: str) -> None:
@@ -1081,9 +889,9 @@ class BetterPromptApp(ctk.CTk):
         self.current_submode = sub_name
 
         # Update banner
-        sub_data = MODES[mode_name]["submodes"][sub_name]
+        sub_data = MODES[mode_name].submodes[sub_name]
         self.banner_mode_lbl.configure(text=f"{mode_name}  ›  {sub_name}")
-        self.banner_desc_lbl.configure(text=sub_data["desc"])
+        self.banner_desc_lbl.configure(text=sub_data.desc)
         self._update_status_info()
         self._update_recommendations_display()
 
@@ -1096,9 +904,54 @@ class BetterPromptApp(ctk.CTk):
     # ── Settings callbacks ────────────────────────────────────────────────────
 
     def _on_model_change(self, _val: str) -> None:
-        self.settings["model"] = self.model_var.get()
+        model = self.model_var.get()
+        self.settings.setdefault("models", {})[self.provider] = model
         save_settings(self.settings)
+        if self.llm:
+            self.llm.model = model
         self._update_status_info()
+
+    # ── Provider / API key ────────────────────────────────────────────────────
+
+    def _find_key(self, provider: str) -> tuple[str, str]:
+        key, source = find_key(provider, KEY_FILES)
+        if not key and provider == "openai":
+            key = legacy_api_key()
+            source = str(LEGACY_SETTINGS_FILE) if key else ""
+        return key, source
+
+    def _saved_model(self, provider: str) -> str:
+        return self.settings.get("models", {}).get(provider) or DEFAULT_MODELS[provider]
+
+    def _show_key_source(self) -> None:
+        src = self._key_source
+        if not src:
+            text = ""
+        elif src.startswith("環境變數"):
+            text = f"已自{src}載入"
+        else:
+            text = f"已自 {Path(src).name} 載入"
+        self.key_source_lbl.configure(text=text)
+
+    def _on_provider_change(self, label: str) -> None:
+        provider = next(k for k, v in PROVIDERS.items() if v == label)
+        if provider == self.provider:
+            return
+        self.provider = provider
+        self.settings["provider"] = provider
+        save_settings(self.settings)
+        self.llm = None
+        key, self._key_source = self._find_key(provider)
+        self.api_key_var.set(key)
+        self._show_key_source()
+        self.available_models = FALLBACK_MODELS[provider].copy()
+        self.model_menu.configure(values=self.available_models)
+        self.model_var.set(self._saved_model(provider))
+        self.api_status_lbl.configure(text="● 未連接", text_color="#FF6B6B")
+        self.connect_btn.configure(text="連接 API", state="normal")
+        self._update_status_info()
+        if key:
+            self._connect_api()
 
     def _on_temp_change(self, val: float) -> None:
         t = round(float(val), 1)
@@ -1218,57 +1071,58 @@ class BetterPromptApp(ctk.CTk):
     # ── API Connection ────────────────────────────────────────────────────────
 
     def _try_connect_api(self) -> None:
-        if self.settings.get("api_key"):
+        if self.api_key_var.get().strip():
             self._connect_api()
 
     def _connect_api(self) -> None:
-        if not OPENAI_AVAILABLE:
-            self.api_status_lbl.configure(text="● openai 未安裝", text_color="#FF9F43")
-            messagebox.showerror(
-                "缺少套件",
-                "找不到 openai 套件。\n請執行：pip install openai",
-            )
-            return
         api_key = self.api_key_var.get().strip()
         if not api_key:
-            messagebox.showwarning("API Key", "請先輸入 OpenAI API Key")
+            messagebox.showwarning("API Key", f"請先輸入 {PROVIDERS[self.provider]} 的 API Key")
             return
 
+        provider, model = self.provider, self.model_var.get()
         self.connect_btn.configure(text="連接中…", state="disabled")
         self.api_status_lbl.configure(text="● 連接中…", text_color="#FF9F43")
 
         def worker() -> None:
             try:
-                client = OpenAI(api_key=api_key)
-                resp = client.models.list()
-                gpt_models = sorted(
-                    [m.id for m in resp.data if "gpt" in m.id],
-                    reverse=True,
-                )
-                self.client = client
-                self.available_models = gpt_models or DEFAULT_MODELS.copy()
-                self.settings["api_key"] = api_key
-                save_settings(self.settings)
-                self.after(0, self._on_connect_ok)
-            except Exception as exc:
-                self.after(0, lambda e=exc: self._on_connect_fail(str(e)))
+                llm = LLM(provider, model, api_key=api_key)
+                models = llm.list_models()
+            except Exception as exc:  # noqa: BLE001
+                self.after(0, lambda e=exc: self._on_connect_fail(provider, str(e)))
+                return
+            self.after(0, lambda: self._on_connect_ok(llm, models, api_key))
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_connect_ok(self) -> None:
+    def _on_connect_ok(self, llm: LLM, models: list[str], api_key: str) -> None:
+        if llm.provider != self.provider:  # 連線途中使用者換了服務，這個結果已經過時
+            return
+        self.llm = llm
+        self.available_models = models or FALLBACK_MODELS[llm.provider].copy()
+        # 手動輸入的新金鑰（或 v1 設定檔裡的舊金鑰）存進共用金鑰檔，其他工具也讀得到；
+        # 本來就從環境變數 / keys.env / .env 讀到的就不重複存
+        if find_key(llm.provider, KEY_FILES)[0] != api_key:
+            save_key(llm.provider, api_key)
+            self._key_source = str(keys_file())
+            self._show_key_source()
         self.api_status_lbl.configure(text="● 已連接", text_color="#4CAF50")
         self.connect_btn.configure(text="重新連接", state="normal")
         self.model_menu.configure(values=self.available_models)
         if self.model_var.get() not in self.available_models:
-            self.model_var.set(self.available_models[0])
+            default = DEFAULT_MODELS[llm.provider]
+            self.model_var.set(default if default in self.available_models else self.available_models[0])
+        llm.model = self.model_var.get()
         self.status_lbl.configure(text="● API 已連接", text_color="#4CAF50")
         self._update_status_info()
 
-    def _on_connect_fail(self, msg: str) -> None:
+    def _on_connect_fail(self, provider: str, msg: str) -> None:
+        if provider != self.provider:
+            return
         self.api_status_lbl.configure(text="● 連接失敗", text_color="#FF6B6B")
         self.connect_btn.configure(text="重試", state="normal")
         self.status_lbl.configure(text="● API 連接失敗", text_color="#FF6B6B")
-        messagebox.showerror("連接錯誤", f"無法連接到 OpenAI API：\n\n{msg}")
+        messagebox.showerror("連接錯誤", f"無法連接到 {PROVIDERS[provider]}：\n\n{msg}")
 
     # ── Processing ────────────────────────────────────────────────────────────
 
@@ -1280,32 +1134,26 @@ class BetterPromptApp(ctk.CTk):
             messagebox.showwarning("輸入為空", "請先在輸入框中貼上要轉換的文字。")
             return
 
-        submodes = MODES[self.current_mode]["submodes"]
-        if self.current_submode not in submodes:
-            self.current_submode = list(submodes.keys())[0]
-        sub_data = submodes[self.current_submode]
-        prompt = sub_data["prompt"].replace("{text}", text)
-
-        if not self.client:
-            self._show_offline(sub_data["prompt"])
+        system, user = build_messages(self.current_mode, self.current_submode, text)
+        if not self.llm:
+            self._show_offline()
             return
 
-        self._start_stream(prompt)
+        self._start_stream(system, user)
 
-    def _show_offline(self, prompt_template: str) -> None:
-        preview = prompt_template.replace("{text}", "（您的文字）")
+    def _show_offline(self) -> None:
         msg = (
             "⚠️  API 尚未連接 — 離線模式\n\n"
-            "請在上方輸入 OpenAI API Key 並點擊「連接 API」。\n"
+            "請在上方選擇服務、輸入 API Key 並點擊「連接 API」。\n"
             "連接後即可開始轉換。\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"目前選擇：{self.current_mode}  ›  {self.current_submode}\n\n"
             "將使用以下 Prompt 呼叫 API：\n\n"
-            f"{preview}"
+            f"{preview(self.current_mode, self.current_submode)}"
         )
         self._set_output(msg)
 
-    def _start_stream(self, prompt: str) -> None:
+    def _start_stream(self, system: str, user: str) -> None:
         self.is_processing = True
         self.transform_btn.configure(
             text="⏳ 運算中…", state="disabled",
@@ -1317,15 +1165,16 @@ class BetterPromptApp(ctk.CTk):
 
         self._set_output("")
 
+        llm = self.llm
+        temperature = self.settings.get("temperature", 0.7)
+
         def worker() -> None:
             run_completion(
-                client=self.client,
-                model_id=self.model_var.get(),
-                messages=[{"role": "user", "content": prompt}],
-                temperature=self.settings.get("temperature", 0.7),
+                llm, system, user, temperature,
                 on_token=lambda tok: self.after(0, lambda t=tok: self._append_output(t)),
-                on_done=lambda: self.after(0, self._finish_ok),
-                on_error=lambda exc: self.after(0, lambda e=exc: self._finish_err(str(e))),
+                on_done=lambda final: self.after(0, lambda f=final: self._finish_ok(f)),
+                on_error=lambda exc: self.after(
+                    0, lambda e=exc: self._finish_err(f"[{llm.provider} | {llm.model}]\n{e}")),
             )
 
         threading.Thread(target=worker, daemon=True).start()
@@ -1335,7 +1184,10 @@ class BetterPromptApp(ctk.CTk):
         self.output_box.see("end")
         self._update_out_count()
 
-    def _finish_ok(self) -> None:
+    def _finish_ok(self, final_text: str | None = None) -> None:
+        # Claude 拒答改由 fallback 模型接手時，串流內容會混到前一個模型的片段，以最終結果為準
+        if final_text is not None and final_text != self.output_box.get("1.0", "end-1c"):
+            self._set_output(final_text)
         self._done_processing()
         self.status_lbl.configure(text="● 轉換完成 ✓", text_color="#4CAF50")
         self._update_out_count()
