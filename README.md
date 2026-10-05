@@ -92,7 +92,7 @@
 
 安全機制（不通過就什麼都不動）：
 
-- 這個工具的資料夾裡有還沒 commit 的修改 → 拒絕（release 必須對應到已 commit 的程式碼）
+- 這個工具的資料夾、或 `tool.json` 的 `pathex` 引用的共用程式碼（例如 `libs/`）裡有還沒 commit 的修改 → 拒絕（release 必須對應到已 commit 的程式碼）
 - 有已經 `git add` 但還沒 commit 的檔案 → 拒絕（避免被一起 commit 進 release）
 - tag 已經存在 → 拒絕
 - build 或冒煙測試失敗 → 把版本檔還原，不 commit、不打 tag

@@ -7,7 +7,8 @@
     不會自動 push，最後會印出 push 指令讓你自己決定。
 
     事前檢查（不通過就不動任何東西）：
-      - 這個工具資料夾裡不能有還沒 commit 的修改（release 必須對應到已 commit 的程式碼）
+      - 這個工具資料夾、以及 tool.json 的 pathex 指到的共用程式碼（例如 libs/），
+        都不能有還沒 commit 的修改（release 必須對應到已 commit 的程式碼）
       - 不能有已經 git add 但還沒 commit 的東西（避免被一起 commit 進去）
       - 新的 tag 不能已經存在
 
@@ -64,12 +65,12 @@ $keep = ($Bump -eq 'keep')
 $new  = if ($keep) { $info.Version } else { Get-BumpedVersion $info.Version $Bump }
 $tag  = "$($info.TagPrefix)_v$new"
 $versionRel = $info.VersionFile.Substring($Root.Length + 1).Replace('\', '/')
-$toolRel    = "tools/$($info.Name)"
+$sources    = @($info.SourcePaths)   # 工具資料夾 + tool.json 的 pathex（例如共用的 libs/）
 
 # ---------------------------------------------------------------- 事前檢查
-$dirty = @(Invoke-Git @('status', '--porcelain', '--', $toolRel))
+$dirty = @(Invoke-Git (@('status', '--porcelain', '--') + $sources))
 if ($dirty.Count -gt 0) {
-    throw "$toolRel 裡有還沒 commit 的修改，先 commit 再發布：`n$($dirty -join "`n")"
+    throw "$($sources -join '、') 裡有還沒 commit 的修改（都會被打包進 exe），先 commit 再發布：`n$($dirty -join "`n")"
 }
 $staged = @(Invoke-Git @('diff', '--cached', '--name-only'))
 if ($staged.Count -gt 0) {

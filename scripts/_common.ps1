@@ -74,6 +74,18 @@ function Get-ToolInfo([string] $name) {
     $envLabel = if ($python -eq $ownVenv) { "tools\$name\.venv" } else { '.venv (共用)' }
     $tagPrefix = if ($cfg.tag_prefix) { $cfg.tag_prefix } else { $cfg.name }
 
+    # 會被打包進 exe 的原始碼位置（repo 相對路徑）：工具資料夾本身 + tool.json 的 pathex
+    # （例如 "../../libs" 共用套件）。release 前要確認這些地方都沒有未 commit 的修改。
+    $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
+    $sources = @("tools/$name")
+    foreach ($p in @($cfg.pathex | Where-Object { $_ })) {
+        $full = [System.IO.Path]::GetFullPath((Join-Path $dir $p))
+        if (-not $full.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "tools\$name\tool.json 的 pathex 指到 repo 外面: $p"
+        }
+        $sources += $full.Substring($rootFull.Length).Replace('\', '/')
+    }
+
     [pscustomobject]@{
         Name        = $name
         Dir         = $dir
@@ -88,6 +100,7 @@ function Get-ToolInfo([string] $name) {
         HasDeps     = $hasDeps
         Python      = $python
         EnvLabel    = $envLabel
+        SourcePaths = $sources
     }
 }
 
