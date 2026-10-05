@@ -5,6 +5,7 @@
     python scripts/check_deps.py requirements-dev.txt tools/<name>/requirements.txt
 
 全部符合 → exit 0；有缺的或版本不在範圍內 → 列出來並 exit 1。
+--quiet：符合的不印，只印有問題的（build 時用）。
 只用標準庫 + packaging（pyinstaller 本身就依賴 packaging，build 環境一定有）。
 """
 import sys
@@ -32,7 +33,9 @@ def read_requirements(path):
     return reqs
 
 
-def main(paths):
+def main(args):
+    quiet = "--quiet" in args
+    paths = [a for a in args if a != "--quiet"]
     problems = []
     for path in paths:
         for req in read_requirements(path):
@@ -45,11 +48,12 @@ def main(paths):
                 continue
             if req.specifier and not req.specifier.contains(installed, prereleases=True):
                 problems.append(f"{req.name}: 裝的是 {installed}，不符合 {req.specifier}")
-            else:
+            elif not quiet:
                 print(f"  ok  {req.name}=={installed}")
 
     if problems:
-        print()
+        if not quiet:
+            print()
         for p in problems:
             print(f"  !!  {p}")
         sys.exit(1)

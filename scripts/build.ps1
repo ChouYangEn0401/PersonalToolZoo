@@ -3,32 +3,45 @@
     PersonalToolZoo 統一 builder。
 
 .DESCRIPTION
-    所有工具共用 scripts\tool.spec，各工具的差異只寫在 tools\<name>\tool.json。
-    所有路徑都以「工具資料夾」為基準解析，所以你站在哪個目錄下執行結果都一樣。
+    什麼參數都不給 → 跳出選單讓你挑要 build 哪些工具（雙擊根目錄的 build.bat 也是這個）。
+    工具名稱可以打不完整：hash、excel、table、HashMyFile、.\tools\hash-my-file\ 都認得；
+    打 .\scripts\build.ps1 再按 Tab 可以補完名稱。
 
-    每次 build 前會先檢查該工具 venv 裡裝的套件符合 requirements，
-    不符合就不 build（避免產出一個能 build、但一打開就崩潰的 exe）。
+    每個工具 build 時會自動：
+      1. 準備環境 —— venv 不存在就建、版本跟 requirements 不符就同步（不用先手動 setup）
+      2. 用共用的 scripts\tool.spec 打包 → dist\<tool>\<name>(v<版本>).exe
+         版本號自動讀 tool.json 的 version_from，不用手打
+      3. 冒煙測試 —— 把 exe 開起來 10 秒，崩潰（錯誤視窗 / 提早結束）就判定失敗
 
 .EXAMPLE
-    .\scripts\build.ps1 git-helper-pro          # build 單一工具
-    .\scripts\build.ps1 git-helper-pro -Smoke   # build 完實際啟動 exe 檢查會不會崩潰
-    .\scripts\build.ps1 -All -Smoke             # 全部 build + 冒煙測試（發 release 前用這個）
-    .\scripts\build.ps1 -List                   # 列出有哪些工具、用哪個環境、版本
-    .\scripts\build.ps1 hash-my-file -Clean -Smoke   # 清掉這個工具的快取後從頭 build（發 release 用）
-    .\scripts\build.ps1 -Clean                  # 清掉整個 build\ 與 dist\
+    .\scripts\build.ps1                         # 選單
+    .\scripts\build.ps1 hash                    # build hash-my-file
+    .\scripts\build.ps1 hash table excel        # 一次 build 多個
+    .\scripts\build.ps1 -All                    # 全部
+    .\scripts\build.ps1 excel -Clean            # 清掉這個工具的快取後從頭 build
+    .\scripts\build.ps1 hash -NoSmoke           # 不開 exe 檢查（快一點）
+    .\scripts\build.ps1 -List                   # 列出工具、版本、環境
+    .\scripts\build.ps1 -Clean                  # 只清掉整個 build\ 與 dist\
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Position = 0)]
-    [string] $Tool,
+    [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
+    [ArgumentCompleter({
+        param($cmd, $param, $word)
+        $base = try { Split-Path -Parent (Split-Path -Parent (Resolve-Path $cmd -ErrorAction Stop).Path) } catch { (Get-Location).Path }
+        Get-ChildItem (Join-Path $base 'tools') -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notlike '_*' -and $_.Name -like "$word*" } | ForEach-Object { $_.Name }
+    })]
+    [string[]] $Tool,
 
     [switch] $All,
     [switch] $List,
     [switch] $Clean,
+    [switch] $NoSmoke,
+    [int]    $SmokeSeconds = 10,
 
-    # build 完把 exe 開起來 N 秒，出現 PyInstaller 的錯誤視窗或程式提早崩潰就算失敗
-    [switch] $Smoke,
-    [int]    $SmokeSeconds = 10
+    # 舊參數，冒煙測試現在預設就會做；留著讓舊指令不會出錯
+    [switch] $Smoke
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,27 +49,6 @@ $ErrorActionPreference = 'Stop'
 
 $Spec = Join-Path $PSScriptRoot 'tool.spec'
 
-
-function Get-ToolVersion([string] $toolDir) {
-    $cfg = Get-Content (Join-Path $toolDir 'tool.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($cfg.version_from) {
-        $vf = Join-Path $toolDir $cfg.version_from
-        if (Test-Path $vf) {
-            $m = Select-String -Path $vf -Pattern '__version__\s*=\s*[''"]([^''"]+)[''"]' | Select-Object -First 1
-            if ($m) { return $m.Matches[0].Groups[1].Value }
-        }
-    }
-    if ($cfg.version) { return $cfg.version }
-    ''
-}
-
-function Get-ExeBaseName([string] $toolDir) {
-    $cfg = Get-Content (Join-Path $toolDir 'tool.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    $v = Get-ToolVersion $toolDir
-    if ($v) { "$($cfg.name)(v$v)" } else { $cfg.name }
-}
-
-function Format-Version([string] $v) { if ($v) { "v$v" } else { '(無版本號)' } }
 
 function Get-ProcessTree([int] $id) {
     $ids = @($id)
@@ -109,96 +101,103 @@ function Test-ExeSmoke([System.IO.FileInfo] $exe) {
     Write-Host "    smoke: OK" -ForegroundColor Green
 }
 
-function Build-Tool([string] $name) {
-    $toolDir  = Get-ToolDir $name
-    $distPath = Join-Path $Root "dist\$name"
-    $workPath = Join-Path $Root "build\$name"
-
+function Build-Tool([string] $name, [bool] $clean, [bool] $smoke) {
     Write-Host ""
-    Write-Host "==> building $name $(Format-Version (Get-ToolVersion $toolDir))" -ForegroundColor Cyan
+    $info = Get-ToolInfo $name
+    Write-Host "==> $name  v$($info.Version)" -ForegroundColor Cyan
 
-    $python = Resolve-ToolPython $name
-    Write-Host "    python: $python" -ForegroundColor DarkGray
+    if ($clean) {
+        foreach ($d in @($info.WorkDir, $info.DistDir)) {
+            if (Test-Path $d) { Remove-Item $d -Recurse -Force; Write-Host "    清掉 $($d.Substring($Root.Length + 1))\" -ForegroundColor DarkGray }
+        }
+    }
 
-    try { Test-ToolDeps $name $python }
-    catch { throw "$($_.Exception.Message) —— 環境跟 requirements 不一致，先跑:  .\scripts\setup-venv.ps1 $name -Force" }
+    $python = Get-ReadyToolPython $info
+    Write-Host "    環境: $($info.EnvLabel)" -ForegroundColor DarkGray
 
-    $env:TOOLZOO_TOOL_DIR = $toolDir
+    $env:TOOLZOO_TOOL_DIR = $info.Dir
     try {
-        Invoke-Native $python @('-m', 'PyInstaller', $Spec, '--noconfirm', '--distpath', $distPath, '--workpath', $workPath) "build $name"
+        Invoke-Native $python @('-m', 'PyInstaller', $Spec, '--noconfirm', '--log-level', 'WARN',
+                                '--distpath', $info.DistDir, '--workpath', $info.WorkDir) "PyInstaller ($name)"
     }
     finally {
         Remove-Item Env:\TOOLZOO_TOOL_DIR -ErrorAction SilentlyContinue
     }
 
-    # 產物檔名規則跟 tool.spec 一致：<name>(v<version>).exe
+    # 檔名規則跟 tool.spec 一致，直接用算的找產物
     # （不能用時間戳找：輸入沒變時 PyInstaller 會判定 EXE 已是最新而不重寫檔案）
-    $exePath = Join-Path $distPath "$(Get-ExeBaseName $toolDir).exe"
-    if (-not (Test-Path $exePath)) { throw "build $name 結束了，但找不到預期的產物 $exePath" }
+    $exePath = Join-Path $info.DistDir $info.ExeName
+    if (-not (Test-Path $exePath)) { throw "build 結束了，但找不到預期的產物 $exePath" }
     $exe = Get-Item $exePath
+    Write-Host ("    產物: dist\{0}\{1}  ({2} MB)" -f $name, $exe.Name, [math]::Round($exe.Length / 1MB, 1)) -ForegroundColor Green
 
-    $mb = [math]::Round($exe.Length / 1MB, 1)
-    Write-Host "    OK -> dist\$name\$($exe.Name)  ($mb MB)" -ForegroundColor Green
+    foreach ($o in @(Get-ChildItem $info.DistDir -Filter *.exe | Where-Object { $_.Name -ne $exe.Name })) {
+        Write-Host "    (dist\$name\ 裡還有舊版的 $($o.Name)，不需要就刪掉，或下次加 -Clean)" -ForegroundColor DarkYellow
+    }
 
-    $old = @(Get-ChildItem -Path $distPath -Filter *.exe | Where-Object { $_.FullName -ne $exe.FullName })
-    foreach ($o in $old) { Write-Host "    (dist\$name\ 裡還有舊的 $($o.Name)，要的話自己刪)" -ForegroundColor DarkYellow }
-
-    if ($Smoke) { Test-ExeSmoke $exe }
+    if ($smoke) { Test-ExeSmoke $exe }
+    $exe.FullName
 }
 
 
 # ---------------------------------------------------------------- main
-if ($Clean) {
-    # 有指定工具 → 只清那個工具的 build\<tool>、dist\<tool>；沒指定 → 整個 build\、dist\
-    $cleanDirs = if ($Tool -and -not $All) { @("build\$Tool", "dist\$Tool") } else { @('build', 'dist') }
-    foreach ($d in $cleanDirs) {
-        $p = Join-Path $Root $d
-        if (Test-Path $p) {
-            Remove-Item $p -Recurse -Force
-            Write-Host "removed $d\" -ForegroundColor Yellow
-        }
-    }
-    if (-not $Tool -and -not $All) { return }
-}
-
 if ($List) {
     Write-Host "tools/:" -ForegroundColor Cyan
-    foreach ($t in Get-AllTools) {
-        $dir = Join-Path $ToolsDir $t
-        $env_ = if (Test-Path (Get-ToolVenvPython $dir)) { "tools\$t\.venv" }
-                elseif ((Get-ToolDeps $dir).Count -gt 0) { '(缺 venv → setup-venv.ps1)' }
-                else { '.venv (共用)' }
-        Write-Host ("  - {0,-24} {1,-12} {2}" -f $t, (Format-Version (Get-ToolVersion $dir)), $env_)
+    Write-ToolTable (Get-AllTools)
+    return
+}
+
+if ($Clean -and -not $All -and -not $Tool) {
+    foreach ($d in @('build', 'dist')) {
+        $p = Join-Path $Root $d
+        if (Test-Path $p) { Remove-Item $p -Recurse -Force; Write-Host "removed $d\" -ForegroundColor Yellow }
     }
     return
 }
 
-$targets = @()
-if ($All)        { $targets = Get-AllTools }
-elseif ($Tool)   { $targets = @($Tool) }
+$interactive = -not $All -and -not $Tool
+$doClean = [bool] $Clean
+$doSmoke = -not $NoSmoke
+
+if ($All) { $targets = Get-AllTools }
 else {
-    Write-Host "用法: .\scripts\build.ps1 <tool> [-Smoke] | -All [-Smoke] | -List | -Clean" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "可用的工具:" -ForegroundColor Cyan
-    Get-AllTools | ForEach-Object { Write-Host "  - $_" }
-    return
+    $targets = Resolve-ToolTargets $Tool 'build' $true
+    if ($targets.Count -eq 0) {
+        Write-Host "沒有選任何工具，結束。" -ForegroundColor Yellow
+        Write-Host "用法: .\scripts\build.ps1 [工具名稱...] [-All] [-Clean] [-NoSmoke] [-List]   （詳見 Get-Help .\scripts\build.ps1）"
+        return
+    }
 }
 
-if ($targets.Count -eq 0) { throw "沒有可以 build 的工具" }
+if ($interactive) {
+    Write-Host ""
+    Write-Host "要 build: $($targets -join ', ')" -ForegroundColor Cyan
+    $doClean = Confirm-YesNo "  清掉快取從頭 build？（發 release 前建議）" $false
+    $doSmoke = Confirm-YesNo "  build 完把 exe 開起來檢查會不會崩潰？" $true
+}
 
-$failed = @()
+$results = @()
 foreach ($t in $targets) {
-    try { Build-Tool $t }
+    try {
+        $exe = Build-Tool $t $doClean $doSmoke
+        $results += [pscustomobject]@{ Tool = $t; Result = 'OK'; Output = $exe.Substring($Root.Length + 1) }
+    }
     catch {
-        $failed += $t
+        $results += [pscustomobject]@{ Tool = $t; Result = 'FAILED'; Output = $_.Exception.Message }
         Write-Host "    FAILED: $($_.Exception.Message)" -ForegroundColor Red
         Write-Verbose $_.ScriptStackTrace
     }
 }
 
 Write-Host ""
-if ($failed.Count -gt 0) {
-    Write-Host "完成，但有 $($failed.Count) 個失敗: $($failed -join ', ')" -ForegroundColor Red
-    exit 1
+Write-Host "================ 結果" -ForegroundColor Cyan
+foreach ($r in $results) {
+    $color = if ($r.Result -eq 'OK') { 'Green' } else { 'Red' }
+    Write-Host ("  {0,-7} {1,-24} {2}" -f $r.Result, $r.Tool, $r.Output) -ForegroundColor $color
 }
-Write-Host "全部完成 ($($targets.Count) 個工具)" -ForegroundColor Green
+$failed = @($results | Where-Object { $_.Result -ne 'OK' })
+
+if ($interactive -and $failed.Count -lt $results.Count) {
+    if (Confirm-YesNo "打開 dist 資料夾？" $false) { Invoke-Item (Join-Path $Root 'dist') }
+}
+if ($failed.Count -gt 0) { exit 1 }
