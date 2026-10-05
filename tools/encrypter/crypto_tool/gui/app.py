@@ -141,7 +141,7 @@ class CryptoToolApp:
             font=FONT_SMALL, bootstyle="secondary",
         ).pack(side=LEFT)
         tk.Label(
-            status, text="v1.1.0",
+            status, text=f"v{__version__}",
             font=FONT_SMALL,
             foreground=GOLD_DARK,
             background=style_bg(self.root),
