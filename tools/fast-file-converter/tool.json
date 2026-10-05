@@ -1,0 +1,13 @@
+{
+  "name": "SuperFileConverter",
+  "entry": "GUI__FastFileConverter.py",
+  "console": false,
+  "version_from": "version.py",
+  "tag_prefix": "SuperFileConverter",
+  "collect_all": ["sv_ttk", "tkinterdnd2"],
+  "hiddenimports": [
+    "PIL._tkinter_finder", "fitz", "pdf2docx", "pdf2docx.converter",
+    "pptx", "pptx.util", "pptx.oxml", "img2pdf",
+    "openpyxl", "openpyxl.styles", "pyarrow", "pyarrow.pandas_compat"
+  ]
+}

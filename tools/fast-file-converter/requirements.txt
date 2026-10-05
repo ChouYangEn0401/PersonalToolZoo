@@ -1,10 +1,12 @@
-Pillow>=10.0.0
-img2pdf>=0.5.0
-PyMuPDF>=1.23.0
-pdf2docx>=0.5.6
-python-pptx>=0.6.21
-pandas>=2.0.0
-openpyxl>=3.1.0
-pyarrow>=14.0.0
-sv-ttk>=2.6.0
-tkinterdnd2>=0.3.0
+# Fast File Converter 執行時依賴（打包工具在根目錄 requirements-dev.txt）
+# 上限依「原專案 .venv 實際在用、確認可用」的版本訂（2026-10）
+Pillow>=10.0,<13            # 圖片轉換（用的是 12.2）
+img2pdf>=0.5,<1             # 圖片無損嵌入 PDF
+PyMuPDF>=1.23,<2            # PDF 文字抽取、頁面渲染
+pdf2docx>=0.5.6,<1          # PDF → Word
+python-pptx>=1.0,<2         # PDF → PPTX
+pandas>=3.0,<4              # 表格讀寫——這個工具是在 pandas 3 上開發測過的（跟 Excel Tool 相反）
+openpyxl>=3.1,<4            # Excel 引擎
+pyarrow>=14.0,<24           # Parquet 引擎（用的是 23.0）
+sv-ttk>=2.6,<3              # Windows 11 風格主題
+tkinterdnd2>=0.3,<1         # 快速拖放分頁
