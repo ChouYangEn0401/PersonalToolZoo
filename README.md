@@ -10,9 +10,20 @@
 | **Git Helper Pro** | Git 指令 GUI 助手：多專案分頁、危險指令攔截、rebase/merge/stash 引導、繁中／簡中／英三語切換 | v1.6.4 | `githelper` | [tools/git-helper-pro/](tools/git-helper-pro/) |
 | **Encrypter** | 檔案／文字加密 GUI，自訂 `.isd` 格式，支援多種演算法與 Mixture（多階段）加密模式 | v0.3.0 | `enc` | [tools/encrypter/](tools/encrypter/) |
 | **Table Format Converter** | 貼上 Tab 分隔或 Markdown 表格即時預覽，一鍵輸出 MD／Tab／CSV／XLSX | v1.0.0 | `table` | [tools/table-format-converter/](tools/table-format-converter/) |
-| **HashMyFile** | 拖放檔案計算 MD5／SHA-1／SHA-256，內容相同的檔案自動標色比對 | v0.1.0 | `hash` | [tools/hash-my-file/](tools/hash-my-file/) |
+| **HashMyFile** | 拖放檔案或資料夾計算 MD5／SHA-1／SHA-256／CRC32，內容相同的檔案自動標色；貼上雜湊值即可驗證 | v0.1.0 | `hash` | [tools/hash-my-file/](tools/hash-my-file/) |
 | **Advanced Excel Tool** | 分頁式 Excel 工作台：核心整理（可疊加／undo）、多檔合併、diff 比較＋AB 審核 | v0.1.0 | `excel` | [tools/excel-tool/](tools/excel-tool/) |
 | **Git Diff Statistics** | 指定兩個 commit／branch，統計各副檔名的檔案數與增刪行數 | v1.0.0 | `diff` | [tools/git-diff-stats/](tools/git-diff-stats/) |
+| **Video Notes** | 影片網址 → 下載 → 逐字稿（GPU Whisper）→ AI 依影片類型整理成 Notion 筆記；本機網頁 GUI＋CLI＋HTTP 串接 | v2.0.0 | `notes` | [tools/video-notes/](tools/video-notes/) |
+| **Video Downloader** | yt-dlp 的本機網頁 GUI：約 1800 個網站與 m3u8 串流、畫質預設、播放清單、佇列與續傳、書籤小工具 | v2.0.0 | `downloader` | [tools/video-downloader/](tools/video-downloader/) |
+| **Better Prompt** | 貼上文字選模式，交給 OpenAI／Gemini／Claude 改寫：整理、摘要、Prompt 優化等 24 種模式 | v1.1.0 | `prompt` | [tools/better-prompt/](tools/better-prompt/) |
+| **Super File Converter** | 圖片／影片／PDF／表格轉換工作台，含「設好規則直接拖檔」的快速轉換分頁 | v1.1.0 | `fast` | [tools/fast-file-converter/](tools/fast-file-converter/) |
+| **Novel Reader** | 長文朗讀：Windows 內建語音或 Google 語音、可調語速、KTV 式字幕、記住讀到哪 | v2.0.0 | `reader` | [tools/novel-reader/](tools/novel-reader/) |
+| **File Renamer** | 拖放檔案，用正規表達式或雜湊批次改名；先預覽、擋下衝突、可以復原 | v1.1.0 | `renamer` | [tools/file-renamer/](tools/file-renamer/) |
+| **Better File Finder** | 多關鍵字、排除、模糊比對的檔案搜尋，也能搜尋文字檔內容 | v1.1.0 | `finder` | [tools/better-file-finder/](tools/better-file-finder/) |
+| **Random Icon Maker** | 輸入種子產生 9 種演算法的隨機圖示，預覽後存成 ICO／PNG | v1.1.0 | `icon` | [tools/random-icon-maker/](tools/random-icon-maker/) |
+
+Video Notes 與 Video Downloader 是本機網頁程式：執行後會開瀏覽器，主控台視窗關掉就停止。
+Video Notes 與 Better Prompt 共用 [`libs/`](libs/README.md) 裡的 AI 呼叫層與 API 金鑰（`%APPDATA%\PersonalToolZoo\keys.env`）。
 
 每個工具的 README 最後都有一段「**交接**」：入口、版本號在哪、用哪個環境、依賴與限制、怎麼測試、已知問題。
 
@@ -147,6 +158,7 @@ PersonalToolZoo/
 ├─ build.bat / release.bat ← 雙擊用的入口
 ├─ requirements-dev.txt    ← 共用 build 工具鏈（pyinstaller 等），所有 venv 都裝
 ├─ .venv/                  ← 共用虛擬環境（只給只用標準庫的工具）
+├─ libs/toolzoo/           ← 工具之間共用的程式（AI 呼叫層、yt-dlp 設定、web app 啟動器…），見 libs/README.md
 ├─ scripts/
 │  ├─ build.ps1            ← 統一 builder：選單、名稱比對、自動環境、打包、冒煙測試
 │  ├─ release.ps1          ← 發布：改版號 → build → commit → tag
@@ -192,6 +204,8 @@ PersonalToolZoo/
 | `version_from` | ✔ | 版本檔（見「版本號規則」） |
 | `tag_prefix` | ✔ | release tag 前綴 |
 | `include` | | 要一起打包的資料檔／資料夾 |
+| `pathex` | | 額外的 import 路徑（相對工具資料夾）。用到共用套件的工具寫 `["../../libs"]` |
+| `icon` | | exe 圖示（`.ico`，相對工具資料夾） |
 | `collect_all` / `hiddenimports` / `excludes` | | PyInstaller 自己抓不到時才需要 |
 
 產物一律 onefile。`build.ps1` 會把工具資料夾的絕對路徑透過環境變數 `TOOLZOO_TOOL_DIR` 交給 spec，
@@ -242,3 +256,26 @@ spec 裡所有路徑都以它為基準解析，**完全不依賴當下的工作�
 | `temp-save` | 未收，內容是 stash。 |
 
 要把上面任何一段補進來，照同一套四步流程再跑一輪（步驟細節見 `AGENTS.md`）。
+
+### 2026-10：獨立專案大搬家
+
+原本散在 `Python Projects\` 底下、各自有 git（或沒有）的小工具整批搬進來（分支 `feat/tool-migration`）。
+這些不是這個 repo 的分支，所以不走 merge：每個工具先有一個 **「原封不動搬進來」** 的 commit
+（`chore(<tool>): import … verbatim`，commit 訊息寫了來源的 commit），之後才是整理與修正的 commit——
+想看改了什麼，對那個 import commit 做 diff 就好。
+
+| 原本的專案（`Python Projects\`） | 去處 | 處理 |
+|---|---|---|
+| `VideoToSimpleNotion` | `tools/video-notes` | 照作者自己寫的重建規格（`docs/update_plan.txt`）重寫；README 最後有逐條對照 |
+| `VideoDownloader` | `tools/video-downloader` | 改用 yt-dlp、做成 web app；舊的 M3U8 下載器只留在 import commit |
+| `。Better Prompt` | `tools/better-prompt` | AI 引擎搬進 `libs/toolzoo/ai`，跟 Video Notes 共用 |
+| `。Fast File Converter` | `tools/fast-file-converter` | 完整版與拖放版兩個 GUI 合成一個視窗 |
+| `。My Internet Novel Reader`＋`My Voice Assistant` | `tools/novel-reader` | Voice Assistant（念固定句子的小程式）變成 Google 語音引擎；只針對單一小說網站的爬蟲實驗沒帶過來 |
+| `。File Renamer` | `tools/file-renamer` | 修掉多一個空白視窗，加預覽與復原 |
+| `。Better File Finder` | `tools/better-file-finder` | 修掉寫反的排除條件、補上內容搜尋 |
+| `64x64 Random Icon Maker` | `tools/random-icon-maker` | 命令列改成預覽 GUI；同一個種子產生的圖跟舊版逐像素相同 |
+| `。HashMyFile` | 併進既有的 `tools/hash-my-file` | 它就是表格版的前身；CRC32 與「貼上雜湊值比對」併回來，沒有另開工具 |
+| `Change Folder Cover (failes)` | 未收 | 作者自己標了 failed |
+
+沒搬的東西：各專案的 `.venv`、`.env`（API 金鑰）、`data/`、`output/`、`downloads/`（產生的影音與個人資料）。
+原本的資料夾都還留在 `Python Projects\`，沒有刪除；確認新版都能用之後可以自行刪掉。
