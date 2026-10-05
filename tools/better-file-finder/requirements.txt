@@ -1,0 +1,1 @@
+# Better File Finder 只用標準庫（tkinter），沒有第三方依賴 → 用根目錄共用的 .venv
