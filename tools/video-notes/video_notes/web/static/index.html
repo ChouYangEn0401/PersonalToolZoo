@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Notes</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">🎬</span>
+    <div><strong>Video Notes</strong><small id="version"></small></div>
+  </div>
+  <div class="chips" id="env-chips"></div>
+  <button id="btn-settings" class="ghost">⚙ 設定</button>
+</header>
+
+<main class="layout">
+  <section class="left">
+    <div class="card">
+      <h2>新增影片</h2>
+      <textarea id="urls" rows="3" placeholder="貼上影片網址，一行一個（YouTube、Shorts、TikTok、IG Reels、Bilibili…）"></textarea>
+      <div class="grid2">
+        <label>整理方式<select id="profile"></select></label>
+        <label>常用組合<select id="preset"><option value="">（不使用）</option></select></label>
+      </div>
+      <div class="field">
+        <span class="label">加料（可以多選）</span>
+        <div id="modifiers" class="toggles"></div>
+      </div>
+      <label class="field">特別想知道（選填）
+        <input id="focus" placeholder="例如：AI 伺服器、對台積電的看法——無關的內容會被濃縮成一行">
+      </label>
+      <div class="options">
+        <label class="check"><input type="checkbox" id="opt-transcript-only"> 只產生逐字稿（不呼叫 AI）</label>
+        <label class="check"><input type="checkbox" id="opt-keep-video"> 保留影片檔</label>
+      </div>
+      <div class="submit-row">
+        <span id="out-hint" class="muted small"></span>
+        <button id="btn-start" class="primary">開始處理</button>
+      </div>
+    </div>
+
+    <nav class="tabs" id="left-tabs">
+      <button data-tab="jobs" class="active">處理中 <span id="job-count" class="count"></span></button>
+      <button data-tab="library">筆記庫</button>
+    </nav>
+    <div id="jobs" class="list"></div>
+    <div id="library" class="list" hidden></div>
+  </section>
+
+  <section class="right card" id="viewer">
+    <div class="empty" id="viewer-empty">
+      <div class="big">📝</div>
+      選一個工作或筆記來查看。<br>
+      筆記是 Notion 相容的 Markdown：按「複製 Markdown」後直接貼進 Notion 即可。
+    </div>
+    <div id="viewer-body" hidden>
+      <div class="viewer-head">
+        <div class="viewer-title">
+          <h2 id="v-title"></h2>
+          <div id="v-meta" class="muted small"></div>
+        </div>
+        <div class="actions">
+          <select id="v-note-select" title="這支影片的其他筆記（不同整理方案）"></select>
+          <button id="v-copy" class="primary">📋 複製 Markdown</button>
+          <button id="v-redo" class="ghost" title="用目前表單的設定重新整理這支影片">🔁 換方案重做</button>
+          <button id="v-open" class="ghost">📂 資料夾</button>
+        </div>
+      </div>
+      <nav class="tabs small" id="view-tabs">
+        <button data-view="rendered" class="active">筆記</button>
+        <button data-view="markdown">Markdown</button>
+        <button data-view="transcript">逐字稿</button>
+      </nav>
+      <article id="v-content" class="markdown"></article>
+      <details class="refine" id="refine">
+        <summary>✨ 二次加工 <span class="muted small">用 Better Prompt 的轉換模式處理這份筆記（例如改成執行摘要、條列式重點）</span></summary>
+        <div class="refine-controls">
+          <select id="r-mode"></select>
+          <select id="r-sub"></select>
+          <button id="r-run" class="primary">加工</button>
+          <button id="r-copy" class="ghost">複製結果</button>
+        </div>
+        <pre id="r-out" class="refine-out"></pre>
+      </details>
+    </div>
+  </section>
+</main>
+
+<dialog id="dlg-redo">
+  <form method="dialog">
+    <h2>這些影片處理過了</h2>
+    <p class="muted small">已經有的檔案預設沿用（省時間也省 API 費用）。要重做哪些？重新下載或重新轉錄時，後面的步驟會跟著重做。</p>
+    <div id="redo-rows"></div>
+    <div class="dialog-actions">
+      <button value="cancel" class="ghost">取消</button>
+      <button value="ok" class="primary" id="redo-ok">開始處理</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-settings">
+  <form method="dialog" id="settings-form">
+    <h2>設定</h2>
+
+    <fieldset>
+      <legend>輸出位置</legend>
+      <label class="check"><input type="radio" name="output" value="downloads"> 下載資料夾 <span class="muted small" id="out-downloads"></span></label>
+      <label class="check"><input type="radio" name="output" value="data"> 工具的 data 資料夾 <span class="muted small" id="out-data"></span></label>
+      <label class="check"><input type="radio" name="output" value="custom"> 自選</label>
+      <input id="s-output-custom" placeholder="例如 D:\Notes\Videos">
+      <label class="check"><input type="checkbox" id="s-keep-video"> 預設保留影片檔（不勾只下載音訊，快很多）</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>AI 整理</legend>
+      <div class="grid2">
+        <label>服務<select id="s-provider"></select></label>
+        <label>模型<input id="s-model" list="model-hints" placeholder="空白 = 預設"></label>
+      </div>
+      <datalist id="model-hints"></datalist>
+      <div class="key-row">
+        <input id="s-key" type="password" placeholder="貼上這個服務的 API Key（存到共用金鑰檔）" autocomplete="off">
+        <button type="button" id="s-key-save" class="ghost">儲存金鑰</button>
+      </div>
+      <div class="muted small" id="s-key-status"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>語音辨識</legend>
+      <div class="grid3">
+        <label>模型<select id="s-whisper"></select></label>
+        <label>裝置<select id="s-device"><option value="auto">自動</option><option value="cuda">GPU</option><option value="cpu">CPU</option></select></label>
+        <label>語言<input id="s-language" list="lang-hints" placeholder="auto"></label>
+      </div>
+      <datalist id="lang-hints"><option value="auto"><option value="zh"><option value="en"><option value="ja"><option value="ko"></datalist>
+      <label class="check"><input type="checkbox" id="s-traditional"> 中文逐字稿轉成繁體（台灣用語）</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>進階</legend>
+      <div class="grid2">
+        <label>同時處理幾支影片<input id="s-parallel" type="number" min="1" max="8"></label>
+        <label>長逐字稿分段門檻（字）<input id="s-long" type="number" min="5000" step="5000"></label>
+      </div>
+      <label>需要登入才看得到的影片：用哪個瀏覽器的登入狀態
+        <select id="s-cookies"><option value="">不使用</option><option>chrome</option><option>edge</option><option>firefox</option><option>brave</option></select>
+      </label>
+      <label>處理完通知網址（socket 模式，選填）<input id="s-notify" placeholder="http://127.0.0.1:8787/video-notes"></label>
+      <div class="muted small">自訂整理方案：把 TOML 檔放進 <code id="s-prompts-dir"></code>（格式見 README）。</div>
+    </fieldset>
+
+    <div class="dialog-actions">
+      <button value="cancel" class="ghost">取消</button>
+      <button value="ok" class="primary">儲存</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" role="status"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
