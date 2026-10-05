@@ -13,12 +13,13 @@ from tkinter import ttk
 from .tab_wrangle import WrangleTab
 from .tab_combine import CombineTab
 from .tab_compare import CompareTab
+from .. import __version__
 
 
 class AdvancedExcelApp:
     def __init__(self, root):
         self.root = root
-        root.title("Advanced Excel Tool")
+        root.title(f"Advanced Excel Tool v{__version__}")
         try:
             root.geometry("1360x820")
             root.minsize(1000, 640)

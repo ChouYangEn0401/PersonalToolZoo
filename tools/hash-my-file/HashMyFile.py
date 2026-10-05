@@ -5,6 +5,8 @@ from tkinter import ttk
 from typing import Dict, Optional, Set
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
+from version import __version__
+
 # --- 配置與常數 ---
 ALGORITHMS = {
     "MD5": hashlib.md5,
@@ -39,7 +41,7 @@ class FileHasher:
 class HashApp:
     def __init__(self, root: TkinterDnD.Tk):
         self.root = root
-        self.root.title("檔案內容比對工具 (相同內容自動同色)")
+        self.root.title(f"檔案內容比對工具 (相同內容自動同色) v{__version__}")
         self.root.geometry("1100x600")
 
         # 狀態紀錄

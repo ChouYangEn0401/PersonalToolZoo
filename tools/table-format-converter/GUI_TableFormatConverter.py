@@ -16,6 +16,8 @@ import csv
 import io
 import re
 
+from version import __version__
+
 
 # ── 解析輸入 ──────────────────────────────────────────────
 
@@ -87,7 +89,7 @@ def to_csv_str(rows: list[list[str]]) -> str:
 class TableTool(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Table Tool")
+        self.title(f"Table Tool v{__version__}")
         self.geometry("820x720")
         self.configure(bg="#f0f0f0")
         self.resizable(True, True)

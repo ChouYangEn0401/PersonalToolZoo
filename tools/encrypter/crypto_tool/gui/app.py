@@ -17,9 +17,10 @@ from .tab_file import FileTab
 from .tab_text import TextTab
 from .tab_mixture import MixtureTab
 from .tab_largefile import LargeFileTab
+from _version import __version__   # crypto_tool/ 在 sys.path 上（見 GUI__Encrypter.py）
 
 
-APP_TITLE = "CryptoTool Pro"
+APP_TITLE = f"CryptoTool Pro v{__version__}"
 APP_SIZE  = (1080, 780)
 APP_MIN   = (900, 650)
 THEME     = "darkly"
