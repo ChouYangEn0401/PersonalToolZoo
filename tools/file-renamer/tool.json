@@ -1,0 +1,10 @@
+{
+  "name": "FileRenamer",
+  "entry": "main.py",
+  "console": false,
+  "version_from": "version.py",
+  "tag_prefix": "FileRenamer",
+  "icon": "data/FileRenamer.ico",
+  "include": ["data/FileRenamer.ico"],
+  "collect_all": ["tkinterdnd2"]
+}

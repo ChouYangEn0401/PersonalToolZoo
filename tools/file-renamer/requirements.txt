@@ -1,1 +1,2 @@
-tkinterdnd2
+# File Renamer 執行時依賴（打包工具在根目錄 requirements-dev.txt）
+tkinterdnd2>=0.4,<1  # 拖放檔案進視窗
