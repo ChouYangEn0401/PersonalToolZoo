@@ -1,4 +1,7 @@
 # Encrypter 執行時依賴
 pycryptodome>=3.20.0
-ttkbootstrap>=1.10.1
+# 釘在 1.x：Encrypter 最後開發於 2026-04，早於 ttkbootstrap 2.0（2026-07-19）。
+# 2.x 改從檔案載入 assets/icons/bootstrap.ttf 等資源，PyInstaller 沒有 hook 收它，
+# 打包後一啟動就 FileNotFoundError。要升 2.x 得先在 tool.json 加 collect_all 並重新驗證 UI。
+ttkbootstrap>=1.10.1,<2
 tkinterdnd2>=0.3.0
