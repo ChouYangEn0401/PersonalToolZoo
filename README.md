@@ -16,33 +16,64 @@
 
 ## 快速開始
 
-```powershell
-# 1. 建立共用環境（只要做一次）
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+以下指令都在 repo 根目錄、用 PowerShell 執行。
 
-# 2. 看有哪些工具
+```powershell
+# 1. 看有哪些工具、各自用哪個環境、版本號
 .\scripts\build.ps1 -List
 
-# 3. 打包某一個工具
-.\scripts\build.ps1 <tool-name>        # 產物在 dist\<tool-name>\
+# 2. 建立工具的隔離環境（第一次、或 requirements 改過之後）
+.\scripts\setup-venv.ps1 <tool-name>
+.\scripts\setup-venv.ps1 -All
+
+# 3. 打包某一個工具；-Smoke 會把 exe 實際開起來檢查有沒有崩潰
+.\scripts\build.ps1 <tool-name> -Smoke     # 產物在 dist\<tool-name>\
 
 # 4. 全部打包
-.\scripts\build.ps1 -All
+.\scripts\build.ps1 -All -Smoke
 ```
 
-某個工具需要額外的第三方套件，不要裝進共用的根目錄 `.venv`——
-給它自己開一個乾淨的 venv，`build.ps1` 會自動優先找 `tools\<tool-name>\.venv`：
+> 如果 PowerShell 擋腳本（執行原則），先在這個視窗跑一次
+> `Set-ExecutionPolicy -Scope Process Bypass`。
+
+## 環境隔離規則
+
+| 工具的 `requirements.txt` | 用哪個環境 | 誰建的 |
+|---|---|---|
+| 有第三方套件 | `tools\<tool-name>\.venv`（專屬，互不干擾） | `setup-venv.ps1 <tool-name>` |
+| 只用標準庫 | 根目錄 `.venv`（共用，只裝 build 工具鏈） | `setup-venv.ps1 <tool-name>` |
+
+- 每個 venv 都裝 `requirements-dev.txt`（PyInstaller 等，版本全 repo 一致）＋該工具自己的 `requirements.txt`。
+- `build.ps1` 每次 build 前會檢查：venv 裡裝的版本**符合** requirements 才放行；
+  有第三方套件的工具如果沒有自己的 `.venv`，**不會**默默退回共用環境（那樣會產出一個缺套件、一開就崩潰的 exe）。
+- 環境跟 requirements 不一致時，build 會告訴你跑 `.\scripts\setup-venv.ps1 <tool-name> -Force` 整個重建。
+- `.venv` 都在 `.gitignore` 裡，隨時可以砍掉重建，不要手動往裡面 `pip install` 東西。
+
+### 版本範圍要給主版本上限
+
+`requirements.txt` 請寫 `套件>=最低版本,<下一個主版本`，不要只寫 `>=`。
+只寫 `>=` 的話，新機器（或重建 venv）會裝到開發時根本還不存在的新主版本。這個 repo 就實際踩過兩次：
+
+| 工具 | 只寫 `>=` 時裝到 | 結果 | 現在 |
+|---|---|---|---|
+| Encrypter | ttkbootstrap 2.2.2 | 2.x 改從檔案載入字型，打包後一啟動就 `FileNotFoundError` | `ttkbootstrap>=1.10.1,<2` |
+| Advanced Excel Tool | pandas 3.0.6 | 「合併濃縮」遇到空格就 `TypeError`（pandas 3 改了 `astype(str)`） | `pandas>=2.0,<3` |
+
+要升主版本：改上限 → `setup-venv.ps1 <tool> -Force` → 實際把功能跑過一輪 → `build.ps1 <tool> -Smoke`。
+
+## 發布流程（release）
 
 ```powershell
-py -3.11 -m venv tools\<tool-name>\.venv
-.\tools\<tool-name>\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt -r tools\<tool-name>\requirements.txt
-.\scripts\build.ps1 <tool-name>
+# 1. 改版本號（tool.json 的 version_from 指到的檔案，例如 src\version.py），commit
+# 2. 清掉這個工具的快取，從頭 build + 冒煙測試
+.\scripts\build.ps1 <tool-name> -Clean -Smoke
+# 3. 產物：dist\<tool-name>\<Name>(v<版本>).exe → 上傳 / 發給別人
+# 4. 打 tag，例如  git tag HashMyFile_v0.1.1
 ```
 
-這樣每個工具的依賴版本互不干擾，某個工具需要 pandas 1.x、另一個需要 2.x
-也不會打架。只用標準庫、沒有額外依賴的工具（例如 Git Helper Pro）才共用根目錄的
-`.venv` 就好，不用每個都開一份。
+平常 build 會用 PyInstaller 的增量快取（輸入沒變就不重寫 exe）；`-Clean` 會先清掉
+`build\<tool-name>\` 和 `dist\<tool-name>\`，確保 release 用的 exe 是從頭 build 的。
+不帶工具名稱的 `.\scripts\build.ps1 -Clean` 則清掉整個 `build\` 和 `dist\`。
 
 ## 開一個新工具
 
@@ -50,31 +81,36 @@ py -3.11 -m venv tools\<tool-name>\.venv
 .\scripts\new-tool.ps1 my-new-tool
 ```
 
-會從 `tools/_template/` 複製一份乾淨骨架出來，然後：
+會從 `tools/_template/` 複製一份乾淨骨架出來（tkinter 視窗 + `resource_path()` + `version.py` + `tool.json`），然後：
 
-1. 寫 `tools/my-new-tool/main.py`
-2. 有資料檔（圖片、語言檔、設定檔…）就填 `tool.json` 的 `include`
-3. `.\scripts\build.ps1 my-new-tool`
-4. 回來這份 README 的表格加一列
+1. 寫 `tools/my-new-tool/main.py`，版本號在 `version.py`
+2. 需要第三方套件就寫進 `tools/my-new-tool/requirements.txt`（記得給主版本上限）
+3. `.\scripts\setup-venv.ps1 my-new-tool`
+4. 有資料檔（圖片、語言檔、設定檔…）就填 `tool.json` 的 `include`
+5. `.\scripts\build.ps1 my-new-tool -Smoke`
+6. 回來這份 README 的表格加一列
 
 ## 目錄結構
 
 ```
 PersonalToolZoo/
 ├─ README.md               ← 你正在看的導覽頁
-├─ requirements-dev.txt    ← 共用 build 工具鏈（pyinstaller 等）
-├─ .venv/                  ← 共用虛擬環境（只給無額外依賴的工具用）
+├─ requirements-dev.txt    ← 共用 build 工具鏈（pyinstaller 等），所有 venv 都裝
+├─ .venv/                  ← 共用虛擬環境（只給只用標準庫的工具）
 ├─ scripts/
 │  ├─ tool.spec            ← 全 repo 唯一一份 PyInstaller spec
-│  ├─ build.ps1            ← 統一 builder
-│  └─ new-tool.ps1         ← 產生新工具骨架
+│  ├─ build.ps1            ← 統一 builder（含依賴檢查、-Smoke 冒煙測試）
+│  ├─ setup-venv.ps1       ← 依 requirements 建立／重建工具的 venv
+│  ├─ new-tool.ps1         ← 產生新工具骨架
+│  ├─ _common.ps1          ← 上面幾支共用的 helper（環境規則定義在這）
+│  └─ check_deps.py        ← 檢查 venv 裡的版本符合 requirements
 ├─ tools/
 │  ├─ _template/           ← 新工具的空白範本
 │  └─ <tool-name>/         ← 每個工具一個資料夾，自成一個乾淨單位
 │     ├─ tool.json         ← 這個工具的 build 設定
 │     ├─ README.md
-│     ├─ requirements.txt  ← 執行時依賴
-│     ├─ .venv/            ← （選用）這個工具專屬的隔離環境
+│     ├─ requirements.txt  ← 執行時依賴（不放 pyinstaller）
+│     ├─ .venv/            ← （有第三方依賴才有）這個工具專屬的隔離環境
 │     └─ main.py, ...
 └─ dist/<tool-name>/       ← 打包產物
 ```
@@ -89,9 +125,14 @@ PersonalToolZoo/
   "entry": "main.py",
   "console": false,
   "version_from": "version.py",
-  "include": ["assets", "config.json"]
+  "include": ["assets", "config.json"],
+  "collect_all": ["some_package_with_data_files"]
 }
 ```
+
+產物檔名是 `<name>(v<版本>).exe`（沒有 `version_from` 就是 `<name>.exe`），一律 onefile。
+`console: false` 的工具如果啟動時丟出例外，PyInstaller 會跳出「Unhandled exception in script」
+視窗顯示完整 traceback，`-Smoke` 就是靠偵測這個視窗判斷 exe 壞掉。
 
 `build.ps1` 會把工具資料夾的絕對路徑透過環境變數 `TOOLZOO_TOOL_DIR` 交給 spec，
 spec 裡所有路徑都以它為基準解析，**完全不依賴當下的工作目錄**。
@@ -108,6 +149,12 @@ spec 裡所有路徑都以它為基準解析，**完全不依賴當下的工作�
        base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
        return os.path.join(base, *parts)
    ```
+
+### 編碼注意事項（繁中 Windows）
+
+- `requirements*.txt` 是 UTF-8 且含中文註解。pip 預設用系統編碼（cp950）讀檔會直接 `UnicodeDecodeError`，
+  所以 `setup-venv.ps1` 呼叫 pip 時會開 `PYTHONUTF8=1`。**手動** `pip install -r` 前也要先 `$env:PYTHONUTF8 = 1`。
+- `scripts\*.ps1` 必須存成 **UTF-8 with BOM**，Windows PowerShell 5.1 才不會把中文讀成亂碼。
 
 ## 歷史
 
@@ -127,7 +174,7 @@ spec 裡所有路徑都以它為基準解析，**完全不依賴當下的工作�
 
 | 分支 | 狀況 |
 |---|---|
-| `feat/git_command_gui_helper/dev` | 未收（收尾是 `[BU]` 不是 build）。裡面有一組 **`fetch` / `pull` 指令設定從沒進主線**，之後想補的話從這裡撈。 |
+| `feat/git_command_gui_helper/dev` | 未收（收尾是 `[BU]` 不是 build，且是從 v1.6.4 之前的舊版分出去的）。主線已經有 Fetch 對話框和 Pull 按鈕；這條分支多的是 `commands.py` 裡一組**帶參數的 `fetch` / `pull` 指令設定**（remote / prune / rebase），之後想補的話從這裡撈。 |
 | `feat/hash_my_file_gui/all_platform` | 只收到 tag `HashMyFile_v0.1.0`。tag 之後那個「只留重複檔」的 feat commit 還沒收尾，未收。 |
 | `feat/git_diff_shower` | 只收到 BUILD 點 `0aba850`。之後的 filter 分類、no-git snapshot 分頁、snapshot 修正三個 commit 還沒收尾，未收。 |
 | `feat/shell_converter/all_platform` | 未收，tag 自己標了 `shell_converter__failed`。 |
