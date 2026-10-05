@@ -4,6 +4,10 @@
 # 釘在 release tag 上，確保換機器也裝得起來（原本 README 寫的是本機 wheel 路徑，
 # 那個路徑只在原作者機器上存在）。它本身會帶進 pandas>=2.0。
 infinity-treeview @ git+https://github.com/ChouYangEn0401/Python-Infinity-Treeview.git@release_0.2.0
-pandas>=2.0
+#
+# pandas 釘在 2.x：程式碼依賴 pandas 2 的 astype(str)（空值 → 'nan' 字串）。
+# pandas 3 的 astype(str) 會保留 NaN，「合併濃縮」(aggregate_with_separator)
+# 遇到有空格的欄位就 TypeError。要升 3.x 得先改那段並重跑全部操作。
+pandas>=2.0,<3
 openpyxl>=3.1
 tkinterdnd2>=0.3.0
