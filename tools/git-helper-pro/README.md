@@ -258,13 +258,12 @@ MIT License — Made with ❤️ for Git Power Users & Project Leads
 | 依賴 | 執行時需要電腦上有 `git`（在 PATH 上） |
 | 打包額外內容 | `include: language/、language_config.json`（多語系檔） |
 | 測試 | 在 `tools\git-helper-pro` 底下：`$env:PYTHONUTF8=1; ..\..\.venv\Scripts\python.exe -m tests.run_lm`（不設 UTF-8 的話，cp950 主控台印簡體字會報錯，程式本身沒問題） |
-| Release tag | `GitHelperPro_vX.Y.Z`（目前最新的 tag 是 v1.5.0，v1.6.4 還沒打過 tag） |
+| Release tag | `GitHelperPro_vX.Y.Z`（最新：`GitHelperPro_v1.6.4`） |
 
 常用指令（repo 根目錄）：
 
 ```powershell
 .\scripts\build.ps1 githelper           # build + 冒煙測試
-.\scripts\release.ps1 githelper keep    # 幫目前的 v1.6.4 補打 tag
 .\scripts\release.ps1 githelper patch   # 發新版
 ```
 

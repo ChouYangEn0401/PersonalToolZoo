@@ -51,7 +51,7 @@
 | 看有哪些工具、版本、環境 | `.\scripts\build.ps1 -List` |
 | 只改版本號 | `.\scripts\bump-version.ps1 hash patch`（`minor`／`major`／`1.2.3`） |
 | 發新版（改版號＋build＋commit＋tag） | `.\scripts\release.ps1 hash patch`（或雙擊 `release.bat`） |
-| 補打目前版本的 tag | `.\scripts\release.ps1 githelper keep` |
+| 補打目前版本的 tag（版本不變、該版本還沒有 tag 時） | `.\scripts\release.ps1 <工具> keep` |
 | 手動建／重建環境（想直接跑原始碼時） | `.\scripts\setup-venv.ps1 hash`、整個重建加 `-Force` |
 | 開新工具 | `.\scripts\new-tool.ps1 my-new-tool` |
 | 清掉所有 build 產物 | `.\scripts\build.ps1 -Clean` |

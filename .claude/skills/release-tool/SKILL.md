@@ -12,7 +12,8 @@ Everything is done by `scripts/release.ps1`; this skill is about using it safely
 1. **Resolve which tool and which bump.** Tool names are forgiving (`hash`, `excel`, `githelper`, `diff`, `table`, `enc`).
    If the user did not say patch / minor / major / X.Y.Z, ask — show the current version from
    `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -List`.
-   Use `keep` only to tag the current version without bumping (e.g. Git Helper Pro v1.6.4 has no tag yet).
+   Use `keep` only to tag the current version without bumping, when that version has no tag yet
+   (`git tag --list '<tag_prefix>_v*'`).
 2. **Pre-check yourself** so the script does not refuse halfway:
    - `git status --porcelain -- tools/<tool>` must be empty — commit pending work on that tool first
      (one topic per commit, see AGENTS.md).
