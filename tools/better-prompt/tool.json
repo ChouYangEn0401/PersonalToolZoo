@@ -1,0 +1,9 @@
+{
+  "name": "GUI__BetterPrompt",
+  "entry": "GUI__BetterPrompt.py",
+  "console": false,
+  "version_from": "version.py",
+  "pathex": ["../../libs"],
+  "include": ["model_recommendations.json"],
+  "collect_all": ["customtkinter"]
+}

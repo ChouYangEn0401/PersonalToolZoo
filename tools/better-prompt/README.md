@@ -1,234 +1,99 @@
 # ✦ Better Prompt — AI Text Transformer
 
-> 一款美觀的桌面 GUI 工具，讓你快速貼上文字、選擇轉換模式，並透過 OpenAI API 即時輸出結果。
-
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)
-![CustomTkinter](https://img.shields.io/badge/UI-CustomTkinter-blueviolet)
-![OpenAI](https://img.shields.io/badge/API-OpenAI-412991?logo=openai)
-![License](https://img.shields.io/badge/License-MIT-green)
-
----
-
-## 📸 功能概覽
+> 貼上一段文字、選一個轉換模式，交給 AI（OpenAI / Gemini / Claude）改寫成更好的版本——
+> 整理、摘要、改寫風格，或把一段口語需求變成結構完整的 prompt。
 
 ```
-┌─ API Key / 模型選擇 ──────────────────────────────────────────────────────┐
-│                                                                           │
+┌─ 服務 / API Key / 模型 ──────────────────────────────────────────────────┐
 │  ┌─ 轉換模式 ─────┐   ┌─ 📥 輸入文字 ────────────────────────────────┐  │
-│  │ ✨ 文字精練    │   │                                              │  │
-│  │  • 基本整理 ◉  │   │    將要轉換的文字貼在這裡...               │  │
-│  │  • 商務風格    │   │                                              │  │
-│  │  • 學術風格    │   └──────────────────────────────────────────────┘  │
-│  │  • 口語化      │                                                      │
-│  │                │          [ ▶ 立即轉換 ]  [ 📋 複製 ]  [ ⬇ 移至輸入 ] │
-│  │ 📋 精要摘要    │                                                      │
-│  │ 🚀 Prompt 優化 │   ┌─ 📤 輸出結果 ────────────────────────────────┐  │
-│  │ 💡 發散思考    │   │                                              │  │
-│  │ 🔍 研究討論    │   │    AI 轉換後的文字即時串流顯示在這裡...      │  │
-│  │ 📝 文件改寫    │   │                                              │  │
-│  └────────────────┘   └──────────────────────────────────────────────┘  │
+│  │ ✨ 文字精練    │   │    將要轉換的文字貼在這裡...                 │  │
+│  │  • 基本整理 ◉  │   └──────────────────────────────────────────────┘  │
+│  │  • 商務風格    │          [ ▶ 立即轉換 ]  [ 📋 複製 ]  [ ⬇ 移至輸入 ] │
+│  │ 📋 精要摘要    │   ┌─ 📤 輸出結果 ────────────────────────────────┐  │
+│  │ 🚀 Prompt 優化 │   │    AI 的回覆即時串流顯示在這裡...            │  │
+│  │ 💡 發散思考 …  │   └──────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
----
+## 使用方式
 
-## 🚀 快速開始
+以下在 PersonalToolZoo repo 根目錄執行：
 
-### 1. 環境需求
-
-- Python **3.10** 或更新版本
-- OpenAI API Key（[前往申請](https://platform.openai.com/api-keys)）
-
-### 2. 安裝依賴
-
-```bash
-pip install -r requirements.txt
+```powershell
+.\scripts\setup-venv.ps1 better-prompt                                   # 建專屬環境 tools\better-prompt\.venv
+.\tools\better-prompt\.venv\Scripts\python.exe tools\better-prompt\GUI__BetterPrompt.py
+.\scripts\build.ps1 better-prompt -Smoke                                 # 打包成 exe
 ```
 
-或手動安裝：
+1. 頂端選 **服務**（OpenAI / Google Gemini / Anthropic Claude），貼上 API Key，按「連接 API」
+2. 左側選模式 → 貼上文字 → `Ctrl + Enter` 或「▶ 立即轉換」
+3. 「⬇ 移至輸入」可以把結果搬回輸入框，連續加工多次
+4. 「📚 批次筆記本」分頁可以一次排好多段文字、各自選模式，一鍵全部執行
 
-```bash
-pip install customtkinter openai
-```
+沒連上 API 時按轉換，會顯示「將要送出的完整 prompt」，方便檢查或手動貼到別的地方用。
 
-### 3. 執行程式
+### API 金鑰
 
-```bash
-python main.py
-```
+連接成功後，手動輸入的金鑰會存進 **`%APPDATA%\PersonalToolZoo\keys.env`**——
+這是所有工具共用的金鑰檔（Video Notes 也讀這個），設一次就好。也可以：
 
----
+- 設環境變數 `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY`
+- 在 exe（或 `GUI__BetterPrompt.py`）旁邊放一個 `.env`，格式見 `.env.example`
 
-## 🎮 使用說明
-
-### 連接 API
-
-1. 在頂部「🔑 API Key」欄位貼上你的 OpenAI API Key
-2. 點擊「**連接 API**」按鈕
-3. 狀態顯示「**● 已連接**」後，模型下拉選單會自動更新為你帳號可用的模型
-
-> **Tip：** API Key 會自動加密儲存在本地（`~/.better_prompt_settings.json`），下次啟動自動連接，無需重新輸入。
-
-### 使用流程
-
-1. **貼上文字** — 將要處理的文字貼入左上方的「📥 輸入文字」框
-2. **選擇模式** — 在左側側欄展開任一分類，點選子模式
-3. **選擇模型** — 在頂部選擇要使用的 GPT 模型
-4. **轉換** — 點擊「**▶ 立即轉換**」或按 `Ctrl + Enter`
-5. **取得結果** — 下方「📤 輸出結果」框即時串流顯示 AI 回應
-
-### 快捷操作
-
-| 操作 | 說明 |
-|------|------|
-| `Ctrl + Enter` | 立即轉換（無需用滑鼠點按鈕）|
-| **📋 複製結果** | 將輸出文字複製到剪貼板 |
-| **⬇ 移至輸入** | 把輸出結果搬回輸入框，方便連續多次加工處理 |
-| **清除** | 清空輸入框 |
+金鑰是以**純文字**存在你自己的使用者資料夾（舊版 README 說「加密儲存」並不正確）。
+v1 存在 `~/.better_prompt_settings.json` 的金鑰仍然讀得到，第一次連接成功時會自動搬進共用金鑰檔。
 
 ### Temperature（創意度）
 
-側欄底部的滑桿控制 AI 的創意程度：
+側欄底部的滑桿：0.0–0.5 穩定保守、0.6–1.1 平衡（預設 0.7）、1.2–2.0 發散。
+部分模型不接受 temperature（OpenAI 的 o 系列、目前的 Claude 模型），這時會自動忽略這個設定。
 
-| 數值 | 行為 |
-|------|------|
-| 0.0 – 0.5 | **低**：輸出更穩定、保守，適合精確性要求高的任務 |
-| 0.6 – 1.1 | **中**：平衡創意與一致性（預設 0.7）|
-| 1.2 – 2.0 | **高**：更有創意、多樣性，適合腦力激盪 |
+## 六大功能模式
 
----
+| 分類 | 子模式 |
+|---|---|
+| ✨ 文字精練 | 基本整理、商務風格、學術風格、口語化 |
+| 📋 精要摘要 | 重點摘要、一句話摘要、條列式重點、執行摘要 |
+| 🚀 Prompt 優化 | ChatGPT Prompt（把口語需求變成完整 prompt）、程式碼說明、AI 繪圖 Prompt（輸出英文）、技術規格說明 |
+| 💡 發散思考 | 腦力激盪、文章發想、繪圖 Prompt 發散、創意點子 |
+| 🔍 研究討論 | 多角度分析、資料補充、反駁辯證、深度討論 |
+| 📝 文件改寫 | 全面改寫、正式化、簡化、擴展豐富 |
 
-## 🛠️ 六大功能模式
+每個模式的 prompt 都拆成兩部分送出：**指令放 system、你的文字用 `<text>` 標籤包起來放 user**。
+模型因此分得清楚哪些是任務、哪些是素材——素材裡就算有「請忽略以上指示」之類的句子也只會被當成文字處理，
+而且統一要求「只輸出結果、不加開場白、不捏造素材沒有的事實、中文用繁體」。
 
-### ✨ 文字精練
-把文字整理得更精煉、整齊，意思不流失。
+模式庫在 [`libs/toolzoo/ai/text_modes.py`](../../libs/toolzoo/ai/text_modes.py)，Video Notes 的「二次加工」也用同一份，改一次兩邊都生效。
 
-| 子模式 | 適用場景 |
-|--------|---------|
-| 基本整理 | 日常筆記、草稿整理 |
-| 商務風格 | Email、報告、提案 |
-| 學術風格 | 論文、研究報告 |
-| 口語化 | 社群貼文、輕鬆內容 |
+### 推薦模型
 
----
+模式橫幅上的「推薦模型」可以按 ✎ 編輯，用比較符號連接：
+`>>` 明顯優於、`>` 優於、`>=` 不亞於、`=` 相當，例如 `gpt-5.1 >> gpt-5.2 = gpt-5.4`。點徽章就會切換到那個模型。
+預設值在 `model_recommendations.json`；你的編輯存在 `%APPDATA%\PersonalToolZoo\better-prompt\`（打包後也不會遺失）。
 
-### 📋 精要摘要
-快速提取核心，去除冗餘。
+## 模型相容性
 
-| 子模式 | 輸出形式 |
-|--------|---------|
-| 重點摘要 | 段落式重點整理 |
-| 一句話摘要 | 1-2 句核心精華 |
-| 條列式重點 | • 條列格式 |
-| 執行摘要 | 給主管／決策者的正式摘要 |
+各家模型吃的參數不一樣（`max_tokens` 或 `max_completion_tokens`、收不收 temperature、能不能串流）。
+呼叫層有一張「第一次猜」的規則表，猜錯時 API 會回 400 指出是哪個參數，程式會自動修正重送並記住，
+所以新模型通常不用改程式就能用。細節見 [`libs/README.md`](../../libs/README.md)。
 
----
-
-### 🚀 Prompt 優化
-讓你的 Prompt 更結構化、更有效。
-
-| 子模式 | 用途 |
-|--------|------|
-| ChatGPT Prompt | 優化給 AI 的指令 |
-| 程式碼說明 | 技術文件、程式碼說明 |
-| AI 繪圖 Prompt | 生成 Midjourney／SD 英文 Prompt |
-| 技術規格說明 | 開發需求文件 |
-
----
-
-### 💡 發散思考
-擴展想法、打開思路。
-
-| 子模式 | 用途 |
-|--------|------|
-| 腦力激盪 | 列出 10+ 個方向和可能性 |
-| 文章發想 | 文章結構、論點、內容方向 |
-| 繪圖 Prompt 發散 | 多種視覺風格概念 |
-| 創意點子 | 問題解決、新點子 |
-
----
-
-### 🔍 研究討論
-深度分析、填充觀點。
-
-| 子模式 | 用途 |
-|--------|------|
-| 多角度分析 | 正反方、各面向全面分析 |
-| 資料補充 | 補充背景知識、案例 |
-| 反駁辯證 | 提出反駁，強化思考深度 |
-| 深度討論 | 專業見解、延伸思考 |
-
----
-
-### 📝 文件改寫
-重新撰寫、風格調整。
-
-| 子模式 | 用途 |
-|--------|------|
-| 全面改寫 | 換全新表達，保留意思 |
-| 正式化 | 官方文件、正式場合 |
-| 簡化 | 讓一般人看懂 |
-| 擴展豐富 | 增加細節、例子、深度 |
-
----
-
-## 📁 專案結構
+## 專案結構
 
 ```
-Better Prompt/
-├── main.py                # 主程式（UI 與應用邏輯）
-├── model_strategies.py    # Strategy Pattern — 各模型 API 參數封裝
-├── requirements.txt       # Python 依賴套件
-└── README.md              # 本文件
+tools/better-prompt/
+├── GUI__BetterPrompt.py        # 主程式（CustomTkinter 介面）
+├── version.py                  # 版本號（exe 檔名會帶上）
+├── model_recommendations.json  # 推薦模型的預設值
+├── .env.example                # 金鑰範本
+├── requirements.txt            # customtkinter、openai（含 Gemini）、anthropic
+└── tool.json                   # build 設定（pathex 指向 repo 的 libs/）
+
+libs/toolzoo/ai/                # 共用：LLM 呼叫層、金鑰、模式庫（Video Notes 也用）
 ```
 
-設定檔儲存於使用者目錄：`~/.better_prompt_settings.json`（自動建立）
+設定（服務、各服務選的模型、temperature）存在 `%APPDATA%\PersonalToolZoo\better-prompt\settings.json`。
 
----
+## 隱私
 
-## 🤖 模型相容性
-
-不同 OpenAI 模型對 API 參數有不同要求，透過 Strategy Pattern 自動處理：
-
-| Strategy | 適用模型 | Token 參數 | Temperature | Streaming |
-|----------|---------|-----------|-------------|-----------|
-| `StandardGPT` | gpt-3.5, gpt-4, gpt-4o, gpt-4o-mini … | `max_tokens` | ✅ | ✅ |
-| `ModernGPT` | gpt-4.1, gpt-4.5, gpt-5.x … | `max_completion_tokens` | ✅ | ✅ |
-| `ReasoningModel` | o1, o1-mini, o3, o3-mini, o4-mini … | `max_completion_tokens` | ❌ | ✅ |
-| `LegacyReasoning` | o1-preview | `max_completion_tokens` | ❌ | ❌ |
-
-如需新增模型支援，只需在 `model_strategies.py` 的 `_RULES` 中加入對應規則，其他程式碼完全不受影響。
-
----
-
-## ⚙️ 離線模式
-
-若尚未連接 API，程式仍可正常啟動和使用。
-點擊「立即轉換」時，輸出框會顯示：
-- 目前選擇的模式與子模式
-- 將會送出的完整 Prompt 預覽
-
-連接 API 後即可正常使用。
-
----
-
-## 🔒 隱私說明
-
-- API Key 僅儲存於本機 `~/.better_prompt_settings.json`，不會上傳任何伺服器
-- 輸入的文字只在你主動點擊「轉換」時才會傳送給 OpenAI API
-- 文字內容不會被本程式記錄或儲存
-
----
-
-## 📦 依賴套件
-
-| 套件 | 版本 | 用途 |
-|------|------|------|
-| [customtkinter](https://github.com/TomSchimansky/CustomTkinter) | ≥ 5.2 | 現代化 GUI 框架 |
-| [openai](https://github.com/openai/openai-python) | ≥ 1.0 | OpenAI API 串接 |
-
----
-
-## 📝 License
-
-MIT License — 自由使用、修改和分發。
+- 文字只在你按「轉換」時送給你選的服務商，本程式不記錄、不保存輸入與輸出。
+- 金鑰只存在本機（見上方「API 金鑰」）。

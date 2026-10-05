@@ -1,2 +1,4 @@
-customtkinter>=5.2.2
-openai>=1.0.0
+# Better Prompt 執行時依賴（打包工具在根目錄 requirements-dev.txt）
+customtkinter>=5.2.2,<6
+openai>=2.0,<3  # OpenAI 與 Gemini（Gemini 走 OpenAI 相容端點）
+anthropic>=1.11,<2  # Claude
