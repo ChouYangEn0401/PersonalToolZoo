@@ -1,0 +1,4 @@
+name = "上課複習"
+description = "知識學習＋名詞解釋＋時間軸：可以回去對照影片複習"
+profile = "knowledge"
+modifiers = ["glossary", "timeline"]
