@@ -2,7 +2,7 @@
 
 一款功能強大的加密/解密桌面工具，支援多種加密演算法、專屬 `.isd` 格式（輸出副檔名）、多階段混合加密，以及大檔案分段處理。
 
-> **v1.4.0** 全面重構：Mixture Pipeline 核心拆出至 `core/pipeline.py`（File/Mixture/LargeFile 共用）、Mixture 模式更名（All-In-One→**All-In-One**、Layered→**Layered**）、加解密順序明確為 1→N 加密 / N→1 解密、Layered 每次只剝一層（修正 Mixture 多密碼 wrong padding 問題）、Mixture 支援文字模式 inline 結果顯示、Pipeline 階段支援 ↑↓ 換序、Mixture 完整支援 PGP / PGP-Multi / PGP-Escrow
+> **v0.3.0**（第一個正式版，內容是開發迭代 1.4）全面重構：Mixture Pipeline 核心拆出至 `core/pipeline.py`（File/Mixture/LargeFile 共用）、Mixture 模式更名（All-In-One→**All-In-One**、Layered→**Layered**）、加解密順序明確為 1→N 加密 / N→1 解密、Layered 每次只剝一層（修正 Mixture 多密碼 wrong padding 問題）、Mixture 支援文字模式 inline 結果顯示、Pipeline 階段支援 ↑↓ 換序、Mixture 完整支援 PGP / PGP-Multi / PGP-Escrow
 
 ---
 
@@ -71,19 +71,24 @@
 
 ---
 
-## 更新紀錄
+## 開發紀錄
 
-### v1.4.0
+> 以下的 1.0～1.4 是**開發期間的內部迭代編號**（2026-04-20～23），不是發布版本。
+> 這些內容全部包含在第一個正式版 **v0.3.0**（tag `Encrypter_v0.3.0`，2026-04-23）。
+> 正式版本號以 `crypto_tool/_version.py` 為準，exe 檔名、視窗標題、狀態列都讀它；之後的版本用
+> `.\scripts\release.ps1 enc patch|minor|major` 發布。
+
+### 迭代 1.4（= v0.3.0）
 - **加解密順序修正確認**：All-In-One 加密 #1→#N、解密 #N→#1；Layered 同理，outermost = 最後一個 stage
 - **Layered 單層剝除（File Tab）**：File Tab 解密 layered 文件改為每次只剝一層，修正多密碼 Mixture 檔案出現 wrong padding 的問題；解完後若結果仍是 .isd，再次解密即可繼續剝層
 - **Mixture Pipeline 全功能 PGP 支援**：PGP / PGP-Multi（多收件人 ＋ 按鈕） / PGP-Escrow 均可用於 Pipeline 的任一 Stage；`STAGE_ALGORITHMS` 現包含所有演算法
 - **Mixture Pipeline ↑↓ 換序**：每個 Stage 右側新增 ↑ / ↓ 按鈕，可即時調整管線順序
 - **Mixture 文字模式 inline 輸出**：選擇 Text 輸入模式後，加密/解密結果直接顯示在 Result 文字區；提供 📋 Copy / 💾 Save .isd / 💾 Save .txt / ↩ Use as Input（可鏈式操作）
 - **Mixture 文字模式 DnD**：可將 .isd 檔案拖拉至輸入文字區，自動載入 .isd 內容（用於解密）
-- **Mixture 模式更名**（v1.4.0 延續）：`"all-in-one"`（All-In-One）與 `"layered"`（Layered）為目前預設模式字串（向下相容）
+- **Mixture 模式更名**（迭代 1.4 延續）：`"all-in-one"`（All-In-One）與 `"layered"`（Layered）為目前預設模式字串（向下相容）
 - **核心架構**：`core/pipeline.py` 作為唯一 pipeline 邏輯出口；GUI 完全不含加密業務邏輯；Large File Tab 未來可直接引用
 
-### v1.3.0
+### 迭代 1.3
 - **XOR-FOLD 演算法**：折疊金鑰 XOR，確保整條金鑰都被使用；AlgoBar 與 tooltip 均已加入
 - **PGP / PGP-Multi / PGP-Escrow**：RSA-4096 + AES-GCM 非對稱包裝，所有 4 個分頁均支援
   - **PGP**：單一公鑰收件人；選取後顯示內層演算法選擇器與公鑰匯入面板
@@ -93,7 +98,7 @@
 - **txtfile 金鑰正規化**：讀取純文字金鑰檔案時自動 `rstrip("\r\n")`，解決不同編輯器儲存換行不一致導致的解密失敗
 - **解密側自動選金鑰類型**：`.isd` 內有 `reveal_key_type` 時，解密卡片自動切換對應的密碼類型
 
-### v1.2.0
+### 迭代 1.2
 - **AlgoBar（演算法選擇器）**：Tab 1 Advanced Settings 的演算法選擇改為分段式按鈕 Bar，金色高亮已選、hover 時有暖金光暈效果
 - **Advanced Settings 移入加密卡片**：現在位於 Encrypt 方框內的可折疊面板，不再佔用頁面底部空間
 - **演算法可見性開關**：新增 "Reveal algorithm in metadata" 切換鈕（預設開啟）；關閉時演算法不寫入 NOTE，解密需手動選擇
@@ -101,7 +106,7 @@
 - **解密側 — 密碼提示自動顯示**：加密時設定的 hint 在解密側自動顯示，金色突出
 - **解密側 — 演算法隱藏警示**：若演算法被隱藏，顯示琥珀色警示並展開手動演算法選擇 Bar
 
-### v1.1.0
+### 迭代 1.1
 - **拖拉支援**：Tab 1–4 中所有檔案/目錄輸入欄均可拖放檔案；含中文、空格的 Unicode 路徑均支援
 - **Text Tab 拖拉**：可將 `.isd`（或舊有 `.bytefile`）或文字檔直接拖放到輸入文字框自動載入
 - **Mixture Tab 拖拉**：可將金鑰檔案拖放到密碼欄，自動切換 Key type 為 `file`
@@ -109,7 +114,7 @@
 - **Tooltip 提示**：所有關鍵元件（演算法選擇、密碼欄、迭代次數、拖拉提示等）加入懸浮說明
 - **編碼容錯**：文字檔載入自動 UTF-8 → latin-1 fallback，避免非 UTF-8 檔案崩潰
 
-### v1.0.0
+### 迭代 1.0
 - 初始版本：四分頁加密工具，支援 7 種演算法與 5 種金鑰類型
 
 ---

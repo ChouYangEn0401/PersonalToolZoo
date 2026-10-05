@@ -63,9 +63,9 @@ cd tools\encrypter
 
 ### 注意事項
 
-- **版本號不一致，待作者決定**：`crypto_tool/README.md` 的更新紀錄寫到 v1.4.0，
-  但 `_version.py`（也就是 exe 檔名與視窗標題）是 0.3.0，tag 也是 `Encrypter_v0.3.0`。
-  要統一的話用 `.\scripts\release.ps1 enc <版本號>`。
+- **版本號以 `_version.py` 為準**：`crypto_tool/README.md` 和 `crypto_tool/dev_plan.md` 裡的 1.0～1.4
+  是開發期間（2026-04-20～23）的內部迭代編號；第一個正式版是 v0.3.0（tag `Encrypter_v0.3.0`，已推上 GitHub），
+  內容就是迭代 1.4。下一版從 0.3.x／0.4.0 接著發，不要用 1.x。
 - `crypto_tool/gui/pgp_demo.py` 是開發用的 PGP 示範視窗，不在 GUI 裡，
   要在 `tools\encrypter` 底下用 `python -m crypto_tool.gui.pgp_demo` 跑。
 - `del_dev_plan.md`、`crypto_tool/dev_plan.md`、`docs/experiment.md` 是開發計畫／實驗紀錄。

@@ -92,4 +92,4 @@ README「歷史」列了還沒收的分支。收的時候照原本的四步，�
 - **PowerShell 的 `-match`／`-notmatch` 不分大小寫**：過濾輸出時 `'ok'` 也會濾掉結果表的 `OK` 行。
 - **增量 build**：輸入沒變時 PyInstaller 不重寫 exe（時間戳是舊的），產物要用 `Get-ToolInfo` 算出的檔名找，不要用時間戳。
 - **Git Helper Pro** 在開發模式切換語言會改寫有進版控的 `language_config.json`。
-- **Encrypter** 的 `crypto_tool/README.md` 更新紀錄寫到 v1.4.0，但實際版本檔是 0.3.0——作者還沒決定以哪個為準，不要自行改。
+- **Encrypter** 文件裡的 1.0～1.4 是開發期間的內部迭代編號，正式版本是 `_version.py` 的 0.3.x 系列；不要把版本跳到 1.x。
