@@ -4,14 +4,16 @@
 
 ## 🌟 核心功能
 
-- **拖放支援 (Drag & Drop)**：直接將多個檔案或資料夾中的檔案拖入視窗即可開始計算。
+- **拖放支援 (Drag & Drop)**：把檔案或整個資料夾（含子資料夾）拖進表格即可開始計算。
 - **路徑防重過濾**：自動識別並跳過已存在於列表中的相同路徑，避免重複處理。
 - **內容視覺化比對**：
     - 使用 **SHA-256** 作為內容唯一性判斷標準。
     - **自動著色機制**：內容完全相同的檔案（即使檔名不同、路徑不同）會被標記為**相同的底色**。
-- **多演算法支援**：同步計算 MD5、SHA-1、SHA-256。
-- **動態排序**：點擊任意標題（如 SHA256 或檔案大小）即可對列表進行即時排序，方便對齊相同內容的檔案。
-- **效能優化**：採用 64KB Buffer 分段讀取機制，穩定處理 GB 級大檔案而不消耗過量記憶體。
+- **多演算法支援**：同步計算 MD5、SHA-1、SHA-256、CRC32。
+- **比對雜湊**：把下載頁提供的雜湊值貼進上方的「比對雜湊」欄（MD5 / SHA1 / SHA256 / CRC32 都可以，
+  不分大小寫、可含空白或冒號），符合的檔案會標綠並顯示是哪一種演算法——確認下載的檔案沒有被竄改或損壞。
+- **動態排序**：點擊任意標題（檔名、各種雜湊、路徑）即可排序，方便對齊相同內容的檔案。
+- **效能優化**：採用 64KB Buffer 分段讀取、在背景計算，GB 級大檔案不會卡住視窗。
 
 ## 🛠 系統需求
 
@@ -67,7 +69,7 @@ with open(file_path, 'rb') as f:
 | 環境 | 專屬 `tools\hash-my-file\.venv`（build 時自動建立／同步） |
 | 依賴 | `tkinterdnd2`（拖放；PyInstaller 內建 hook 會自動帶 tkdnd 執行檔） |
 | 打包額外內容 | 無；console 版（`console: true`） |
-| 測試 | 無自動化測試 |
+| 測試 | `.\tools\hash-my-file\.venv\Scripts\python.exe -m unittest discover -s tools\hash-my-file\tests -v`（`FileHasher`：四種雜湊、資料夾展開、比對） |
 | Release tag | `HashMyFile_vX.Y.Z` |
 
 常用指令（repo 根目錄）：
@@ -81,3 +83,5 @@ with open(file_path, 'rb') as f:
 
 - **分支上還有未收的功能**：`feat/hash_my_file_gui/all_platform` 在 tag `HashMyFile_v0.1.0` 之後
   還有一個 commit（`548d036`：只留重複檔、開啟、刪除按鈕），還沒收尾所以沒併。詳見根目錄 README「歷史」。
+- 最早的獨立版（`Python Projects\。HashMyFile`）有 CRC32 和「輸入雜湊值比對」，改寫成表格版時不見了，
+  2026-10 併回來（沒有另外開一個工具）。版本號還是 0.1.0，發版時用 `release.ps1 hash minor`。
