@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from toolzoo.ai import anthropic_claude, openai_compat
+from toolzoo.ai.errors import LLMError, explain
 from toolzoo.ai.keys import KEY_NAMES, find_key, keys_file
 
 PROVIDERS: dict[str, str] = {
@@ -79,9 +80,12 @@ class LLM:
         return f"LLM({self.provider!r}, {self.model!r})"
 
     def list_models(self) -> list[str]:
-        if self.provider == "anthropic":
-            return anthropic_claude.list_models(self._client)
-        return openai_compat.list_models(self._client, self.provider)
+        try:
+            if self.provider == "anthropic":
+                return anthropic_claude.list_models(self._client)
+            return openai_compat.list_models(self._client, self.provider)
+        except Exception as exc:  # noqa: BLE001 — 統一翻成看得懂的訊息
+            raise LLMError(explain(exc, self.provider, self.model)) from exc
 
     def stream(
         self,
@@ -92,7 +96,18 @@ class LLM:
         max_tokens: int | None = None,
         final: dict | None = None,
     ) -> Iterator[str]:
-        """逐段 yield 輸出。``final`` 有給的話，結束時 final["text"] 是完整、權威的結果。"""
+        """逐段 yield 輸出。``final`` 有給的話，結束時 final["text"] 是完整、權威的結果。
+
+        出錯時丟 LLMError，訊息已經是給人看的中文（額度用完、金鑰無效、被限流…），原始例外在 __cause__。
+        """
+        try:
+            yield from self._stream(system, user, temperature, max_tokens, final)
+        except (LLMError, anthropic_claude.ClaudeRefusal):
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise LLMError(explain(exc, self.provider, self.model)) from exc
+
+    def _stream(self, system, user, temperature, max_tokens, final) -> Iterator[str]:
         if self.provider == "anthropic":
             yield from anthropic_claude.stream_chat(
                 self._client, self.model, system,
