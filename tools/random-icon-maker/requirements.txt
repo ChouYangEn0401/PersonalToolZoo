@@ -1,1 +1,2 @@
-pillow==11.0.0
+# Random Icon Maker 執行時依賴（打包工具在根目錄 requirements-dev.txt）
+pillow>=11.0,<13  # 舊版鎖 11.0.0；12.x 產生的圖逐像素相同（見 tests/）

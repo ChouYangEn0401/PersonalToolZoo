@@ -1,0 +1,7 @@
+{
+  "name": "RandomIconMaker",
+  "entry": "main.py",
+  "console": false,
+  "version_from": "version.py",
+  "tag_prefix": "RandomIconMaker"
+}
