@@ -12,7 +12,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from toolzoo.ai import keys, openai_compat, text_modes  # noqa: E402
+from toolzoo.ai import errors, keys, openai_compat, text_modes  # noqa: E402
 from toolzoo.ai.client import provider_for_model  # noqa: E402
 from toolzoo.ai.prompts import strip_outer_fence, wrap  # noqa: E402
 
@@ -120,6 +120,48 @@ class PromptTest(unittest.TestCase):
         self.assertEqual(provider_for_model("gemini-2.5-flash"), "gemini")
         self.assertEqual(provider_for_model("claude-opus-5-5"), "anthropic")
         self.assertEqual(provider_for_model("gpt-5.1"), "openai")
+
+
+class ErrorTextTest(unittest.TestCase):
+    """用 2026-10-05 實際收到的錯誤內容測，確保使用者看到的是下一步該做什麼。"""
+
+    @staticmethod
+    def api_error(status, body, message="Error"):
+        exc = Exception(message)
+        exc.status_code, exc.body = status, body
+        return exc
+
+    def test_quota_exhausted(self):
+        exc = self.api_error(429, {"message": "You have no credits remaining.", "type": "insufficient_quota",
+                                   "code": "credit_balance_exhausted"})
+        text = errors.explain(exc, "openai", "gpt-5.1")
+        self.assertIn("額度用完", text)
+        self.assertIn("billing", text)
+
+    def test_gemini_invalid_key(self):
+        exc = self.api_error(400, [{"error": {"code": 400, "message": "Please pass a valid API key",
+                                              "status": "INVALID_ARGUMENT"}}],
+                             "Error code: 400 - Please pass a valid API key")
+        self.assertIn("金鑰無效", errors.explain(exc, "gemini", "gemini-2.5-flash"))
+
+    def test_unknown_model_and_fallback(self):
+        self.assertIn("找不到模型", errors.explain(self.api_error(404, {}), "openai", "gpt-9"))
+        self.assertIn("呼叫失敗", errors.explain(ValueError("boom"), "openai", "gpt-5.1"))
+
+    def test_stream_wraps_errors(self):
+        from toolzoo.ai.client import LLM
+
+        llm = LLM.__new__(LLM)
+        llm.provider, llm.model = "openai", "gpt-5.1"
+
+        def broken(*_args):
+            raise self.api_error(429, {"code": "insufficient_quota"})
+            yield  # pragma: no cover
+
+        llm._stream = broken
+        with self.assertRaises(errors.LLMError) as ctx:
+            list(llm.stream("s", "u"))
+        self.assertIn("額度用完", str(ctx.exception))
 
 
 if __name__ == "__main__":
