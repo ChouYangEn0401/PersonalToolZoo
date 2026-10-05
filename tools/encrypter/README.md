@@ -30,7 +30,7 @@ cd tools\encrypter
 
 打包：
 ```powershell
-.\scripts\build.ps1 encrypter -Smoke
+.\scripts\build.ps1 encrypter
 ```
 
 關於 Mixture 模式的驗證
@@ -40,3 +40,32 @@ cd tools\encrypter
 
 更多細節請見 `del_dev_plan.md`。
 
+---
+
+## 交接
+
+| 項目 | 內容 |
+|---|---|
+| 入口 | `crypto_tool/GUI__Encrypter.py`（會把 `crypto_tool/` 加進 `sys.path`，所以內部都用 `from gui...`、`from core...`、`from _version...`） |
+| 版本號 | `crypto_tool/_version.py` 的 `__version__` → exe 檔名 `GUI__Encrypter(vX.Y.Z).exe`、視窗標題 `CryptoTool Pro vX.Y.Z` |
+| 環境 | 專屬 `tools\encrypter\.venv`（build 時自動建立／同步） |
+| 依賴 | `pycryptodome`、`ttkbootstrap>=1.10.1,<2`、`tkinterdnd2`。ttkbootstrap **不能升 2.x**：2.x 打包後缺 `assets\icons\bootstrap.ttf`，exe 一開就崩潰 |
+| 打包額外內容 | 無（`tool.json` 沒有 include） |
+| 測試 | `cd tools\encrypter` → `.\.venv\Scripts\python.exe -m pip install pytest` → `.\.venv\Scripts\python.exe -m pytest -q`（7 個） |
+| Release tag | `Encrypter_vX.Y.Z` |
+
+常用指令（repo 根目錄）：
+
+```powershell
+.\scripts\build.ps1 enc                 # build + 冒煙測試
+.\scripts\release.ps1 enc patch         # 發新版
+```
+
+### 注意事項
+
+- **版本號不一致，待作者決定**：`crypto_tool/README.md` 的更新紀錄寫到 v1.4.0，
+  但 `_version.py`（也就是 exe 檔名與視窗標題）是 0.3.0，tag 也是 `Encrypter_v0.3.0`。
+  要統一的話用 `.\scripts\release.ps1 enc <版本號>`。
+- `crypto_tool/gui/pgp_demo.py` 是開發用的 PGP 示範視窗，不在 GUI 裡，
+  要在 `tools\encrypter` 底下用 `python -m crypto_tool.gui.pgp_demo` 跑。
+- `del_dev_plan.md`、`crypto_tool/dev_plan.md`、`docs/experiment.md` 是開發計畫／實驗紀錄。

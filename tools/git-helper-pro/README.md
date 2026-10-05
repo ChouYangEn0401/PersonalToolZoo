@@ -245,3 +245,34 @@ CSV 欄位：`key, zh-tw, zh-cn, en`，每行一個翻譯 key。
 ## 📄 License
 
 MIT License — Made with ❤️ for Git Power Users & Project Leads
+
+---
+
+## 交接
+
+| 項目 | 內容 |
+|---|---|
+| 入口 | `GUI__GitHelperPro.py`；只看指令面板可用 `ShowPanel.bat` |
+| 版本號 | `src/version.py` 的 `__version__` → exe 檔名 `GUI__GitHelperPro(vX.Y.Z).exe`、視窗標題 `(vX.Y.Z)` |
+| 環境 | 只用標準庫 → 根目錄共用 `.venv` |
+| 依賴 | 執行時需要電腦上有 `git`（在 PATH 上） |
+| 打包額外內容 | `include: language/、language_config.json`（多語系檔） |
+| 測試 | 在 `tools\git-helper-pro` 底下：`$env:PYTHONUTF8=1; ..\..\.venv\Scripts\python.exe -m tests.run_lm`（不設 UTF-8 的話，cp950 主控台印簡體字會報錯，程式本身沒問題） |
+| Release tag | `GitHelperPro_vX.Y.Z`（目前最新的 tag 是 v1.5.0，v1.6.4 還沒打過 tag） |
+
+常用指令（repo 根目錄）：
+
+```powershell
+.\scripts\build.ps1 githelper           # build + 冒煙測試
+.\scripts\release.ps1 githelper keep    # 幫目前的 v1.6.4 補打 tag
+.\scripts\release.ps1 githelper patch   # 發新版
+```
+
+### 注意事項
+
+- 開發模式下切換語言會改寫 `language_config.json`（這個檔有進版控），commit 前留意 diff。
+- 打包後的 exe 會在**自己旁邊**寫 `githelper_language.log` 和 `language_config.json`，
+  語言檔也會優先讀 exe 旁邊的 `language/` 或 `.lang/GitHelperPro/`（方便不重新打包就改翻譯）。
+- 新增指令：在 `src/core/git_handler/commands.py` 加設定，面板是設定驅動的，詳見 `docs/development.md`。
+- **分支上還有未收的功能**：`feat/git_command_gui_helper/dev` 有一組帶參數的 fetch / pull 指令設定
+  （remote / prune / rebase），主線目前是簡化版的 Fetch 對話框 + Pull 按鈕。詳見根目錄 README「歷史」。

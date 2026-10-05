@@ -29,7 +29,7 @@ cd tools\excel-tool
 .\.venv\Scripts\python.exe -m excel_tool.cli apply drop_columns --in a.xlsx --out b.xlsx --param columns=foo,bar
 cd ..\..
 
-.\scripts\build.ps1 excel-tool -Smoke         # 打包成 exe → dist\excel-tool\
+.\scripts\build.ps1 excel-tool         # 打包成 exe（含冒煙測試）→ dist\excel-tool\
 ```
 
 ## 架構（MVC，btn → callback → 純運算）
@@ -43,3 +43,33 @@ excel_tool/
 └── cli.py           ← 以同一 registry 從命令列驅動
 GUI_AdvancedExcelTool.py  ← GUI 進入點
 ```
+
+---
+
+## 交接
+
+| 項目 | 內容 |
+|---|---|
+| 入口 | `GUI_AdvancedExcelTool.py`（GUI）；`python -m excel_tool.cli`（CLI，共用同一個操作註冊表） |
+| 版本號 | `excel_tool/__init__.py` 的 `__version__` → exe 檔名 `GUI_AdvancedExcelTool(vX.Y.Z).exe`、視窗標題 `Advanced Excel Tool vX.Y.Z` |
+| 環境 | 專屬 `tools\excel-tool\.venv`（build 時自動建立／同步；第一次需要 git 與網路） |
+| 依賴 | `infinity-treeview`（作者自己的套件，沒上 PyPI，從 GitHub tag `release_0.2.0` 安裝）、`pandas>=2.0,<3`、`openpyxl`、`tkinterdnd2` |
+| 打包額外內容 | `collect_all: infinity_treeview`（把它的資料檔一起打包） |
+| 測試 | repo 裡沒有自動化測試。改了 `excel_tool/core` 的話，至少用 CLI 把動到的操作跑一次 |
+| Release tag | `ExcelTool_vX.Y.Z` |
+
+常用指令（repo 根目錄）：
+
+```powershell
+.\scripts\build.ps1 excel               # build + 冒煙測試
+.\scripts\release.ps1 excel patch       # 發新版
+```
+
+### 注意事項
+
+- **pandas 不能直接升 3.x**：`core/operations.py` 的 `aggregate_with_separator`（合併濃縮）
+  用 `x.astype(str)` 再 join，pandas 3 的 `astype(str)` 會保留 NaN，遇到空格就 `TypeError`。
+  要升級得先改這段（先處理空值再轉字串，並決定空值要顯示成什麼——pandas 2 下目前是 `nan`），
+  再把所有操作跑過一輪。
+- 新增操作的方式：在 `core/operations.py` 寫純函式並 `register(Operation(...))`，
+  GUI 的選單和 CLI 會自動出現，不用改 GUI 程式碼。

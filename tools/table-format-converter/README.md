@@ -46,7 +46,7 @@ cd PersonalToolZoo
 .\tools\table-format-converter\.venv\Scripts\python.exe tools\table-format-converter\GUI_TableFormatConverter.py
 
 # 打包成 exe → dist\table-format-converter\
-.\scripts\build.ps1 table-format-converter -Smoke
+.\scripts\build.ps1 table-format-converter
 ```
 
 1. 把表格文字貼進上方輸入框（Tab 分隔或 Markdown 格式皆可）
@@ -87,3 +87,23 @@ tools/table-format-converter/
 └── tool.json                    # build 設定（給 scripts/build.ps1 用）
 ```
 
+---
+
+## 交接
+
+| 項目 | 內容 |
+|---|---|
+| 入口 | `GUI_TableFormatConverter.py`（單檔：解析、預覽、輸出都在裡面） |
+| 版本號 | `version.py` 的 `__version__` → exe 檔名 `GUI_TableFormatConverter(vX.Y.Z).exe`、視窗標題 `Table Tool vX.Y.Z` |
+| 環境 | 專屬 `tools\table-format-converter\.venv`（build 時自動建立／同步） |
+| 依賴 | `openpyxl`（只有「存成 .xlsx」會用到，沒裝時程式會提示而不會壞） |
+| 打包額外內容 | 無；console 版（`console: true`） |
+| 測試 | 無自動化測試 |
+| Release tag | `TableFormatConverter_vX.Y.Z`（另有一個舊的重複 tag `Table_Format_Converter_v1.0.0`，可以不用理它） |
+
+常用指令（repo 根目錄）：
+
+```powershell
+.\scripts\build.ps1 table               # build + 冒煙測試
+.\scripts\release.ps1 table patch       # 發新版
+```

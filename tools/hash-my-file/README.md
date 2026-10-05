@@ -32,7 +32,7 @@
 .\tools\hash-my-file\.venv\Scripts\python.exe tools\hash-my-file\HashMyFile.py
 
 # 打包成 exe → dist\hash-my-file\
-.\scripts\build.ps1 hash-my-file -Smoke
+.\scripts\build.ps1 hash-my-file
 ```
 2. 導入檔案：從檔案總管直接拖入一或多個檔案至視窗中。
 3. 比對策略：
@@ -55,3 +55,29 @@ with open(file_path, 'rb') as f:
 ```
 
 ## 📜 授權本專案採用 MIT License。
+
+---
+
+## 交接
+
+| 項目 | 內容 |
+|---|---|
+| 入口 | `HashMyFile.py`（`FileHasher` 負責算雜湊、`HashApp` 負責畫面） |
+| 版本號 | `version.py` 的 `__version__` → exe 檔名 `HashMyFile(vX.Y.Z).exe`、視窗標題結尾 `vX.Y.Z` |
+| 環境 | 專屬 `tools\hash-my-file\.venv`（build 時自動建立／同步） |
+| 依賴 | `tkinterdnd2`（拖放；PyInstaller 內建 hook 會自動帶 tkdnd 執行檔） |
+| 打包額外內容 | 無；console 版（`console: true`） |
+| 測試 | 無自動化測試 |
+| Release tag | `HashMyFile_vX.Y.Z` |
+
+常用指令（repo 根目錄）：
+
+```powershell
+.\scripts\build.ps1 hash                # build + 冒煙測試
+.\scripts\release.ps1 hash patch        # 發新版
+```
+
+### 注意事項
+
+- **分支上還有未收的功能**：`feat/hash_my_file_gui/all_platform` 在 tag `HashMyFile_v0.1.0` 之後
+  還有一個 commit（`548d036`：只留重複檔、開啟、刪除按鈕），還沒收尾所以沒併。詳見根目錄 README「歷史」。
