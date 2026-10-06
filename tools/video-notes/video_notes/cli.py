@@ -16,6 +16,8 @@ import threading
 from dataclasses import replace
 from pathlib import Path
 
+from toolzoo.ai import PROVIDERS, provider_for_model
+
 from video_notes import notify
 from video_notes.config import OUTPUT_CUSTOM, OUTPUT_DATA, OUTPUT_DOWNLOADS, Settings, load_settings
 from video_notes.jobs import JobManager
@@ -47,8 +49,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-w", "--with", dest="modifiers", default="", help="加料，逗號分隔，例如 timeline,actions")
     p.add_argument("--preset", default="", help="常用組合（--list 看有哪些）")
     p.add_argument("--focus", default="", help="特別想知道的主題；無關的內容會被濃縮成一行")
-    p.add_argument("--provider", choices=("openai", "gemini", "anthropic"), help="AI 服務")
-    p.add_argument("--model", help="AI 模型（例如 gpt-5.1、gemini-2.5-flash、claude-opus-5-5）")
+    p.add_argument("--provider", choices=list(PROVIDERS),
+                   help="AI 服務：claude-sub（Claude 訂閱，預設，不需要金鑰）、openai、gemini、anthropic（Claude API）")
+    p.add_argument("--model", help="AI 模型（例如 sonnet、haiku、gpt-5.1、gemini-2.5-flash、claude-opus-5-5）；"
+                                   "只給模型時從名稱判斷服務")
     p.add_argument("--whisper-model", help="語音辨識模型：tiny / base / small / medium / large-v3 / large-v3-turbo")
     p.add_argument("--device", choices=("auto", "cuda", "cpu"), help="語音辨識用 GPU 或 CPU")
     p.add_argument("--language", help="影片語言，例如 zh、en；auto 讓 Whisper 自己判斷")
@@ -79,6 +83,8 @@ def _settings_from_args(args, base: Settings) -> Settings:
             setattr(s, attr, value)
     if args.provider and not args.model:
         s.model = ""  # 換了服務但沒指定模型 → 用該服務的預設模型
+    elif args.model and not args.provider:
+        s.provider = provider_for_model(args.model) or s.provider  # 只給模型（例如 haiku）→ 從名稱判斷服務
     if args.jobs:
         s.parallel_jobs = args.jobs
     return s

@@ -1,4 +1,4 @@
-"""印出執行環境：ffmpeg、GPU、yt-dlp 的 JS 執行環境、各家 API 金鑰有沒有設、設定檔位置。
+"""印出執行環境：ffmpeg、GPU、yt-dlp 的 JS 執行環境、各家 AI 能不能用（Claude Code、API 金鑰）、設定檔位置。
 
 出問題時第一個跑這支：
     .\\tools\\video-notes\\.venv\\Scripts\\python.exe tools\\video-notes\\debug\\check_env.py
@@ -28,4 +28,4 @@ if __name__ == "__main__":
     if not env["js_runtimes"]:
         print("\n!! 沒有 deno / node / bun —— YouTube 可能抓不到影片網址")
     if not any(env["keys"].values()):
-        print("\n!! 沒有任何 AI 金鑰 —— 只能用 --no-notes 產生逐字稿")
+        print("\n!! 沒有可用的 AI（找不到 Claude Code，也沒有任何 API 金鑰）—— 只能用 --no-notes 產生逐字稿")

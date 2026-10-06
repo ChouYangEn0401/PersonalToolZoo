@@ -11,6 +11,7 @@ import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
+from toolzoo.ai import DEFAULT_PROVIDER
 from toolzoo.appdirs import downloads_dir, tool_data_dir
 
 TOOL_NAME = "video-notes"
@@ -52,7 +53,7 @@ class Settings:
     traditional: bool = True          # 中文逐字稿轉成繁體（台灣用語）
 
     # AI 整理
-    provider: str = "openai"
+    provider: str = DEFAULT_PROVIDER  # Claude 訂閱（電腦上的 Claude Code），不需要金鑰；存過設定的照存檔
     model: str = ""                   # 空白 = 該 provider 的預設模型
     profile: str = "auto"
     modifiers: list[str] = field(default_factory=list)

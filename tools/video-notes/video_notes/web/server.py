@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Str
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from toolzoo.ai import DEFAULT_MODELS, LLM, PROVIDERS, MissingKeyError, save_key, text_modes
+from toolzoo.ai import DEFAULT_MODELS, LLM, PROVIDERS, MissingKeyError, needs_key, save_key, text_modes
 from toolzoo.webapp import run as run_webapp
 
 from version import __version__
@@ -153,6 +153,8 @@ def create_app() -> FastAPI:
     def put_key(req: KeyRequest):
         if req.provider not in PROVIDERS:
             raise HTTPException(400, "不認得的服務")
+        if not needs_key(req.provider):
+            raise HTTPException(400, f"{PROVIDERS[req.provider]} 不需要金鑰")
         path = save_key(req.provider, req.key)
         return {"saved": str(path), "env": environment()}
 
