@@ -1,4 +1,7 @@
 # Better Prompt 執行時依賴（打包工具在根目錄 requirements-dev.txt）
 customtkinter>=5.2.2,<6
+# Claude 訂閱（預設服務）：透過電腦上的 Claude Code 呼叫，不需要金鑰。釘在 tag，至少 v0.2.1
+# （v0.2.0 在視窗程式裡每次呼叫會閃黑窗）。從 GitHub 安裝，需要 git。
+claude-subscription @ git+https://github.com/ChouYangEn0401/ClaudeLogin.git@v0.2.1
 openai>=2.0,<3  # OpenAI 與 Gemini（Gemini 走 OpenAI 相容端點）
-anthropic>=1.11,<2  # Claude
+anthropic>=1.11,<2  # Claude API（按量計費，跟訂閱分開）
