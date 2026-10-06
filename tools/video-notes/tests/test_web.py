@@ -54,6 +54,18 @@ class WebTest(unittest.TestCase):
         self.assertIn("✨ 文字精練", s["text_modes"])
         self.assertEqual(self.client.get("/api/health").json()["app"], "video-notes")
 
+    def test_claude_subscription_needs_no_key(self):
+        from toolzoo.ai import claude_code
+
+        with mock.patch.object(claude_code, "available", lambda: (True, r"C:\fake\claude.exe")):
+            s = self.client.get("/api/state").json()
+        self.assertEqual(s["settings"]["provider"], "claude-sub")    # 沒存過設定 → 預設 Claude 訂閱
+        self.assertEqual(s["env"]["keyless"], ["claude-sub"])
+        self.assertTrue(s["env"]["keys"]["claude-sub"])               # 找得到 Claude Code 就算可用
+        self.assertEqual(s["env"]["claude_code"], r"C:\fake\claude.exe")
+        r = self.client.post("/api/keys", json={"provider": "claude-sub", "key": "x"}, headers=H)
+        self.assertEqual(r.status_code, 400)
+
     def test_full_flow(self):
         make_done_video(self.out)
         check = self.client.post("/api/check", json={"urls": [URL]}, headers=H).json()[0]

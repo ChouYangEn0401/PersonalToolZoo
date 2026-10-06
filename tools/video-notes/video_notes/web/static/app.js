@@ -139,9 +139,11 @@ function renderEnv() {
   chips.push(`<span class="chip ${env.gpu ? "ok" : ""}" title="${esc(env.gpu_text)}">${env.gpu ? "GPU" : "CPU"} 語音辨識</span>`);
   chips.push(`<span class="chip ${env.ffmpeg ? "ok" : "bad"}" title="${esc(env.ffmpeg || "找不到 ffmpeg")}">ffmpeg ${env.ffmpeg ? "✓" : "✗"}</span>`);
   chips.push(`<span class="chip ${env.js_runtimes.length ? "ok" : "bad"}" title="yt-dlp ${esc(env.yt_dlp)}">YouTube JS ${env.js_runtimes.length ? "✓ " + env.js_runtimes[0] : "✗"}</span>`);
-  const hasKey = env.keys[settings.provider];
+  const ready = env.keys[settings.provider];   // 有金鑰；Claude 訂閱則是找得到 Claude Code
+  const keyless = env.keyless.includes(settings.provider);
   const model = settings.model || state.app.default_models[settings.provider];
-  chips.push(`<span class="chip ${hasKey ? "ok" : "bad"}">AI：${esc(providers[settings.provider])} ${esc(model)} ${hasKey ? "✓" : "（未設定金鑰）"}</span>`);
+  const missing = keyless ? "（找不到 Claude Code）" : "（未設定金鑰）";
+  chips.push(`<span class="chip ${ready ? "ok" : "bad"}" title="${esc(keyless ? env.claude_code : "")}">AI：${esc(providers[settings.provider])} ${esc(model)} ${ready ? "✓" : missing}</span>`);
   $("#env-chips").innerHTML = chips.join("");
   $("#out-hint").textContent = `輸出到：${state.app.output_root}`;
 }
@@ -513,7 +515,8 @@ function openSettings() {
 
 function updateModelHints() {
   const p = $("#s-provider").value;
-  const hints = { openai: ["gpt-5.1", "gpt-4.1", "gpt-4.1-mini"], gemini: ["gemini-2.5-flash", "gemini-2.5-pro"],
+  const hints = { "claude-sub": ["sonnet", "haiku", "opus"],
+    openai: ["gpt-5.1", "gpt-4.1", "gpt-4.1-mini"], gemini: ["gemini-2.5-flash", "gemini-2.5-pro"],
     anthropic: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"] }[p] || [];
   $("#model-hints").innerHTML = hints.map(h => `<option value="${h}">`).join("");
   $("#s-model").placeholder = `空白 = ${state.app.default_models[p]}`;
@@ -521,8 +524,16 @@ function updateModelHints() {
 
 function updateKeyStatus() {
   const p = $("#s-provider").value;
-  const ok = state.app.env.keys[p];
-  $("#s-key-status").textContent = ok ? `✓ 已經有 ${state.app.providers[p]} 的金鑰（貼上新的會取代）` : `尚未設定 ${state.app.providers[p]} 的金鑰`;
+  const { env, providers } = state.app;
+  const keyless = env.keyless.includes(p);
+  $(".key-row").style.display = keyless ? "none" : "";   // Claude 訂閱用 Claude Code 登入的帳號，沒有金鑰可貼
+  if (keyless) {
+    $("#s-key-status").textContent = env.keys[p]
+      ? "✓ 用電腦上 Claude Code 登入的帳號，不需要金鑰（會用掉訂閱額度）"
+      : `找不到 Claude Code（${env.claude_code}）：先安裝，再開終端機執行一次 claude 登入`;
+    return;
+  }
+  $("#s-key-status").textContent = env.keys[p] ? `✓ 已經有 ${providers[p]} 的金鑰（貼上新的會取代）` : `尚未設定 ${providers[p]} 的金鑰`;
 }
 
 async function saveKey() {
