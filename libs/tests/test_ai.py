@@ -118,8 +118,89 @@ class PromptTest(unittest.TestCase):
 
     def test_provider_guess(self):
         self.assertEqual(provider_for_model("gemini-2.5-flash"), "gemini")
-        self.assertEqual(provider_for_model("claude-opus-5-5"), "anthropic")
+        self.assertEqual(provider_for_model("claude-opus-5-5"), "anthropic")   # 完整模型名 = API 金鑰版
         self.assertEqual(provider_for_model("gpt-5.1"), "openai")
+        self.assertEqual(provider_for_model("sonnet"), "claude-sub")         # Claude Code 的別名 = 訂閱
+
+
+def fake_claude_subscription(answer="整理好的文字", error=None):
+    """假的 claude_subscription 模組：記錄呼叫參數，不會真的叫 claude、不花錢。"""
+    import types
+
+    mod = types.ModuleType("claude_subscription")
+
+    class ClaudeError(RuntimeError):
+        pass
+
+    class ClaudeAuthError(ClaudeError):
+        pass
+
+    class ClaudeNotFoundError(FileNotFoundError):
+        pass
+
+    mod.ClaudeError, mod.ClaudeAuthError, mod.ClaudeNotFoundError = ClaudeError, ClaudeAuthError, ClaudeNotFoundError
+    mod.calls = []
+
+    def ask(prompt, **kwargs):
+        mod.calls.append((prompt, kwargs))
+        if error:
+            raise getattr(mod, error)("boom")
+        return types.SimpleNamespace(text=answer, cost_usd=0.001)
+
+    def find_claude_binary():
+        if error == "ClaudeNotFoundError":
+            raise ClaudeNotFoundError("找不到 claude 執行檔")
+        return r"C:\fake\claude.exe"
+
+    mod.ask, mod.find_claude_binary = ask, find_claude_binary
+    return mod
+
+
+class ClaudeSubscriptionTest(unittest.TestCase):
+    def use(self, mod):
+        patcher = mock.patch.dict(sys.modules, {"claude_subscription": mod})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return mod
+
+    def test_no_key_needed_and_one_piece(self):
+        from toolzoo.ai import LLM
+
+        mod = self.use(fake_claude_subscription("答案"))
+        with mock.patch.dict(os.environ, {}, clear=True):          # 沒有任何金鑰也能建立
+            llm = LLM("claude-sub")
+        self.assertEqual(llm.model, "sonnet")
+        final = {}
+        self.assertEqual(list(llm.stream("系統", "內容", temperature=0.3, final=final)), ["答案"])
+        self.assertEqual(final["text"], "答案")
+        prompt, kwargs = mod.calls[0]
+        self.assertEqual(prompt, "內容")
+        self.assertEqual((kwargs["system"], kwargs["model"]), ("系統", "sonnet"))
+        self.assertNotIn("temperature", kwargs)                     # 不支援的參數不會傳下去
+        self.assertGreaterEqual(kwargs["timeout"], 600)             # 長逐字稿要夠久
+
+    def test_list_models_checks_the_binary(self):
+        from toolzoo.ai import LLM, LLMError
+
+        self.use(fake_claude_subscription())
+        self.assertEqual(LLM("claude-sub").list_models(), ["sonnet", "haiku", "opus"])
+        self.use(fake_claude_subscription(error="ClaudeNotFoundError"))
+        with self.assertRaises(LLMError) as ctx:
+            LLM("claude-sub").list_models()
+        self.assertIn("install.ps1", str(ctx.exception))
+
+    def test_errors_are_explained(self):
+        from toolzoo.ai import LLM, LLMError
+
+        for error, words in (("ClaudeAuthError", "登入"), ("ClaudeError", "額度")):
+            self.use(fake_claude_subscription(error=error))
+            with self.assertRaises(LLMError) as ctx:
+                LLM("claude-sub", "haiku").complete("s", "u")
+            self.assertIn(words, str(ctx.exception), error)
+        with mock.patch.dict(sys.modules, {"claude_subscription": None}):   # 沒裝套件
+            with self.assertRaises(LLMError) as ctx:
+                LLM("claude-sub").complete("s", "u")
+        self.assertIn("claude-subscription", str(ctx.exception))
 
 
 class ErrorTextTest(unittest.TestCase):

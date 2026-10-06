@@ -2,12 +2,14 @@
 
     from toolzoo.ai import LLM
 
+    llm = LLM("claude-sub", "sonnet")         # Claude 訂閱（Claude Code）：不需要金鑰
     llm = LLM("openai", "gpt-5.1")            # 金鑰自動從環境變數 / keys.env 找
     for piece in llm.stream(system, user):    # 串流（GUI 用）
         ...
     text = llm.complete(system, user)         # 一次拿完整結果（CLI / 批次用）
 
-provider 不給時會從模型名稱猜（gemini-* → gemini、claude-* → anthropic，其餘 openai）。
+provider 不給時會從模型名稱猜：sonnet / haiku / opus → claude-sub、gemini-* → gemini、
+claude-* → anthropic（API 金鑰版），其餘 openai。
 """
 
 from __future__ import annotations
@@ -15,21 +17,28 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable, Iterator
 
-from toolzoo.ai import anthropic_claude, openai_compat
+from toolzoo.ai import anthropic_claude, claude_code, openai_compat
 from toolzoo.ai.errors import LLMError, explain
 from toolzoo.ai.keys import KEY_NAMES, find_key, keys_file
 
+# 順序就是選單的順序；Claude 訂閱是預設服務（用自己的訂閱、不需要 API 金鑰）
 PROVIDERS: dict[str, str] = {
+    claude_code.KEY: "Claude 訂閱（Claude Code）",
     "openai": "OpenAI（ChatGPT）",
     "gemini": "Google Gemini",
-    "anthropic": "Anthropic Claude",
+    "anthropic": "Anthropic Claude（API 金鑰）",
 }
 
+DEFAULT_PROVIDER = claude_code.KEY
+
 DEFAULT_MODELS: dict[str, str] = {
+    claude_code.KEY: claude_code.DEFAULT_MODEL,
     "openai": "gpt-5.1",
     "gemini": "gemini-2.5-flash",
     "anthropic": "claude-opus-5-5",
 }
+
+NO_KEY_PROVIDERS = {claude_code.KEY}
 
 
 class MissingKeyError(RuntimeError):
@@ -42,10 +51,16 @@ class MissingKeyError(RuntimeError):
         self.provider = provider
 
 
+def needs_key(provider: str) -> bool:
+    return provider not in NO_KEY_PROVIDERS
+
+
 def provider_for_model(model: str | None) -> str | None:
     if not model:
         return None
     lower = model.lower()
+    if lower in claude_code.MODELS:
+        return claude_code.KEY
     if lower.startswith("gemini"):
         return "gemini"
     if lower.startswith("claude"):
@@ -63,11 +78,14 @@ class LLM:
         key_files: Iterable[Path] = (),
         timeout: float = 600.0,
     ):
-        provider = provider or provider_for_model(model) or "openai"
+        provider = provider or provider_for_model(model) or DEFAULT_PROVIDER
         if provider not in PROVIDERS:
             raise ValueError(f"不認得的 provider：{provider}（可用：{', '.join(PROVIDERS)}）")
         self.provider = provider
         self.model = model or DEFAULT_MODELS[provider]
+        self._client = None
+        if not needs_key(provider):
+            return
         key = (api_key or "").strip() or find_key(provider, key_files)[0]
         if not key:
             raise MissingKeyError(provider)
@@ -80,7 +98,11 @@ class LLM:
         return f"LLM({self.provider!r}, {self.model!r})"
 
     def list_models(self) -> list[str]:
+        """帳號可用的模型。Claude 訂閱沒有清單 API：順便確認 Claude Code 找得到（不花錢）。"""
         try:
+            if self.provider == claude_code.KEY:
+                claude_code.find_binary()
+                return list(claude_code.MODELS)
             if self.provider == "anthropic":
                 return anthropic_claude.list_models(self._client)
             return openai_compat.list_models(self._client, self.provider)
@@ -108,6 +130,14 @@ class LLM:
             raise LLMError(explain(exc, self.provider, self.model)) from exc
 
     def _stream(self, system, user, temperature, max_tokens, final) -> Iterator[str]:
+        if self.provider == claude_code.KEY:
+            # 沒有串流：一次回整段；temperature / max_tokens 不支援，忽略
+            text = claude_code.complete(self.model, system, user)
+            if final is not None:
+                final["text"] = text
+            yield text
+            return
+
         if self.provider == "anthropic":
             yield from anthropic_claude.stream_chat(
                 self._client, self.model, system,
