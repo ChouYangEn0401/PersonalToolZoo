@@ -29,8 +29,9 @@
 
    | 用到 | 需要 |
    |---|---|
+   | `toolzoo.ai` 的 Claude 訂閱 | `claude-subscription @ git+https://github.com/ChouYangEn0401/ClaudeLogin.git@v0.2.1`（**至少 v0.2.1**：v0.2.0 在視窗程式裡每次呼叫都會閃一個黑窗） |
    | `toolzoo.ai` 的 OpenAI / Gemini | `openai>=2.0,<3` |
-   | `toolzoo.ai` 的 Claude | `anthropic>=1.11,<2` |
+   | `toolzoo.ai` 的 Claude API | `anthropic>=1.11,<2` |
    | `toolzoo.webapp` | `fastapi`、`uvicorn` |
 
 ## toolzoo.ai
@@ -38,11 +39,19 @@
 ```python
 from toolzoo.ai import LLM
 
+llm = LLM("claude-sub", "sonnet")           # Claude 訂閱：不需要金鑰（預設服務）
 llm = LLM("openai", "gpt-5.1")              # provider 不給會從模型名稱猜
 for piece in llm.stream(system, user):      # 串流
     ...
 text = llm.complete(system, user)           # 一次拿完整結果
 ```
+
+| 服務（provider） | 認證 | 模型 | 備註 |
+|---|---|---|---|
+| `claude-sub` Claude 訂閱（預設） | 電腦上官方的 **Claude Code** 登入的帳號（不需要金鑰） | `sonnet`（預設）/ `haiku` / `opus` | 透過使用者自己寫的 claude-subscription（ClaudeLogin）呼叫 `claude -p`。沒有串流（一次回整段）、不支援 temperature。**會用掉訂閱額度**（haiku 一次短呼叫約 0.002～0.009 美元）。要先安裝 Claude Code 並執行一次 `claude` 登入 |
+| `openai` | `OPENAI_API_KEY` | `gpt-5.1` 等 | |
+| `gemini` | `GEMINI_API_KEY` | `gemini-2.5-flash` 等 | 走 Gemini 的 OpenAI 相容端點 |
+| `anthropic` Claude API | `ANTHROPIC_API_KEY` | `claude-opus-5-5` 等 | 按量計費，跟訂閱分開 |
 
 ### API 金鑰放哪裡
 
@@ -63,7 +72,7 @@ text = llm.complete(system, user)           # 一次拿完整結果
 
 ## 測試
 
-不會打 API，隨便哪個裝了 `openai` 的 Python 都能跑：
+不會打 API、也不會呼叫 Claude Code（用假的 claude_subscription 模組），隨便哪個裝了 `openai` 的 Python 都能跑：
 
 ```powershell
 python -m unittest discover -s libs\tests -v

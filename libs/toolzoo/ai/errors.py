@@ -35,7 +35,29 @@ def _code(exc: Exception) -> str:
     return ""
 
 
+CLAUDE_CODE_INSTALL = ("PowerShell 執行 irm https://claude.ai/install.ps1 | iex，"
+                       "或在 VS Code 安裝擴充「Anthropic.claude-code」")
+
+
+def _explain_claude_code(exc: Exception) -> str:
+    """Claude 訂閱（claude-subscription 套件）的錯誤；只看類別名稱，不 import 套件。"""
+    kind = type(exc).__name__
+    if isinstance(exc, ImportError):
+        return ("這個工具的環境沒有裝 claude-subscription 套件，無法使用 Claude 訂閱。"
+                "請重建環境（scripts\\setup-venv.ps1 <工具> -Force），或改用其他 AI 服務。")
+    if kind == "ClaudeNotFoundError":
+        return f"找不到 Claude Code。請先安裝（{CLAUDE_CODE_INSTALL}），再執行一次 claude 用你的帳號登入。"
+    if kind == "ClaudeAuthError":
+        return "Claude Code 還沒登入，或登入已過期：開一個終端機執行 claude，用瀏覽器登入你的 Claude 帳號後再試。"
+    detail = str(exc).strip()
+    if "逾時" in detail:
+        return f"Claude 訂閱回應逾時：{detail}（內容很長時要等比較久，可以換 haiku 或稍後再試）"
+    return f"Claude 訂閱呼叫失敗（可能是訂閱額度用完或暫時連不上）：{detail[-600:]}"
+
+
 def explain(exc: Exception, provider: str, model: str) -> str:
+    if provider == "claude-sub":
+        return _explain_claude_code(exc)
     name = {"openai": "OpenAI", "gemini": "Gemini", "anthropic": "Claude"}.get(provider, provider)
     status = getattr(exc, "status_code", None)
     code = _code(exc)
