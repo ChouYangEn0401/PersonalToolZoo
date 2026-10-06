@@ -1,6 +1,6 @@
 # ✦ Better Prompt — AI Text Transformer
 
-> 貼上一段文字、選一個轉換模式，交給 AI（OpenAI / Gemini / Claude）改寫成更好的版本——
+> 貼上一段文字、選一個轉換模式，交給 AI（Claude 訂閱 / OpenAI / Gemini / Claude API）改寫成更好的版本——
 > 整理、摘要、改寫風格，或把一段口語需求變成結構完整的 prompt。
 
 ```
@@ -25,14 +25,25 @@
 .\scripts\build.ps1 better-prompt -Smoke                                 # 打包成 exe
 ```
 
-1. 頂端選 **服務**（OpenAI / Google Gemini / Anthropic Claude），貼上 API Key，按「連接 API」
+1. 頂端選 **服務**（預設是 **Claude 訂閱**，見下方）；選 OpenAI / Gemini / Claude API 時貼上 API Key，按「連接 API」
 2. 左側選模式 → 貼上文字 → `Ctrl + Enter` 或「▶ 立即轉換」
 3. 「⬇ 移至輸入」可以把結果搬回輸入框，連續加工多次
 4. 「📚 批次筆記本」分頁可以一次排好多段文字、各自選模式，一鍵全部執行
 
 沒連上 API 時按轉換，會顯示「將要送出的完整 prompt」，方便檢查或手動貼到別的地方用。
 
-### API 金鑰
+### Claude 訂閱（預設，不需要金鑰）
+
+用電腦上官方的 **Claude Code** 登入的 Claude 帳號（訂閱方案）呼叫 Claude，不用 API 金鑰。第一次使用前：
+
+1. 安裝 Claude Code：PowerShell 執行 `irm https://claude.ai/install.ps1 | iex`，或在 VS Code 安裝擴充「Anthropic.claude-code」
+2. 開終端機執行一次 `claude`，用瀏覽器登入你的 Claude 帳號
+
+開啟程式時會自動檢查 Claude Code 找不找得到（不花錢），顯示「● Claude Code 可用」。模型可選 `sonnet`（預設）/ `haiku` / `opus`。
+注意：**每次轉換都會用掉訂閱額度**（haiku 短短一次約 0.002～0.009 美元）；這個服務沒有串流（整段一次出現）、不吃 temperature。
+已經存過設定的人照原本選的服務；想換回 OpenAI 等，在頂端選單切換即可。
+
+### API 金鑰（OpenAI / Gemini / Claude API）
 
 連接成功後，手動輸入的金鑰會存進 **`%APPDATA%\PersonalToolZoo\keys.env`**——
 這是所有工具共用的金鑰檔（Video Notes 也讀這個），設一次就好。也可以：
@@ -46,7 +57,7 @@ v1 存在 `~/.better_prompt_settings.json` 的金鑰仍然讀得到，第一次�
 ### Temperature（創意度）
 
 側欄底部的滑桿：0.0–0.5 穩定保守、0.6–1.1 平衡（預設 0.7）、1.2–2.0 發散。
-部分模型不接受 temperature（OpenAI 的 o 系列、目前的 Claude 模型），這時會自動忽略這個設定。
+部分模型不接受 temperature（OpenAI 的 o 系列、目前的 Claude 模型、Claude 訂閱），這時會自動忽略這個設定。
 
 ## 六大功能模式
 
@@ -85,7 +96,7 @@ tools/better-prompt/
 ├── version.py                  # 版本號（exe 檔名會帶上）
 ├── model_recommendations.json  # 推薦模型的預設值
 ├── .env.example                # 金鑰範本
-├── requirements.txt            # customtkinter、openai（含 Gemini）、anthropic
+├── requirements.txt            # customtkinter、claude-subscription、openai（含 Gemini）、anthropic
 └── tool.json                   # build 設定（pathex 指向 repo 的 libs/）
 
 libs/toolzoo/ai/                # 共用：LLM 呼叫層、金鑰、模式庫（Video Notes 也用）
@@ -107,7 +118,8 @@ libs/toolzoo/ai/                # 共用：LLM 呼叫層、金鑰、模式庫（
 | 入口 | `GUI__BetterPrompt.py` |
 | 版本號 | `version.py` 的 `__version__` → exe 檔名 `GUI__BetterPrompt(vX.Y.Z).exe`、視窗標題 `Better Prompt ✦ AI Text Transformer vX.Y.Z` |
 | 環境 | 有第三方套件 → `tools\better-prompt\.venv` |
-| 依賴 | `customtkinter<6`、`openai<3`（OpenAI 與 Gemini）、`anthropic<2`（Claude；1.11 起 `fallbacks` 是正式參數） |
+| 依賴 | `customtkinter<6`、`claude-subscription`（Claude 訂閱，釘在 GitHub tag `v0.2.1`，安裝要有 git）、`openai<3`（OpenAI 與 Gemini）、`anthropic<2`（Claude API；1.11 起 `fallbacks` 是正式參數） |
+| 預設服務 | Claude 訂閱（`claude-sub`，模型 `sonnet`）——要先安裝並登入 Claude Code，**會用掉訂閱額度**；存過設定的人照原本的選擇 |
 | 共用程式 | `libs/toolzoo/ai`（LLM 呼叫層、金鑰、模式庫）——tool.json 的 `pathex` 指向 `../../libs`，進入點開頭也把它加進 `sys.path` |
 | 打包額外內容 | `include`: `model_recommendations.json`；`collect_all`: `customtkinter`（主題 JSON 與字型） |
 | 測試 | 程式本身無；共用層 `python -m unittest discover -s libs\tests` |
@@ -118,3 +130,8 @@ libs/toolzoo/ai/                # 共用：LLM 呼叫層、金鑰、模式庫（
 - 模式的名稱是 `model_recommendations.json` 的 key，改 `libs/toolzoo/ai/text_modes.py` 的分類或子模式名稱時要一起改。
 - 改 `libs/toolzoo/ai` 也會影響 Video Notes，兩個工具都要重新 build 測過。
 - v1 的設定檔 `~/.better_prompt_settings.json` 只會被讀、不會被刪；金鑰搬進 keys.env 之後，那個檔可以手動刪掉。
+  v1 只會帶過來 OpenAI 的模型與 temperature，不會帶服務——v1 只有 OpenAI，所以升上來的人預設也是 Claude 訂閱。
+- Claude 訂閱的「檢查 Claude Code」只找執行檔（`claude_subscription.find_claude_binary`），不會真的呼叫、不花額度；
+  沒登入或登入過期要到第一次轉換才會知道，錯誤訊息會叫使用者執行 `claude` 重新登入（訊息在 `libs/toolzoo/ai/errors.py`）。
+- `claude-subscription` 不要降到 v0.2.1 以下：舊版在打包後的視窗程式裡每呼叫一次就閃一個黑窗。
+- Claude 訂閱一次回整段，沒有串流；轉換時輸出框要等整段回來才會出現文字。
