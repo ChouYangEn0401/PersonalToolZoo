@@ -22,7 +22,8 @@ import customtkinter as ctk  # noqa: E402
 from tkinter import messagebox  # noqa: E402
 from tkinter import simpledialog  # noqa: E402
 
-from toolzoo.ai import DEFAULT_MODELS, LLM, PROVIDERS, find_key, keys_file, save_key  # noqa: E402
+from toolzoo.ai import (DEFAULT_MODELS, DEFAULT_PROVIDER, LLM, PROVIDERS, find_key, keys_file,  # noqa: E402
+                        needs_key, save_key)
 from toolzoo.ai.text_modes import MODES, build_messages, first_mode, preview  # noqa: E402
 from toolzoo.appdirs import tool_data_dir  # noqa: E402
 from version import __version__  # noqa: E402
@@ -58,6 +59,7 @@ KEY_FILES = (_app_dir() / ".env",)
 
 # 還沒連上 API（拿不到帳號可用的模型清單）時，下拉選單先顯示這些
 FALLBACK_MODELS: dict[str, list[str]] = {
+    "claude-sub": ["sonnet", "haiku", "opus"],
     "openai": ["gpt-5.1", "gpt-4.1", "gpt-4.1-mini", "gpt-4o-mini"],
     "gemini": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
     "anthropic": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"],
@@ -84,7 +86,9 @@ def _write_json(path: Path, data: dict) -> None:
 
 
 def load_settings() -> dict:
-    settings: dict = {"provider": "openai", "models": {}, "temperature": 0.7}
+    # 沒存過設定的人預設用 Claude 訂閱；存過的照原本的選擇。
+    # v1 的舊設定檔不算「選過服務」——那時只有 OpenAI 可選，只沿用它的模型與 temperature。
+    settings: dict = {"provider": DEFAULT_PROVIDER, "models": {}, "temperature": 0.7}
     legacy = _read_json(LEGACY_SETTINGS_FILE)
     if legacy.get("model"):
         settings["models"]["openai"] = legacy["model"]
@@ -134,9 +138,9 @@ class BetterPromptApp(ctk.CTk):
         super().__init__()
         self.settings = load_settings()
         self.recommendations = load_recommendations()
-        self.provider: str = self.settings.get("provider", "openai")
+        self.provider: str = self.settings.get("provider", DEFAULT_PROVIDER)
         if self.provider not in PROVIDERS:
-            self.provider = "openai"
+            self.provider = DEFAULT_PROVIDER
         self._initial_key, self._key_source = self._find_key(self.provider)
         self.llm: LLM | None = None
         self.available_models: list[str] = FALLBACK_MODELS[self.provider].copy()
@@ -208,7 +212,7 @@ class BetterPromptApp(ctk.CTk):
         self.provider_var = ctk.StringVar(value=PROVIDERS[self.provider])
         ctk.CTkOptionMenu(
             api, values=list(PROVIDERS.values()), variable=self.provider_var,
-            width=150, height=28, font=ctk.CTkFont(size=12),
+            width=200, height=28, font=ctk.CTkFont(size=12),
             command=self._on_provider_change,
         ).pack(side="left", padx=(0, 10))
 
@@ -240,12 +244,13 @@ class BetterPromptApp(ctk.CTk):
         self.api_key_entry.bind("<ButtonRelease-1>", lambda e: self.after(1, _clear_selection_after_click))
 
         self._show_key = False
-        ctk.CTkButton(
+        self.eye_btn = ctk.CTkButton(
             api, text="👁", width=30, height=28,
             fg_color="transparent", hover_color="#222",
             command=self._toggle_key_visibility,
             font=ctk.CTkFont(size=14),
-        ).pack(side="left", padx=(0, 6))
+        )
+        self.eye_btn.pack(side="left", padx=(0, 6))
 
         # 金鑰是從哪裡讀到的（環境變數 / keys.env / .env / v1 設定檔）
         self.key_source_lbl = ctk.CTkLabel(api, text="", font=ctk.CTkFont(size=10), text_color="#A3BE8C")
@@ -259,6 +264,7 @@ class BetterPromptApp(ctk.CTk):
             command=self._connect_api,
         )
         self.connect_btn.pack(side="left", padx=(0, 14))
+        self._apply_key_ui()
 
         self.api_status_lbl = ctk.CTkLabel(
             api, text="● 未連接",
@@ -914,6 +920,8 @@ class BetterPromptApp(ctk.CTk):
     # ── Provider / API key ────────────────────────────────────────────────────
 
     def _find_key(self, provider: str) -> tuple[str, str]:
+        if not needs_key(provider):
+            return "", ""
         key, source = find_key(provider, KEY_FILES)
         if not key and provider == "openai":
             key = legacy_api_key()
@@ -925,13 +933,24 @@ class BetterPromptApp(ctk.CTk):
 
     def _show_key_source(self) -> None:
         src = self._key_source
-        if not src:
+        if not needs_key(self.provider):
+            text = "用 Claude Code 登入的帳號，不需要金鑰"
+        elif not src:
             text = ""
         elif src.startswith("環境變數"):
             text = f"已自{src}載入"
         else:
             text = f"已自 {Path(src).name} 載入"
         self.key_source_lbl.configure(text=text)
+
+    def _apply_key_ui(self) -> None:
+        """Claude 訂閱不需要金鑰：金鑰欄停用，「連接」改成檢查電腦上的 Claude Code（不花錢）。"""
+        keyless = not needs_key(self.provider)
+        state = "disabled" if keyless else "normal"
+        self.api_key_entry.configure(state=state)
+        self.eye_btn.configure(state=state)
+        self.connect_btn.configure(text="檢查 Claude Code" if keyless else "連接 API", width=120 if keyless else 82)
+        self._show_key_source()
 
     def _on_provider_change(self, label: str) -> None:
         provider = next(k for k, v in PROVIDERS.items() if v == label)
@@ -942,15 +961,16 @@ class BetterPromptApp(ctk.CTk):
         save_settings(self.settings)
         self.llm = None
         key, self._key_source = self._find_key(provider)
+        self.api_key_entry.configure(state="normal")   # 停用中的欄位改不了內容，先打開再設
         self.api_key_var.set(key)
-        self._show_key_source()
         self.available_models = FALLBACK_MODELS[provider].copy()
         self.model_menu.configure(values=self.available_models)
         self.model_var.set(self._saved_model(provider))
         self.api_status_lbl.configure(text="● 未連接", text_color="#FF6B6B")
-        self.connect_btn.configure(text="連接 API", state="normal")
+        self.connect_btn.configure(state="normal")
+        self._apply_key_ui()
         self._update_status_info()
-        if key:
+        if key or not needs_key(provider):
             self._connect_api()
 
     def _on_temp_change(self, val: float) -> None:
@@ -1071,25 +1091,27 @@ class BetterPromptApp(ctk.CTk):
     # ── API Connection ────────────────────────────────────────────────────────
 
     def _try_connect_api(self) -> None:
-        if self.api_key_var.get().strip():
-            self._connect_api()
+        # 有金鑰、或是不需要金鑰的 Claude 訂閱（只檢查 Claude Code 在不在，不花錢）就自動連接
+        if self.api_key_var.get().strip() or not needs_key(self.provider):
+            self._connect_api(silent=True)
 
-    def _connect_api(self) -> None:
+    def _connect_api(self, silent: bool = False) -> None:
         api_key = self.api_key_var.get().strip()
-        if not api_key:
+        if needs_key(self.provider) and not api_key:
             messagebox.showwarning("API Key", f"請先輸入 {PROVIDERS[self.provider]} 的 API Key")
             return
 
         provider, model = self.provider, self.model_var.get()
-        self.connect_btn.configure(text="連接中…", state="disabled")
-        self.api_status_lbl.configure(text="● 連接中…", text_color="#FF9F43")
+        busy = "連接中…" if needs_key(provider) else "檢查中…"
+        self.connect_btn.configure(text=busy, state="disabled")
+        self.api_status_lbl.configure(text=f"● {busy}", text_color="#FF9F43")
 
         def worker() -> None:
             try:
-                llm = LLM(provider, model, api_key=api_key)
+                llm = LLM(provider, model, api_key=api_key or None)
                 models = llm.list_models()
             except Exception as exc:  # noqa: BLE001
-                self.after(0, lambda e=exc: self._on_connect_fail(provider, str(e)))
+                self.after(0, lambda e=exc: self._on_connect_fail(provider, str(e), silent))
                 return
             self.after(0, lambda: self._on_connect_ok(llm, models, api_key))
 
@@ -1102,25 +1124,30 @@ class BetterPromptApp(ctk.CTk):
         self.available_models = models or FALLBACK_MODELS[llm.provider].copy()
         # 手動輸入的新金鑰（或 v1 設定檔裡的舊金鑰）存進共用金鑰檔，其他工具也讀得到；
         # 本來就從環境變數 / keys.env / .env 讀到的就不重複存
-        if find_key(llm.provider, KEY_FILES)[0] != api_key:
+        keyless = not needs_key(llm.provider)
+        if not keyless and find_key(llm.provider, KEY_FILES)[0] != api_key:
             save_key(llm.provider, api_key)
             self._key_source = str(keys_file())
             self._show_key_source()
-        self.api_status_lbl.configure(text="● 已連接", text_color="#4CAF50")
-        self.connect_btn.configure(text="重新連接", state="normal")
+        self.api_status_lbl.configure(text="● Claude Code 可用" if keyless else "● 已連接", text_color="#4CAF50")
+        self.connect_btn.configure(text="重新檢查" if keyless else "重新連接", state="normal")
         self.model_menu.configure(values=self.available_models)
         if self.model_var.get() not in self.available_models:
             default = DEFAULT_MODELS[llm.provider]
             self.model_var.set(default if default in self.available_models else self.available_models[0])
         llm.model = self.model_var.get()
-        self.status_lbl.configure(text="● API 已連接", text_color="#4CAF50")
+        self.status_lbl.configure(text="● Claude Code 可用" if keyless else "● API 已連接", text_color="#4CAF50")
         self._update_status_info()
 
-    def _on_connect_fail(self, provider: str, msg: str) -> None:
+    def _on_connect_fail(self, provider: str, msg: str, silent: bool = False) -> None:
         if provider != self.provider:
             return
         self.api_status_lbl.configure(text="● 連接失敗", text_color="#FF6B6B")
         self.connect_btn.configure(text="重試", state="normal")
+        if silent:   # 啟動時的自動連線：只顯示在狀態列，不要每次開程式都跳視窗；按「重試」才看完整原因
+            first = (msg.strip().splitlines() or ["連接失敗"])[0][:90]
+            self.status_lbl.configure(text=f"● {first}（按「重試」看完整說明）", text_color="#FF6B6B")
+            return
         self.status_lbl.configure(text="● API 連接失敗", text_color="#FF6B6B")
         messagebox.showerror("連接錯誤", f"無法連接到 {PROVIDERS[provider]}：\n\n{msg}")
 
@@ -1142,9 +1169,12 @@ class BetterPromptApp(ctk.CTk):
         self._start_stream(system, user)
 
     def _show_offline(self) -> None:
+        how = ("請先安裝並登入 Claude Code（見 README），再按上方「檢查 Claude Code」。\n"
+               if not needs_key(self.provider) else
+               "請在上方選擇服務、輸入 API Key 並點擊「連接 API」。\n")
         msg = (
             "⚠️  API 尚未連接 — 離線模式\n\n"
-            "請在上方選擇服務、輸入 API Key 並點擊「連接 API」。\n"
+            f"{how}"
             "連接後即可開始轉換。\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"目前選擇：{self.current_mode}  ›  {self.current_submode}\n\n"
