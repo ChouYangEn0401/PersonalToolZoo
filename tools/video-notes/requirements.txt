@@ -12,9 +12,12 @@ nvidia-cudnn-cu12>=9.1,<10
 # 中文逐字稿轉繁體（台灣用語）
 opencc-python-reimplemented>=0.1.7,<0.2
 
-# AI 整理（透過 libs/toolzoo/ai）：OpenAI 與 Gemini 走 openai，Claude 走 anthropic
-openai>=2.0,<3
-anthropic>=1.11,<2
+# AI 整理（透過 libs/toolzoo/ai）
+# Claude 訂閱（預設服務）：透過電腦上的 Claude Code 呼叫，不需要金鑰。釘在 tag，至少 v0.2.1
+# （v0.2.0 在視窗程式裡每次呼叫會閃黑窗）。從 GitHub 安裝，需要 git。
+claude-subscription @ git+https://github.com/ChouYangEn0401/ClaudeLogin.git@v0.2.1
+openai>=2.0,<3  # OpenAI 與 Gemini（Gemini 走 OpenAI 相容端點）
+anthropic>=1.11,<2  # Claude API（按量計費，跟訂閱分開）
 
 # GUI（本機網頁）
 fastapi>=0.115,<1
