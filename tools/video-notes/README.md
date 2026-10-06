@@ -19,14 +19,15 @@ $py = ".\tools\video-notes\.venv\Scripts\python.exe"
 ```
 
 需要：**ffmpeg**（PATH 上，或裝在 `C:\ffmpeg\bin`）、**Node / Bun / Deno 其中一個**（yt-dlp 抓 YouTube 要用），
-以及一把 AI 金鑰（見下方「API 金鑰」；只要逐字稿可以不用）。
+以及 AI：預設用 **Claude 訂閱**（電腦上裝好並登入 Claude Code，不需要金鑰），也可以改用 OpenAI / Gemini / Claude API 的金鑰
+（見下方「AI 服務」；只要逐字稿可以不用）。
 
 ### GUI
 
 - 左邊貼網址（一行一個，可以一次很多支）、選整理方式與加料、填「特別想知道」，按「開始處理」。
 - 處理過的影片會先跳出視窗告訴你「已有：影音 ✓ 逐字稿 ✓ 筆記 news」，勾選要重做哪些，其他沿用。
 - 每支影片顯示 資訊 → 下載 → 音訊 → 轉錄 → 筆記 五個階段（綠色＝完成、紫色＝沿用既有檔案）；
-  AI 寫筆記時右邊即時顯示。
+  AI 寫筆記時右邊即時顯示（Claude 訂閱沒有串流，寫完才一次出現）。
 - 右邊看筆記：「複製 Markdown」直接貼進 Notion；也可以切到 Markdown 原文或逐字稿。
 - **✨ 二次加工**：用 Better Prompt 的轉換模式（執行摘要、條列式重點、正式化…）再處理一次筆記。
 - 「筆記庫」分頁列出輸出資料夾裡所有處理過的影片。
@@ -48,7 +49,7 @@ VideoNotes --dry-run -p news -w brief                               # 印出會�
 | `-o downloads` / `-o data` / `-o <資料夾>` | 輸出位置（預設「下載\Video Notes」，其次工具的 `data\`，或自選） |
 | `-p` / `-w` / `--preset` / `--focus` | 整理方式、加料、常用組合、特別想知道的主題 |
 | `--reuse` / `--redo download,transcribe,notes`（或 `all`） | 處理過的影片：一律沿用 / 指定重做。都沒給而且是互動視窗時會逐項詢問 |
-| `--provider` / `--model` | 這次用哪個 AI（不改存檔設定） |
+| `--provider` / `--model` | 這次用哪個 AI（不改存檔設定）。服務：`claude-sub`（預設）/ `openai` / `gemini` / `anthropic`；只給 `--model`（例如 `haiku`）會從名稱判斷服務 |
 | `--whisper-model` / `--device` / `--language` | 語音辨識模型、GPU/CPU、語言（`auto` 會先判斷） |
 | `--video` | 連影片一起保留（預設只下載音訊，快很多） |
 | `--post [網址]` | socket 模式（見下方） |
@@ -136,7 +137,19 @@ GUI 與 CLI 批次都一樣。「同時處理幾支」在設定裡改。
 `include_transcript: true` 會再附上整份逐字稿。送不出去不會讓處理失敗（筆記已經在硬碟上了）。
 測試接收端：`python debug\notify_receiver.py`（在 127.0.0.1:8787 印出收到的內容）。
 
-## API 金鑰
+## AI 服務
+
+預設用 **Claude 訂閱**：透過電腦上官方的 Claude Code 登入的 Claude 帳號呼叫，不需要 API 金鑰。第一次使用前：
+
+1. 安裝 Claude Code：PowerShell 執行 `irm https://claude.ai/install.ps1 | iex`，或在 VS Code 安裝擴充「Anthropic.claude-code」
+2. 開終端機執行一次 `claude`，用瀏覽器登入你的 Claude 帳號
+
+模型 `sonnet`（預設）/ `haiku` / `opus`。**每支影片的筆記都會用掉訂閱額度**：整理方式選 `auto` 時會先多一次判斷類型的小呼叫，
+逐字稿太長時會分段整理再合併，次數更多。GUI 頂端的「AI」標籤會顯示找不找得到 Claude Code（只找執行檔，不花錢）；
+沒登入或登入過期要到真的寫筆記時才會知道，錯誤訊息會說要執行 `claude` 重新登入。
+已經存過設定的人照原本選的服務；在 ⚙ 設定或 CLI 的 `--provider` 切換。
+
+### API 金鑰（OpenAI / Gemini / Claude API）
 
 和 Better Prompt 共用：環境變數 `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` →
 `%APPDATA%\PersonalToolZoo\keys.env` → 工具資料夾（或 exe 旁）的 `.env`。
@@ -160,7 +173,7 @@ DLL 不齊時自動改用 CPU（int8，比較慢）。設定頁標題列會顯�
 
 | 檔案 | 用途 |
 |---|---|
-| `check_env.py` | 印出 ffmpeg、GPU、JS 執行環境、金鑰有沒有設、設定檔位置——出問題先跑這支 |
+| `check_env.py` | 印出 ffmpeg、GPU、JS 執行環境、AI 能不能用（Claude Code、金鑰）、設定檔位置——出問題先跑這支 |
 | `run_stage.py` | 單獨跑一個階段：`info` / `download` / `audio` / `transcribe` / `prompt`（只印 prompt）/ `notes` |
 | `notify_receiver.py` | socket 模式的測試接收端 |
 
@@ -189,7 +202,8 @@ DLL 不齊時自動改用 CPU（int8，比較慢）。設定頁標題列會顯�
 | 入口 | `VideoNotes.py`（無參數 → `video_notes/web/server.py` 的 GUI；有參數 → `video_notes/cli.py`） |
 | 版本號 | `version.py` 的 `__version__` → exe 檔名 `VideoNotes(vX.Y.Z).exe`、GUI 標題與 CLI |
 | 環境 | 有第三方套件 → `tools\video-notes\.venv` |
-| 依賴 | `yt-dlp[default]<2028`（網站常改版，上限刻意給到年底後一年）、`faster-whisper<2`、`nvidia-cublas-cu12<13`、`nvidia-cudnn-cu12<10`、`opencc-python-reimplemented<0.2`、`openai<3`、`anthropic<2`、`fastapi<1`、`uvicorn<1` |
+| 依賴 | `yt-dlp[default]<2028`（網站常改版，上限刻意給到年底後一年）、`faster-whisper<2`、`nvidia-cublas-cu12<13`、`nvidia-cudnn-cu12<10`、`opencc-python-reimplemented<0.2`、`claude-subscription`（Claude 訂閱，釘在 GitHub tag `v0.2.1`，安裝要有 git）、`openai<3`、`anthropic<2`、`fastapi<1`、`uvicorn<1` |
+| 預設 AI | Claude 訂閱（`claude-sub`，模型 `sonnet`）——要先安裝並登入 Claude Code，**會用掉訂閱額度**；存過設定的人照原本的選擇 |
 | 共用程式 | `libs/toolzoo`：`ai`（LLM、金鑰、Better Prompt 模式庫）、`ytdlp`（JS 執行環境、ffmpeg 位置）、`webapp`（啟動器）、`appdirs` |
 | 打包額外內容 | `include`: `prompts`、`socket`、`video_notes/web/static`；`collect_all`: `yt_dlp_ejs`、`faster_whisper`（VAD 模型）、`opencc`（字典）；uvicorn 的 hiddenimports |
 | 測試 | `.\tools\video-notes\.venv\Scripts\python.exe -m unittest discover -s tools\video-notes\tests -v`（離線） |
@@ -201,4 +215,7 @@ DLL 不齊時自動改用 CPU（int8，比較慢）。設定頁標題列會顯�
 - YouTube 改版導致抓不到時，先在 `requirements.txt` 範圍內升級 yt-dlp：`setup-venv.ps1 video-notes -Force`。
 - Whisper 模型第一次用會從 Hugging Face 下載到 `~\.cache\huggingface`（medium 約 1.5 GB）。
 - 改 `libs/toolzoo/ai` 會同時影響 Better Prompt，兩個工具都要重新測。
+- Claude 訂閱每次呼叫最多等 900 秒（`libs/toolzoo/ai/claude_code.py` 的 `DEFAULT_TIMEOUT`；套件預設 180 秒，長逐字稿不夠）。
+  `claude-subscription` 不要降到 v0.2.1 以下：舊版在打包後的 exe 裡每呼叫一次就閃一個黑窗。
+- 「AI 能不能用」（`service.environment()` 的 `keys`）對 Claude 訂閱只代表找得到 Claude Code，驗不出登入是否過期。
 - GUI 的 API 只聽 127.0.0.1，寫入請求要帶 `X-Video-Notes: 1`（擋其他網站跨站呼叫），檔案存取限輸出資料夾內。
