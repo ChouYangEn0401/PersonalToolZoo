@@ -22,7 +22,7 @@ from toolzoo import ytdlp
 from toolzoo.ai import LLM
 
 from video_notes import media
-from video_notes.config import Settings, key_files
+from video_notes.config import Settings
 from video_notes.naming import Artifacts, VideoRef, classify, find_folder, new_folder
 from video_notes.notify import post_result
 from video_notes.profiles import AUTO, Plan, PromptLibrary
@@ -62,7 +62,7 @@ class Pipeline:
         self.locks = locks or Locks()
         # 可以注入：測試換成假的 LLM，其他程式也可以換成自己的實作（只要有 stream()）
         self.llm_factory = llm_factory or (
-            lambda s: LLM(s.provider, s.model or None, key_files=key_files()))
+            lambda s: LLM(s.provider, s.model or None))
         self.ffmpeg = ytdlp.find_ffmpeg()
 
     # ------------------------------------------------------------------ 公開介面

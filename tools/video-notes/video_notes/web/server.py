@@ -23,8 +23,8 @@ from toolzoo.ai import DEFAULT_MODELS, LLM, PROVIDERS, MissingKeyError, needs_ke
 from toolzoo.webapp import run as run_webapp
 
 from version import __version__
-from video_notes.config import (OUTPUT_CUSTOM, OUTPUT_DATA, OUTPUT_DOWNLOADS, Settings, app_dir, key_files,
-                                load_settings, save_settings)
+from video_notes.config import (OUTPUT_CUSTOM, OUTPUT_DATA, OUTPUT_DOWNLOADS, Settings, load_settings,
+                                save_settings)
 from video_notes.jobs import JobManager
 from video_notes.naming import Artifacts, classify, find_folder
 from video_notes.pipeline import REDOABLE, JobOptions, Locks, Pipeline, _read_json
@@ -123,7 +123,7 @@ def create_app() -> FastAPI:
             "output_root": str(s.output_root()),
             "output_choices": {
                 OUTPUT_DOWNLOADS: str(Settings(output=OUTPUT_DOWNLOADS).output_root()),
-                OUTPUT_DATA: str(app_dir() / "data"),
+                OUTPUT_DATA: str(Settings(output=OUTPUT_DATA).output_root()),
                 OUTPUT_CUSTOM: s.output_custom,
             },
             "providers": PROVIDERS,
@@ -258,7 +258,7 @@ def create_app() -> FastAPI:
         """用 Better Prompt 的轉換模式二次加工筆記（同一個模式庫：libs/toolzoo/ai/text_modes.py）。"""
         s = hub.settings
         try:
-            llm = LLM(s.provider, s.model or None, key_files=key_files())
+            llm = LLM(s.provider, s.model or None)
         except MissingKeyError as exc:
             raise HTTPException(400, str(exc)) from exc
         if req.mode not in text_modes.MODES:

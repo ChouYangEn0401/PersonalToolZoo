@@ -44,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("urls", nargs="*", help="影片網址（可以一次給很多個）")
     p.add_argument("-f", "--file", help="從文字檔讀網址，一行一個（# 開頭的行忽略）")
-    p.add_argument("-o", "--out", help="輸出位置：downloads（預設）、data（工具資料夾的 data\\）或任何資料夾路徑")
+    p.add_argument("-o", "--out", help="輸出位置：downloads（預設）、data（工具旁邊的 data\\videos\\）或任何資料夾路徑")
     p.add_argument("-p", "--profile", help="整理方式：auto（自動判斷）或 --list 列出的 id")
     p.add_argument("-w", "--with", dest="modifiers", default="", help="加料，逗號分隔，例如 timeline,actions")
     p.add_argument("--preset", default="", help="常用組合（--list 看有哪些）")

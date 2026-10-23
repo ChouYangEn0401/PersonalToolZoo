@@ -12,6 +12,9 @@ TOOL = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(TOOL), str(TOOL.parents[1] / "libs")]
 
 from toolzoo.ai import keys_file  # noqa: E402
+from toolzoo.appdirs import load_env  # noqa: E402
+
+load_env()
 
 from video_notes.config import load_settings, settings_file  # noqa: E402
 from video_notes.service import environment  # noqa: E402

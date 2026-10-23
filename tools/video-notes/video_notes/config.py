@@ -1,24 +1,25 @@
 """設定：預設值、存檔位置、輸出資料夾的三種選擇。
 
-設定存在 %APPDATA%\\PersonalToolZoo\\video-notes\\settings.json（GUI 改了就寫回去），
+設定存在工具旁邊的 data\\settings.json（原始碼：tools\\video-notes\\data\\；exe：exe 旁邊的 data\\），GUI 改了就寫回去；
 CLI 的參數只影響那一次執行，不會改到存檔。
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from toolzoo.ai import DEFAULT_PROVIDER
-from toolzoo.appdirs import downloads_dir, tool_data_dir
+from toolzoo.appdirs import downloads_dir, repo_root, tool_data_dir
 
 TOOL_NAME = "video-notes"
 
 # 輸出資料夾的三種選擇，順序就是預設的優先順序
 OUTPUT_DOWNLOADS = "downloads"   # 使用者的「下載」\Video Notes
-OUTPUT_DATA = "data"             # 工具資料夾（或 exe 旁邊）的 data\
+OUTPUT_DATA = "data"             # 工具旁邊的 data\videos\（跟設定檔分開）
 OUTPUT_CUSTOM = "custom"         # 自選
 
 
@@ -35,7 +36,25 @@ def bundle_dir() -> Path:
 
 
 def user_dir() -> Path:
+    """設定、自訂提示詞、模型都在這裡：原始碼是 tools/video-notes/data/，exe 是 exe 旁邊的 data/。"""
     return tool_data_dir(TOOL_NAME)
+
+
+def models_dir() -> Path:
+    """Whisper 模型放哪裡（Hugging Face 快取格式，約 1.5 GB／medium）。
+
+    依序：環境變數 VIDEO_NOTES_MODEL_DIR → exe 在 repo 的 dist\\ 裡時借用 repo 裡這個工具的 data\\models\\
+    （不用再下載一份）→ 工具旁邊的 data\\models\\。
+    """
+    custom = os.environ.get("VIDEO_NOTES_MODEL_DIR", "").strip()
+    if custom:
+        return Path(custom)
+    repo = repo_root()
+    if getattr(sys, "frozen", False) and repo:
+        shared = repo / "tools" / TOOL_NAME / "data" / "models"
+        if shared.is_dir():
+            return shared
+    return user_dir() / "models"
 
 
 @dataclass
@@ -72,7 +91,7 @@ class Settings:
         if self.output == OUTPUT_CUSTOM and self.output_custom.strip():
             return Path(self.output_custom.strip()).expanduser()
         if self.output == OUTPUT_DATA:
-            return app_dir() / "data"
+            return user_dir() / "videos"
         return downloads_dir() / "Video Notes"
 
 
@@ -92,7 +111,3 @@ def load_settings() -> Settings:
 def save_settings(settings: Settings) -> None:
     settings_file().write_text(json.dumps(asdict(settings), ensure_ascii=False, indent=2), encoding="utf-8")
 
-
-def key_files() -> tuple[Path, ...]:
-    """除了共用金鑰檔以外，也接受放在工具資料夾（或 exe 旁）的 .env——舊專案的 .env 直接複製過來就能用。"""
-    return (app_dir() / ".env",)

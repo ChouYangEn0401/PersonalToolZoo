@@ -7,7 +7,7 @@ from pathlib import Path
 from toolzoo import ytdlp
 from toolzoo.ai import PROVIDERS, claude_code, find_key, needs_key
 
-from video_notes.config import bundle_dir, key_files, user_dir
+from video_notes.config import bundle_dir, user_dir
 from video_notes.profiles import PromptLibrary
 from video_notes.transcribe import cuda_status
 
@@ -36,7 +36,7 @@ def environment() -> dict:
         "js_runtimes": ytdlp.find_js_runtimes(),
         "yt_dlp": ytdlp.version(),
         # 每個服務能不能用：要金鑰的看有沒有金鑰；Claude 訂閱看找不找得到 Claude Code（只找執行檔，不花錢）
-        "keys": {p: claude_ok if p == claude_code.KEY else bool(find_key(p, key_files())[0]) for p in PROVIDERS},
+        "keys": {p: claude_ok if p == claude_code.KEY else bool(find_key(p)[0]) for p in PROVIDERS},
         "keyless": [p for p in PROVIDERS if not needs_key(p)],
         "claude_code": claude_text,   # 找到的 claude 執行檔，或找不到的原因
         "user_prompts": str(user_dir() / "prompts"),

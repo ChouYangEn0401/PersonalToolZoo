@@ -6,8 +6,8 @@
     modifiers/  加料（時間軸、行動清單、金句、名詞解釋、極簡、詳細、英文）：可以同時套好幾個
     presets/    常用組合（類型 + 加料 + 關注主題），CLI 用 --preset 一次選好
 
-讀取順序：程式內建的 prompts/ → 使用者資料夾 %APPDATA%\\PersonalToolZoo\\video-notes\\prompts\\。
-同一個 id 後讀到的覆蓋前面的，所以想改內建方案，複製一份到使用者資料夾再改就好（更新程式也不會被蓋掉）。
+讀取順序：程式內建的 prompts/ → 工具旁邊的 data\\prompts\\（原始碼：tools\\video-notes\\data\\prompts\\）。
+同一個 id 後讀到的覆蓋前面的，所以想改內建方案，複製一份到 data\\prompts\\ 再改就好（更新程式也不會被蓋掉）。
 """
 
 from __future__ import annotations

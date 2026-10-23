@@ -7,6 +7,9 @@ nvidia-cudnn-cu12 會把 DLL 放在 site-packages/nvidia/*/bin，但那不在 Wi
 
 打包成 exe 時不把這些 DLL（約 2 GB）塞進去，exe 會到這些地方找：
 環境變數 VIDEO_NOTES_CUDA_DIR、repo 裡這個工具的 .venv（exe 在 <repo>\\dist\\video-notes\\ 時）、系統 PATH。
+
+模型：放在 config.models_dir()（工具旁邊的 data\\models\\），不寫到使用者的 ~/.cache/huggingface。
+HF_HOME 一併指過去，下載時的 xet 快取也不會跑到使用者資料夾。
 """
 
 from __future__ import annotations
@@ -19,6 +22,12 @@ import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
+
+from video_notes.config import models_dir
+
+# 必須在 import faster_whisper / huggingface_hub 之前設定（它們在 import 時就決定快取位置）
+MODEL_ROOT = models_dir()
+os.environ["HF_HOME"] = str(MODEL_ROOT)
 
 CUDA_DLLS = ("cublas64_12.dll", "cublasLt64_12.dll", "cudnn_ops64_9.dll", "cudnn_cnn64_9.dll")
 
@@ -194,7 +203,8 @@ class Transcriber:
                 from faster_whisper import WhisperModel
 
                 compute = "float16" if self.device == "cuda" else "int8"
-                self._models[key] = WhisperModel(self.model_size, device=self.device, compute_type=compute)
+                self._models[key] = WhisperModel(self.model_size, device=self.device, compute_type=compute,
+                                                 download_root=str(MODEL_ROOT / "hub"))
             return self._models[key]
 
     def transcribe(self, wav: Path, on_progress: Callable[[float, str], None] | None = None,

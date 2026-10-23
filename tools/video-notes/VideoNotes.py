@@ -12,6 +12,11 @@ _LIBS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "li
 if not getattr(sys, "frozen", False) and os.path.isdir(_LIBS):
     sys.path.insert(0, os.path.abspath(_LIBS))
 
+from toolzoo.appdirs import load_env  # noqa: E402
+
+# 專案 .env 的參數（CLAUDE_BINARY、VIDEO_NOTES_MODEL_DIR、VIDEO_NOTES_CUDA_DIR…）；已設定的環境變數優先
+load_env()
+
 
 def main() -> None:
     args = sys.argv[1:]
