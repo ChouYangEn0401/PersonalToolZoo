@@ -23,24 +23,27 @@ from typing import Optional
 # Resolve runtime root and handle PyInstaller bundles.
 # When frozen by PyInstaller, data files bundled via --add-data
 # are extracted into sys._MEIPASS. Also avoid writing back
-# into the frozen bundle; use a user-writable config location.
+# into the frozen bundle.
+#
+# Where the selected language is saved (PersonalToolZoo rule: data lives next to the tool,
+# never in the user profile):
+#   - running from source: <tool>/data/language_config.json  (git-ignored; the tracked
+#     <tool>/language_config.json is only read as the default and never rewritten)
+#   - frozen exe:          <exe dir>/data/language_config.json  (an old <exe dir>/language_config.json
+#     is still read once as the default)
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if getattr(sys, 'frozen', False):
     # When frozen prefer external resources placed next to the exe:
-    #  - language_config.json beside the exe
     #  - .lang/GitHelperPro/ as the language folder (preferred)
     #  - fallback to language/ inside the extracted bundle (sys._MEIPASS)
     exe_dir = os.path.dirname(sys.executable)
-    candidate_config = os.path.join(exe_dir, "language_config.json")
     candidate_lang_dot = os.path.join(exe_dir, ".lang", "GitHelperPro")
     candidate_lang_plain = os.path.join(exe_dir, "language")
     bundle_root = getattr(sys, '_MEIPASS', _HERE)
     bundle_lang = os.path.join(bundle_root, "language")
-    # choose config file location: prefer exe-side config (read/write), else user home
-    if os.path.exists(candidate_config) or os.access(exe_dir, os.W_OK):
-        _CONFIG_FILE = candidate_config
-    else:
-        _CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".githelper_config.json")
+    _DATA_DIR = os.path.join(exe_dir, "data")
+    _CONFIG_FILE = os.path.join(_DATA_DIR, "language_config.json")
+    _DEFAULT_CONFIG_FILE = os.path.join(exe_dir, "language_config.json")
 
     # separate bundled vs external language dirs. External (.lang/GitHelperPro or language)
     # will be used as overlays on top of bundled/base languages.
@@ -56,7 +59,9 @@ if getattr(sys, 'frozen', False):
     _ROOT = exe_dir
 else:
     _ROOT = os.path.dirname(os.path.dirname(_HERE))   # src/core → src → root
-    _CONFIG_FILE = os.path.join(_ROOT, "language_config.json")
+    _DATA_DIR = os.path.join(_ROOT, "data")
+    _CONFIG_FILE = os.path.join(_DATA_DIR, "language_config.json")
+    _DEFAULT_CONFIG_FILE = os.path.join(_ROOT, "language_config.json")
     _BUNDLED_LANG_DIR = os.path.join(_ROOT, "language")
     _EXTERNAL_LANG_DIR = None
     _LANG_DIR = _BUNDLED_LANG_DIR
@@ -82,11 +87,11 @@ class LanguageManager:
             sh = logging.StreamHandler()
             sh.setFormatter(logging.Formatter("[lang] %(message)s"))
             self._logger.addHandler(sh)
-            # if frozen, also add file handler next to exe
+            # if frozen, also add a file handler in the data folder next to the exe
             if getattr(sys, 'frozen', False):
                 try:
-                    exe_dir = os.path.dirname(sys.executable)
-                    logpath = os.path.join(exe_dir, "githelper_language.log")
+                    os.makedirs(_DATA_DIR, exist_ok=True)
+                    logpath = os.path.join(_DATA_DIR, "githelper_language.log")
                     fh = logging.FileHandler(logpath, encoding="utf-8")
                     fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [lang] %(message)s"))
                     self._logger.addHandler(fh)
@@ -95,13 +100,16 @@ class LanguageManager:
 
     # ── Config persistence ───────────────────────────────────────────────
     def _load_config(self):
-        if os.path.exists(_CONFIG_FILE):
-            try:
-                with open(_CONFIG_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    self._current_lang = data.get("language", _DEFAULT_LANG)
-            except Exception:
-                pass
+        # the saved choice in data/ wins; otherwise fall back to the shipped default file
+        for path in (_CONFIG_FILE, _DEFAULT_CONFIG_FILE):
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        self._current_lang = data.get("language", _DEFAULT_LANG)
+                    return
+                except Exception:
+                    pass
 
     def _save_config(self):
         try:
