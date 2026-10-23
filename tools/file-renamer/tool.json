@@ -4,7 +4,8 @@
   "console": false,
   "version_from": "version.py",
   "tag_prefix": "FileRenamer",
-  "icon": "data/FileRenamer.ico",
-  "include": ["data/FileRenamer.ico"],
+  "icon": "assets/FileRenamer.ico",
+  "pathex": ["../../libs"],
+  "include": ["assets/FileRenamer.ico"],
   "collect_all": ["tkinterdnd2"]
 }
