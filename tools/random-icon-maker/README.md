@@ -9,7 +9,7 @@
   喜歡的圖示記下種子，之後可以用別的尺寸重新產生。
 - 尺寸：32 / 64 / 128 / 256。
 - 9 張一起預覽，勾選要的存起來；ICO 會內含 16～256 的多種尺寸（不超過選的尺寸），也可以存 PNG。
-- 檔名沿用舊版格式：`[2026-10-05 21-30-00] algo3(596481).ico`，預設存到「圖片\Random Icons」。
+- 檔名沿用舊版格式：`[2026-10-05 21-30-00] algo3(596481).ico`，預設存到工具旁邊的 `data\icons\`（原始碼執行是 `tools\random-icon-maker\data\icons\`，exe 是 exe 旁邊的 `data\icons\`），也可以按「存到」旁邊的「…」換位置。
 
 ## 使用方式
 
@@ -31,6 +31,8 @@
 | 版本號 | `version.py` 的 `__version__` → exe 檔名 `RandomIconMaker(vX.Y.Z).exe`、視窗標題 `Random Icon Maker vX.Y.Z` |
 | 環境 | 有第三方套件 → `tools\random-icon-maker\.venv` |
 | 依賴 | `pillow<13`（舊版鎖 11.0.0；12.x 的輸出經測試逐像素相同） |
+| 共用程式 | `libs/toolzoo/appdirs`（資料放哪裡）——tool.json 的 `pathex` 指向 `../../libs`，進入點開頭也把它加進 `sys.path` |
+| 資料 | 產生的圖示預設存在工具旁邊的 `data\icons\`（不進版控）；舊版 `ouputs\` 的圖示 2026-10-23 搬到這裡 |
 | 打包額外內容 | 無 |
 | 測試 | `.\tools\random-icon-maker\.venv\Scripts\python.exe -m unittest discover -s tools\random-icon-maker\tests -v`（對照舊版輸出） |
 | Release tag | `RandomIconMaker_vX.Y.Z` |
