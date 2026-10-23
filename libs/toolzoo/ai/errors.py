@@ -70,7 +70,7 @@ def explain(exc: Exception, provider: str, model: str) -> str:
     if status == 401 or "invalid api key" in lower or "incorrect api key" in lower \
             or "valid api key" in lower or "api key not valid" in lower:
         return (f"{name} 的 API 金鑰無效或已被撤銷。請到 {KEY_PAGES.get(provider, '')} 重新產生一把，"
-                f"存進 keys.env（或在工具的設定畫面貼上）。")
+                f"存進專案的 .env（或在工具的設定畫面貼上）。")
     if status == 403:
         return f"{name} 拒絕這個請求（權限不足）：這把金鑰可能沒有使用 {model} 的權限。"
     if status == 404:

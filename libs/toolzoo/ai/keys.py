@@ -3,13 +3,13 @@
 讀取順序（先找到先用）：
 
 1. 環境變數            —— OPENAI_API_KEY / GEMINI_API_KEY / ANTHROPIC_API_KEY …
-2. 共用金鑰檔          —— %APPDATA%\\PersonalToolZoo\\keys.env（所有工具共用，設一次就好）
-3. 工具額外指定的檔案   —— 例如工具資料夾裡的 .env（開發時方便；已被 .gitignore 擋掉）
+2. 專案的 .env         —— 從原始碼執行時是 repo 根目錄的 .env；打包的 exe 先找 exe 旁邊的 .env
+                          （位置規則見 toolzoo.appdirs；範本是 repo 根目錄的 .env.example）
+3. 工具額外指定的檔案
 
 舊專案的 .env 寫法（``chatgpt=...``、``gemini=...``）也認得，整個檔案複製過來就能用。
 
-金鑰檔是純文字，跟 ~/.aws/credentials 一樣靠「放在自己的使用者資料夾」保護，
-不要把它放進 repo 或傳給別人。
+.env 是純文字，已被 .gitignore 擋掉；不要把它傳給別人。
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import os
 from pathlib import Path
 from typing import Iterable
 
-from toolzoo.appdirs import data_root
+from toolzoo.appdirs import env_file, env_files, loaded_from, read_env_file
 
 # 每個 provider 認得的名稱；第一個是「正式」名稱，存檔時用它
 KEY_NAMES: dict[str, tuple[str, ...]] = {
@@ -29,25 +29,8 @@ KEY_NAMES: dict[str, tuple[str, ...]] = {
 
 
 def keys_file() -> Path:
-    return data_root() / "keys.env"
-
-
-def read_env_file(path: Path) -> dict[str, str]:
-    """讀 KEY=VALUE 格式的檔案（.env）。不認得的行直接略過，不會丟例外。"""
-    data: dict[str, str] = {}
-    try:
-        text = path.read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
-        return data
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        if line.startswith("export "):
-            line = line[len("export "):]
-        name, value = line.split("=", 1)
-        data[name.strip()] = value.strip().strip('"').strip("'")
-    return data
+    """存金鑰時寫入的 .env。"""
+    return env_file()
 
 
 def find_key(provider: str, extra_files: Iterable[Path] = ()) -> tuple[str, str]:
@@ -56,8 +39,10 @@ def find_key(provider: str, extra_files: Iterable[Path] = ()) -> tuple[str, str]
     for name in names:
         value = os.environ.get(name, "").strip()
         if value:
-            return value, f"環境變數 {name}"
-    for path in (keys_file(), *extra_files):
+            # load_env() 從 .env 載進環境變數的，來源寫那個檔案
+            source = loaded_from.get(name)
+            return value, str(source) if source else f"環境變數 {name}"
+    for path in (*env_files(), *extra_files):
         values = read_env_file(Path(path))
         for name in names:
             value = values.get(name, "").strip()
@@ -67,7 +52,7 @@ def find_key(provider: str, extra_files: Iterable[Path] = ()) -> tuple[str, str]
 
 
 def save_key(provider: str, key: str) -> Path:
-    """把金鑰寫進共用金鑰檔（同一個 provider 的舊值會被取代，其他行保留）。"""
+    """把金鑰寫進專案的 .env（同一個 provider 的舊值會被取代，其他行與註解都保留）。"""
     canonical = KEY_NAMES[provider][0]
     aliases = set(KEY_NAMES[provider])
     path = keys_file()
@@ -77,9 +62,10 @@ def save_key(provider: str, key: str) -> Path:
             name = raw.split("=", 1)[0].strip() if "=" in raw else ""
             if name not in aliases:
                 kept.append(raw)
+    else:
+        kept.append("# PersonalToolZoo 的金鑰與參數（不進版控；每一項的說明見 .env.example）")
     if key.strip():
         kept.append(f"{canonical}={key.strip()}")
-    header = "# PersonalToolZoo 共用 API 金鑰（所有工具都會讀這個檔）\n"
-    body = "\n".join(line for line in kept if not line.startswith("# PersonalToolZoo 共用"))
-    path.write_text(header + body.strip("\n") + "\n", encoding="utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(kept).strip("\n") + "\n", encoding="utf-8")
     return path

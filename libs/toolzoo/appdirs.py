@@ -1,12 +1,17 @@
-"""使用者資料夾：設定、金鑰、歷史紀錄放這裡，不放在工具資料夾或 exe 旁邊。
+"""工具的資料與參數放哪裡：一律放在工具自己旁邊，不寫到使用者資料夾（%APPDATA%、家目錄）。
 
-onefile exe 會把自己解到一個關掉就刪的暫存資料夾，寫在 ``__file__`` 旁邊的東西
-下次開就不見了；工具資料夾又在 repo 裡，不該混進個人資料。所以一律寫到：
+資料（設定、紀錄、快取）：
 
-    Windows : %APPDATA%\\PersonalToolZoo\\<tool>\\
-    其他    : ~/.local/share/PersonalToolZoo/<tool>/
+    從原始碼執行  tools/<tool>/data/          （.gitignore 擋掉 tools/*/data/，不進版控）
+    打包的 exe    exe 所在資料夾的 data/      （例如 dist/<tool>/data/）
 
-想搬到別的地方，設環境變數 TOOLZOO_DATA_DIR 即可。
+金鑰與參數放 .env（範本是 repo 根目錄的 .env.example）：
+
+    從原始碼執行  repo 根目錄的 .env
+    打包的 exe    exe 旁邊的 .env；exe 放在 repo 的 dist/ 裡時，也讀 repo 根目錄的 .env
+
+環境變數永遠優先於 .env。測試與冒煙測試可以設 TOOLZOO_DATA_DIR 把兩者整個搬走：
+資料放 <TOOLZOO_DATA_DIR>/<tool>/，.env 用 <TOOLZOO_DATA_DIR>/.env。
 """
 
 from __future__ import annotations
@@ -15,31 +20,112 @@ import os
 import sys
 from pathlib import Path
 
-APP_NAME = "PersonalToolZoo"
+REPO_MARKER = Path("scripts") / "tool.spec"   # 有這個檔案的資料夾就是 repo 根目錄
+
+# load_env() 從哪個 .env 載入了哪些變數（給畫面顯示「金鑰從哪裡讀到的」）
+loaded_from: dict[str, Path] = {}
 
 
-def data_root() -> Path:
-    """全部工具共用的根資料夾（金鑰檔就在這一層）。"""
-    override = os.environ.get("TOOLZOO_DATA_DIR")
-    if override:
-        root = Path(override)
-    elif sys.platform == "win32":
-        root = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming") / APP_NAME
-    else:
-        root = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / APP_NAME
-    root.mkdir(parents=True, exist_ok=True)
-    return root
+def is_frozen() -> bool:
+    return bool(getattr(sys, "frozen", False))
+
+
+def exe_dir() -> Path:
+    """打包後 exe 所在的資料夾。"""
+    return Path(sys.executable).resolve().parent
+
+
+def _source_repo() -> Path:
+    return Path(__file__).resolve().parents[2]   # libs/toolzoo/appdirs.py → repo 根目錄
+
+
+def _override() -> Path | None:
+    value = os.environ.get("TOOLZOO_DATA_DIR", "").strip()
+    return Path(value) if value else None
+
+
+def repo_root() -> Path | None:
+    """PersonalToolZoo repo 的根目錄；打包的 exe 不在 repo 裡時回傳 None。"""
+    start = exe_dir() if is_frozen() else _source_repo()
+    for folder in (start, *start.parents):
+        if (folder / REPO_MARKER).is_file():
+            return folder
+    return None
 
 
 def tool_data_dir(tool: str) -> Path:
-    """某個工具自己的資料夾，例如 tool_data_dir("video-notes")。"""
-    path = data_root() / tool
+    """某個工具存設定、紀錄、快取的資料夾，例如 tool_data_dir("video-notes")。"""
+    override = _override()
+    if override:
+        path = override / tool
+    elif is_frozen():
+        path = exe_dir() / "data"
+    else:
+        path = _source_repo() / "tools" / tool / "data"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
+def env_files() -> list[Path]:
+    """要讀的 .env，前面的優先。"""
+    override = _override()
+    if override:
+        return [override / ".env"]
+    files: list[Path] = []
+    if is_frozen():
+        files.append(exe_dir() / ".env")
+    repo = repo_root()
+    if repo:
+        files.append(repo / ".env")
+    return list(dict.fromkeys(files))
+
+
+def env_file() -> Path:
+    """要寫入（例如存金鑰）時用的 .env：在 repo 裡就寫 repo 根目錄的，否則寫 exe 旁邊的。"""
+    override = _override()
+    if override:
+        override.mkdir(parents=True, exist_ok=True)
+        return override / ".env"
+    repo = repo_root()
+    if repo:
+        return repo / ".env"
+    return exe_dir() / ".env"
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    """讀 KEY=VALUE 格式的 .env。不認得的行直接略過，不會丟例外。"""
+    data: dict[str, str] = {}
+    try:
+        text = Path(path).read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return data
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):]
+        name, value = line.split("=", 1)
+        data[name.strip()] = value.strip().strip('"').strip("'")
+    return data
+
+
+def load_env() -> dict[str, Path]:
+    """把 .env 裡的參數載入 os.environ（已經設定的環境變數不覆蓋），回傳載入了哪些。
+
+    範本裡的佔位值（以 ... 結尾，例如 sk-proj-......）不會被載入。
+    """
+    for path in env_files():
+        for name, value in read_env_file(path).items():
+            if not value or value.endswith("...") or name in os.environ:
+                continue
+            os.environ[name] = value
+            loaded_from[name] = path
+    return dict(loaded_from)
+
+
 def downloads_dir() -> Path:
-    """使用者的「下載」資料夾（找不到就退回家目錄底下的 Downloads）。"""
+    """使用者的「下載」資料夾（找不到就退回家目錄底下的 Downloads）。影片類工具的輸出放這裡。"""
     if sys.platform == "win32":
         try:
             import ctypes

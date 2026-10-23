@@ -3,7 +3,7 @@
     from toolzoo.ai import LLM
 
     llm = LLM("claude-sub", "sonnet")         # Claude 訂閱（Claude Code）：不需要金鑰
-    llm = LLM("openai", "gpt-5.1")            # 金鑰自動從環境變數 / keys.env 找
+    llm = LLM("openai", "gpt-5.1")            # 金鑰自動從環境變數 / 專案的 .env 找
     for piece in llm.stream(system, user):    # 串流（GUI 用）
         ...
     text = llm.complete(system, user)         # 一次拿完整結果（CLI / 批次用）
