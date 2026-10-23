@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Better Prompt — AI Text Transformer
-貼上文字、選一個轉換模式，交給 LLM（OpenAI / Gemini / Claude）改寫。
+貼上文字、選一個轉換模式，交給 AI（預設 Claude 訂閱，也可以用 OpenAI / Gemini / Claude API）改寫。
 
 模式庫（MODES）與 LLM 呼叫層在 repo 的 libs/toolzoo/ai/，Video Notes 也用同一份。
 """
@@ -25,8 +25,10 @@ from tkinter import simpledialog  # noqa: E402
 from toolzoo.ai import (DEFAULT_MODELS, DEFAULT_PROVIDER, LLM, PROVIDERS, find_key, keys_file,  # noqa: E402
                         needs_key, save_key)
 from toolzoo.ai.text_modes import MODES, build_messages, first_mode, preview  # noqa: E402
-from toolzoo.appdirs import tool_data_dir  # noqa: E402
+from toolzoo.appdirs import load_env, tool_data_dir  # noqa: E402
 from version import __version__  # noqa: E402
+
+load_env()   # 專案 .env 裡的參數（金鑰、CLAUDE_BINARY…）載進環境變數；已經設定的環境變數優先
 
 # ─── Appearance ───────────────────────────────────────────────────────────────
 ctk.set_appearance_mode("dark")
@@ -41,21 +43,11 @@ def resource_path(*parts):
     return os.path.join(base, *parts)
 
 
-def _app_dir() -> Path:
-    """exe（或腳本）所在的資料夾——使用者會把 .env 放在這裡。"""
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent
-
-
-# 設定與「推薦模型」的編輯都寫到使用者資料夾：onefile exe 旁邊或 _MEIPASS 裡的檔案，關掉程式就沒了
+# 設定與「推薦模型」的編輯存在工具旁邊的 data\：從原始碼執行是 tools\better-prompt\data\，exe 是 exe 旁邊的 data\
 DATA_DIR = tool_data_dir("better-prompt")
 SETTINGS_FILE = DATA_DIR / "settings.json"
 RECO_FILE = DATA_DIR / "model_recommendations.json"
 DEFAULT_RECO_FILE = Path(resource_path("model_recommendations.json"))
-# v1 把設定（含明文 OpenAI 金鑰）存在家目錄；讀得到就沿用，不會刪它
-LEGACY_SETTINGS_FILE = Path.home() / ".better_prompt_settings.json"
-KEY_FILES = (_app_dir() / ".env",)
 
 # 還沒連上 API（拿不到帳號可用的模型清單）時，下拉選單先顯示這些
 FALLBACK_MODELS: dict[str, list[str]] = {
@@ -86,25 +78,15 @@ def _write_json(path: Path, data: dict) -> None:
 
 
 def load_settings() -> dict:
-    # 沒存過設定的人預設用 Claude 訂閱；存過的照原本的選擇。
-    # v1 的舊設定檔不算「選過服務」——那時只有 OpenAI 可選，只沿用它的模型與 temperature。
+    # 沒存過設定的人預設用 Claude 訂閱；存過的照原本的選擇
     settings: dict = {"provider": DEFAULT_PROVIDER, "models": {}, "temperature": 0.7}
-    legacy = _read_json(LEGACY_SETTINGS_FILE)
-    if legacy.get("model"):
-        settings["models"]["openai"] = legacy["model"]
-    if "temperature" in legacy:
-        settings["temperature"] = legacy["temperature"]
     settings.update({k: v for k, v in _read_json(SETTINGS_FILE).items() if k != "api_key"})
     return settings
 
 
 def save_settings(settings: dict) -> None:
-    # 金鑰不放設定檔：統一由 toolzoo.ai.save_key 存到共用金鑰檔
+    # 金鑰不放設定檔：統一由 toolzoo.ai.save_key 存到專案的 .env
     _write_json(SETTINGS_FILE, {k: v for k, v in settings.items() if k != "api_key"})
-
-
-def legacy_api_key() -> str:
-    return str(_read_json(LEGACY_SETTINGS_FILE).get("api_key", "")).strip()
 
 
 def load_recommendations() -> dict:
@@ -252,7 +234,7 @@ class BetterPromptApp(ctk.CTk):
         )
         self.eye_btn.pack(side="left", padx=(0, 6))
 
-        # 金鑰是從哪裡讀到的（環境變數 / keys.env / .env / v1 設定檔）
+        # 金鑰是從哪裡讀到的（環境變數 / 專案的 .env）
         self.key_source_lbl = ctk.CTkLabel(api, text="", font=ctk.CTkFont(size=10), text_color="#A3BE8C")
         self.key_source_lbl.pack(side="left", padx=(0, 8))
         self._show_key_source()
@@ -922,11 +904,7 @@ class BetterPromptApp(ctk.CTk):
     def _find_key(self, provider: str) -> tuple[str, str]:
         if not needs_key(provider):
             return "", ""
-        key, source = find_key(provider, KEY_FILES)
-        if not key and provider == "openai":
-            key = legacy_api_key()
-            source = str(LEGACY_SETTINGS_FILE) if key else ""
-        return key, source
+        return find_key(provider)
 
     def _saved_model(self, provider: str) -> str:
         return self.settings.get("models", {}).get(provider) or DEFAULT_MODELS[provider]
@@ -1122,10 +1100,9 @@ class BetterPromptApp(ctk.CTk):
             return
         self.llm = llm
         self.available_models = models or FALLBACK_MODELS[llm.provider].copy()
-        # 手動輸入的新金鑰（或 v1 設定檔裡的舊金鑰）存進共用金鑰檔，其他工具也讀得到；
-        # 本來就從環境變數 / keys.env / .env 讀到的就不重複存
+        # 手動輸入的新金鑰存進專案的 .env，其他工具也讀得到；本來就從環境變數 / .env 讀到的就不重複存
         keyless = not needs_key(llm.provider)
-        if not keyless and find_key(llm.provider, KEY_FILES)[0] != api_key:
+        if not keyless and find_key(llm.provider)[0] != api_key:
             save_key(llm.provider, api_key)
             self._key_source = str(keys_file())
             self._show_key_source()
