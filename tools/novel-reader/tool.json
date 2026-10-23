@@ -4,5 +4,6 @@
   "console": false,
   "version_from": "version.py",
   "tag_prefix": "NovelReader",
+  "pathex": ["../../libs"],
   "hiddenimports": ["win32com.client", "pythoncom"]
 }
