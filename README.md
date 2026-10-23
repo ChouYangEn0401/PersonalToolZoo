@@ -15,7 +15,7 @@
 | **Git Diff Statistics** | 指定兩個 commit／branch，統計各副檔名的檔案數與增刪行數 | v1.0.0 | `diff` | [tools/git-diff-stats/](tools/git-diff-stats/) |
 | **Video Notes** | 影片網址 → 下載 → 逐字稿（GPU Whisper）→ AI 依影片類型整理成 Notion 筆記；本機網頁 GUI＋CLI＋HTTP 串接 | v2.0.0 | `notes` | [tools/video-notes/](tools/video-notes/) |
 | **Video Downloader** | yt-dlp 的本機網頁 GUI：約 1800 個網站與 m3u8 串流、畫質預設、播放清單、佇列與續傳、書籤小工具 | v2.0.0 | `downloader` | [tools/video-downloader/](tools/video-downloader/) |
-| **Better Prompt** | 貼上文字選模式，交給 OpenAI／Gemini／Claude 改寫：整理、摘要、Prompt 優化等 24 種模式 | v1.1.0 | `prompt` | [tools/better-prompt/](tools/better-prompt/) |
+| **Better Prompt** | 貼上文字選模式，交給 AI 改寫：整理、摘要、Prompt 優化等 24 種模式。預設用 Claude 訂閱（不需要金鑰），也可以選 OpenAI／Gemini／Claude API | v1.1.0 | `prompt` | [tools/better-prompt/](tools/better-prompt/) |
 | **Super File Converter** | 圖片／影片／PDF／表格轉換工作台，含「設好規則直接拖檔」的快速轉換分頁 | v1.1.0 | `fast` | [tools/fast-file-converter/](tools/fast-file-converter/) |
 | **Novel Reader** | 長文朗讀：Windows 內建語音或 Google 語音、可調語速、KTV 式字幕、記住讀到哪 | v2.0.0 | `reader` | [tools/novel-reader/](tools/novel-reader/) |
 | **File Renamer** | 拖放檔案，用正規表達式或雜湊批次改名；先預覽、擋下衝突、可以復原 | v1.1.0 | `renamer` | [tools/file-renamer/](tools/file-renamer/) |
@@ -23,7 +23,12 @@
 | **Random Icon Maker** | 輸入種子產生 9 種演算法的隨機圖示，預覽後存成 ICO／PNG | v1.1.0 | `icon` | [tools/random-icon-maker/](tools/random-icon-maker/) |
 
 Video Notes 與 Video Downloader 是本機網頁程式：執行後會開瀏覽器，主控台視窗關掉就停止。
-Video Notes 與 Better Prompt 共用 [`libs/`](libs/README.md) 裡的 AI 呼叫層與 API 金鑰（`%APPDATA%\PersonalToolZoo\keys.env`）。
+
+三個工具共用 [`libs/`](libs/README.md) 裡的程式：
+
+- **Better Prompt、Video Notes**：AI 呼叫層。預設用 **Claude 訂閱**：透過電腦上裝好、登入過的 Claude Code 呼叫，不需要 API 金鑰，但會用掉訂閱額度。
+  改用 OpenAI／Gemini／Claude API 時，金鑰放在共用的 `%APPDATA%\PersonalToolZoo\keys.env`，設一次所有工具都讀得到。
+- **Video Notes、Video Downloader**：yt-dlp 的設定（ffmpeg 位置、YouTube 需要的 JavaScript 執行環境）與本機網頁的啟動器。
 
 每個工具的 README 最後都有一段「**交接**」：入口、版本號在哪、用哪個環境、依賴與限制、怎麼測試、已知問題。
 
@@ -43,7 +48,16 @@ Video Notes 與 Better Prompt 共用 [`libs/`](libs/README.md) 裡的 AI 呼叫�
 發新版就**雙擊 `release.bat`**（選工具 → 選 patch／minor／major → 確認）。
 
 不用先裝任何東西或建環境：build 發現某個工具的 venv 不存在、或裝的版本跟 requirements 不符，會自己建好／修好。
-唯一的前提是電腦上有 Python 3.11（`py -3.11` 叫得到）；Advanced Excel Tool 第一次建環境還需要 git 與網路。
+build 的前提只有一個：電腦上有 Python 3.11（`py -3.11` 叫得到）。
+Advanced Excel Tool、Better Prompt、Video Notes 第一次建環境還需要 git 與網路，因為有依賴直接從 GitHub 安裝。
+
+執行時另外需要的東西：
+
+| 工具 | 需要 |
+|---|---|
+| Video Notes、Video Downloader | ffmpeg（PATH 上，或裝在 `C:\ffmpeg\bin`）；Node／Bun／Deno 其中一個（yt-dlp 抓 YouTube 要用） |
+| Better Prompt、Video Notes | 用預設的 Claude 訂閱時，要先裝 Claude Code 並執行一次 `claude` 登入（細節見各工具 README） |
+| Novel Reader | Google 語音要調語速時用 ffmpeg（沒有就用原速） |
 
 ## 指令速查
 
@@ -259,10 +273,14 @@ spec 裡所有路徑都以它為基準解析，**完全不依賴當下的工作�
 
 ### 2026-10：獨立專案大搬家
 
-原本散在 `Python Projects\` 底下、各自有 git（或沒有）的小工具整批搬進來（分支 `feat/tool-migration`）。
+原本散在 `Python Projects\` 底下、各自有 git（或沒有）的小工具整批搬進來。
+工作在 worktree 的分支 `feat/tool-migration` 上做；2026-10-23 整理成 80 個小 commit，直接接在 master 後面（線性歷史，沒有 merge commit）。
 這些不是這個 repo 的分支，所以不走 merge：每個工具先有一個 **「原封不動搬進來」** 的 commit
 （`chore(<tool>): import … verbatim`，commit 訊息寫了來源的 commit），之後才是整理與修正的 commit——
 想看改了什麼，對那個 import commit 做 diff 就好。
+
+整理的 commit 依這個順序排：搬入 → 共用的 `libs/` → 每個工具「build 設定 → 核心模組 → 介面 → 移除舊檔 → 文件」→ hub 文件 → 預設 AI 改成 Claude 訂閱。
+測試檔放在它用到的程式都已經進來的那個 commit；commit 訊息寫的「驗證」都是在該 commit 上實際跑過的結果。
 
 | 原本的專案（`Python Projects\`） | 去處 | 處理 |
 |---|---|---|
@@ -278,4 +296,6 @@ spec 裡所有路徑都以它為基準解析，**完全不依賴當下的工作�
 | `Change Folder Cover (failes)` | 未收 | 作者自己標了 failed |
 
 沒搬的東西：各專案的 `.venv`、`.env`（API 金鑰）、`data/`、`output/`、`downloads/`（產生的影音與個人資料）。
-原本的資料夾都還留在 `Python Projects\`，沒有刪除；確認新版都能用之後可以自行刪掉。
+原本的資料夾都還留在 `Python Projects\`，沒有刪除。刪之前注意：上面這些沒搬的東西只存在原資料夾裡，
+例如 `VideoDownloader\downloads\`（約 21 GB 下載的影片）、`VideoToSimpleNotion\data\`（約 1.7 GB）、各專案 `.env` 裡的金鑰，要留的先備份；
+原本有 git 的專案，也先確認沒有只存在本機、還沒推上遠端的 commit。
