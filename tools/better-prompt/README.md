@@ -45,14 +45,15 @@
 
 ### API 金鑰（OpenAI / Gemini / Claude API）
 
-連接成功後，手動輸入的金鑰會存進 **`%APPDATA%\PersonalToolZoo\keys.env`**——
-這是所有工具共用的金鑰檔（Video Notes 也讀這個），設一次就好。也可以：
+金鑰放在**專案的 `.env`**（範本與每一項的說明在 repo 根目錄的 [`.env.example`](../../.env.example)），
+所有工具共用（Video Notes 也讀這一份），設一次就好：
 
-- 設環境變數 `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY`
-- 在 exe（或 `GUI__BetterPrompt.py`）旁邊放一個 `.env`，格式見 `.env.example`
+- 從原始碼執行：repo 根目錄的 `.env`
+- 打包的 exe：先讀 exe 旁邊的 `.env`；exe 放在 repo 的 `dist\` 裡時也讀 repo 根目錄的那份
 
-金鑰是以**純文字**存在你自己的使用者資料夾（舊版 README 說「加密儲存」並不正確）。
-v1 存在 `~/.better_prompt_settings.json` 的金鑰仍然讀得到，第一次連接成功時會自動搬進共用金鑰檔。
+也可以設環境變數 `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY`（優先於 `.env`）。
+在畫面上貼金鑰並連接成功時，會自動寫進同一份 `.env`。
+金鑰是**純文字**，`.env` 已被 `.gitignore` 擋掉，不會進版控（舊版 README 說「加密儲存」並不正確）。
 
 ### Temperature（創意度）
 
@@ -95,19 +96,20 @@ tools/better-prompt/
 ├── GUI__BetterPrompt.py        # 主程式（CustomTkinter 介面）
 ├── version.py                  # 版本號（exe 檔名會帶上）
 ├── model_recommendations.json  # 推薦模型的預設值
-├── .env.example                # 金鑰範本
 ├── requirements.txt            # customtkinter、claude-subscription、openai（含 Gemini）、anthropic
-└── tool.json                   # build 設定（pathex 指向 repo 的 libs/）
+├── tool.json                   # build 設定（pathex 指向 repo 的 libs/）
+└── data/                       # 執行時才出現：設定與推薦模型的編輯（不進版控）
 
 libs/toolzoo/ai/                # 共用：LLM 呼叫層、金鑰、模式庫（Video Notes 也用）
 ```
 
-設定（服務、各服務選的模型、temperature）存在 `%APPDATA%\PersonalToolZoo\better-prompt\settings.json`。
+設定（服務、各服務選的模型、temperature）與推薦模型的編輯存在工具旁邊的 `data\`：
+從原始碼執行是 `tools\better-prompt\data\`，打包的 exe 是 exe 旁邊的 `data\`。
 
 ## 隱私
 
 - 文字只在你按「轉換」時送給你選的服務商，本程式不記錄、不保存輸入與輸出。
-- 金鑰只存在本機（見上方「API 金鑰」）。
+- 金鑰只存在專案的 `.env`（見上方「API 金鑰」），不進版控。
 
 ---
 
@@ -121,6 +123,7 @@ libs/toolzoo/ai/                # 共用：LLM 呼叫層、金鑰、模式庫（
 | 依賴 | `customtkinter<6`、`claude-subscription`（Claude 訂閱，釘在 GitHub tag `v0.2.1`，安裝要有 git）、`openai<3`（OpenAI 與 Gemini）、`anthropic<2`（Claude API；1.11 起 `fallbacks` 是正式參數） |
 | 預設服務 | Claude 訂閱（`claude-sub`，模型 `sonnet`）——要先安裝並登入 Claude Code，**會用掉訂閱額度**；存過設定的人照原本的選擇 |
 | 共用程式 | `libs/toolzoo/ai`（LLM 呼叫層、金鑰、模式庫）——tool.json 的 `pathex` 指向 `../../libs`，進入點開頭也把它加進 `sys.path` |
+| 資料與金鑰 | 設定在工具旁邊的 `data\`（原始碼：`tools\better-prompt\data\`；exe：exe 旁的 `data\`）；金鑰在專案的 `.env`（見 repo 根目錄 `.env.example`） |
 | 打包額外內容 | `include`: `model_recommendations.json`；`collect_all`: `customtkinter`（主題 JSON 與字型） |
 | 測試 | 程式本身無；共用層 `python -m unittest discover -s libs\tests` |
 | Release tag | `BetterPrompt_vX.Y.Z`（tool.json 的 tag_prefix） |
@@ -129,8 +132,8 @@ libs/toolzoo/ai/                # 共用：LLM 呼叫層、金鑰、模式庫（
 
 - 模式的名稱是 `model_recommendations.json` 的 key，改 `libs/toolzoo/ai/text_modes.py` 的分類或子模式名稱時要一起改。
 - 改 `libs/toolzoo/ai` 也會影響 Video Notes，兩個工具都要重新 build 測過。
-- v1 的設定檔 `~/.better_prompt_settings.json` 只會被讀、不會被刪；金鑰搬進 keys.env 之後，那個檔可以手動刪掉。
-  v1 只會帶過來 OpenAI 的模型與 temperature，不會帶服務——v1 只有 OpenAI，所以升上來的人預設也是 Claude 訂閱。
+- 不讀也不寫使用者資料夾：v1 的 `~/.better_prompt_settings.json` 與舊的 `%APPDATA%\PersonalToolZoo\` 都不再使用
+  （2026-10-23 已把裡面的金鑰與設定搬進專案的 `.env` 與 `data\`）。
 - Claude 訂閱的「檢查 Claude Code」只找執行檔（`claude_subscription.find_claude_binary`），不會真的呼叫、不花額度；
   沒登入或登入過期要到第一次轉換才會知道，錯誤訊息會叫使用者執行 `claude` 重新登入（訊息在 `libs/toolzoo/ai/errors.py`）。
 - `claude-subscription` 不要降到 v0.2.1 以下：舊版在打包後的視窗程式裡每呼叫一次就閃一個黑窗。
