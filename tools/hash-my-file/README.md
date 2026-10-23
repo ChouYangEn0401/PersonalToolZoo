@@ -84,4 +84,4 @@ with open(file_path, 'rb') as f:
 - **分支上還有未收的功能**：`feat/hash_my_file_gui/all_platform` 在 tag `HashMyFile_v0.1.0` 之後
   還有一個 commit（`548d036`：只留重複檔、開啟、刪除按鈕），還沒收尾所以沒併。詳見根目錄 README「歷史」。
 - 最早的獨立版（`Python Projects\。HashMyFile`）有 CRC32 和「輸入雜湊值比對」，改寫成表格版時不見了，
-  2026-10 併回來（沒有另外開一個工具）。版本號還是 0.1.0，發版時用 `release.ps1 hash minor`。
+  2026-10 併回來（沒有另外開一個工具），2026-10-23 用 `release.ps1 hash minor` 發成 0.2.0（tag `HashMyFile_v0.2.0`）。

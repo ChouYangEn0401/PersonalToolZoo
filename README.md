@@ -10,7 +10,7 @@
 | **Git Helper Pro** | Git 指令 GUI 助手：多專案分頁、危險指令攔截、rebase/merge/stash 引導、繁中／簡中／英三語切換 | v1.6.4 | `githelper` | [tools/git-helper-pro/](tools/git-helper-pro/) |
 | **Encrypter** | 檔案／文字加密 GUI，自訂 `.isd` 格式，支援多種演算法與 Mixture（多階段）加密模式 | v0.3.0 | `enc` | [tools/encrypter/](tools/encrypter/) |
 | **Table Format Converter** | 貼上 Tab 分隔或 Markdown 表格即時預覽，一鍵輸出 MD／Tab／CSV／XLSX | v1.0.0 | `table` | [tools/table-format-converter/](tools/table-format-converter/) |
-| **HashMyFile** | 拖放檔案或資料夾計算 MD5／SHA-1／SHA-256／CRC32，內容相同的檔案自動標色；貼上雜湊值即可驗證 | v0.1.0 | `hash` | [tools/hash-my-file/](tools/hash-my-file/) |
+| **HashMyFile** | 拖放檔案或資料夾計算 MD5／SHA-1／SHA-256／CRC32，內容相同的檔案自動標色；貼上雜湊值即可驗證 | v0.2.0 | `hash` | [tools/hash-my-file/](tools/hash-my-file/) |
 | **Advanced Excel Tool** | 分頁式 Excel 工作台：核心整理（可疊加／undo）、多檔合併、diff 比較＋AB 審核 | v0.1.0 | `excel` | [tools/excel-tool/](tools/excel-tool/) |
 | **Git Diff Statistics** | 指定兩個 commit／branch，統計各副檔名的檔案數與增刪行數 | v1.0.0 | `diff` | [tools/git-diff-stats/](tools/git-diff-stats/) |
 | **Video Notes** | 影片網址 → 下載 → 逐字稿（GPU Whisper）→ AI 依影片類型整理成 Notion 筆記；本機網頁 GUI＋CLI＋HTTP 串接 | v2.0.0 | `notes` | [tools/video-notes/](tools/video-notes/) |
