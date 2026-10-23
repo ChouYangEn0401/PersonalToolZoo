@@ -6,6 +6,7 @@
 
 import os
 import random
+import sys
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
@@ -13,15 +14,23 @@ from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
-from icon_algorithms import generate_all
-from version import __version__
+# 從原始碼執行時讓 import 找得到 repo 的 libs/（打包時由 tool.json 的 pathex 處理）
+_LIBS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "libs")
+if not getattr(sys, "frozen", False) and os.path.isdir(_LIBS):
+    sys.path.insert(0, os.path.abspath(_LIBS))
+
+from toolzoo.appdirs import tool_data_dir  # noqa: E402
+
+from icon_algorithms import generate_all  # noqa: E402
+from version import __version__  # noqa: E402
 
 PREVIEW = 112              # 預覽格子的大小（放大顯示時用最近鄰，像素邊緣才清楚）
 ICO_SIZES = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
 
 
 def default_output() -> Path:
-    return Path.home() / "Pictures" / "Random Icons"
+    """預設存在工具旁邊的 data\\icons\\（原始碼：tools\\random-icon-maker\\data\\icons\\；exe：exe 旁邊的 data\\icons\\）。"""
+    return tool_data_dir("random-icon-maker") / "icons"
 
 
 def file_name(key: str, seed: int, ext: str) -> str:
