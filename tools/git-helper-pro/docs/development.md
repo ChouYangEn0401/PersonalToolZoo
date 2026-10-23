@@ -11,7 +11,8 @@ tools/git-helper-pro/
 ├── README.md
 ├── tool.json                     # build 設定（打包: repo 根目錄跑 .\scripts\build.ps1 git-helper-pro）
 ├── ShowPanel.bat                 # 不打包、直接跑指令面板
-├── language_config.json          # 語言偏好設定（開發模式下切換語言會改寫這個檔）
+├── language_config.json          # 預設語言（只讀；切換語言時存到 data\language_config.json）
+├── data/                         # 執行時才出現：選的語言、log（不進版控）
 ├── language/
 │   ├── zh-tw.json                # 繁體中文（預設）
 │   ├── zh-cn.json                # 簡體中文

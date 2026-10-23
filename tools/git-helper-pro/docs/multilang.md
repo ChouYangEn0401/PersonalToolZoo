@@ -12,13 +12,14 @@ Git Helper Pro 支援完整多語言介面，所有 UI 文字均可切換。
 | `zh-cn` | 简体中文 |
 | `en`    | English |
 
-工具列右上方有語言下拉選單，選擇後立即生效。語言偏好自動儲存至 `language_config.json`。
+工具列右上方有語言下拉選單，選擇後立即生效。語言偏好自動儲存至 `data\language_config.json`。
 
 ```json
 { "language": "en" }
 ```
 
-`language_config.json` 位於 exe 旁（若目錄可寫），或使用者主目錄（`~/.githelper_config.json`）。
+`data\` 在工具旁邊：從原始碼執行是 `tools\git-helper-pro\data\`，exe 是 exe 旁邊的 `data\`（不進版控、不寫使用者主目錄）。
+還沒選過語言時，讀工具資料夾（或 exe 旁）的 `language_config.json` 當預設值。
 
 ---
 

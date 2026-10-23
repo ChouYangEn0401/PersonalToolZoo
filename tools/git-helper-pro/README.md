@@ -269,9 +269,10 @@ MIT License — Made with ❤️ for Git Power Users & Project Leads
 
 ### 注意事項
 
-- 開發模式下切換語言會改寫 `language_config.json`（這個檔有進版控），commit 前留意 diff。
-- 打包後的 exe 會在**自己旁邊**寫 `githelper_language.log` 和 `language_config.json`，
-  語言檔也會優先讀 exe 旁邊的 `language/` 或 `.lang/GitHelperPro/`（方便不重新打包就改翻譯）。
+- 選的語言存在工具旁邊的 `data\language_config.json`（原始碼：`tools\git-helper-pro\data\`；exe：exe 旁邊的 `data\`），
+  log `githelper_language.log` 也在 exe 旁的 `data\`。有進版控的 `language_config.json` 只當預設值讀，不會再被改寫；
+  不寫使用者主目錄（舊版找不到可寫位置時會寫 `~/.githelper_config.json`，已拿掉）。
+- 語言檔會優先讀 exe 旁邊的 `language/` 或 `.lang/GitHelperPro/`（方便不重新打包就改翻譯）。
 - 新增指令：在 `src/core/git_handler/commands.py` 加設定，面板是設定驅動的，詳見 `docs/development.md`。
 - **分支上還有未收的功能**：`feat/git_command_gui_helper/dev` 有一組帶參數的 fetch / pull 指令設定
   （remote / prune / rebase），主線目前是簡化版的 Fetch 對話框 + Pull 按鈕。詳見根目錄 README「歷史」。
