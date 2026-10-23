@@ -15,6 +15,7 @@
 - 太長的段落會在句尾（。！？；…）切開，不會切在「...」中間。
 - **記住讀到哪裡**：同一個 .txt 再開一次，會跳到上次讀到的段落。
 - 開檔自動判斷 UTF-8 / Big5 / UTF-16 / GB18030。
+- 設定、閱讀進度與暫存語音檔都放在工具旁邊的 `data\`（原始碼執行是 `tools\novel-reader\data\`，exe 是 exe 旁邊的 `data\`），不寫到使用者資料夾。
 
 ## 使用方式
 
@@ -36,8 +37,10 @@
 | 版本號 | `version.py` 的 `__version__` → exe 檔名 `NovelReader(vX.Y.Z).exe`、視窗標題 `Novel Reader vX.Y.Z` |
 | 環境 | 有第三方套件 → `tools\novel-reader\.venv` |
 | 依賴 | `pywin32<400`（SAPI）、`pygame<3`（播放）、`gTTS<3`（Google 語音）；Google 語音加速另外需要系統的 ffmpeg |
+| 共用程式 | `libs/toolzoo/appdirs`（資料放哪裡）——tool.json 的 `pathex` 指向 `../../libs`，進入點開頭也把它加進 `sys.path` |
+| 資料 | 工具旁邊的 `data\`：`settings.json`（語音、語速、每個檔案讀到哪一段）、`cache\`（邊播邊產生的語音檔，播完就刪；被強制結束留下的舊暫存，下次啟動時清掉超過 6 小時的） |
 | 打包額外內容 | `hiddenimports`: `win32com.client`、`pythoncom` |
-| 測試 | `.\tools\novel-reader\.venv\Scripts\python.exe -m unittest discover -s tools\novel-reader\tests -v`（7 個：分段、SAPI 連續產生、播放流程；pygame 用 dummy 音效驅動，不會出聲） |
+| 測試 | `.\tools\novel-reader\.venv\Scripts\python.exe -m unittest discover -s tools\novel-reader\tests -v`（8 個：分段、SAPI 連續產生、播放流程、暫存清理；pygame 用 dummy 音效驅動，不會出聲） |
 | Release tag | `NovelReader_vX.Y.Z` |
 
 ### 注意事項
