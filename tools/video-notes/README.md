@@ -46,7 +46,7 @@ VideoNotes --dry-run -p news -w brief                               # 印出會�
 
 | 選項 | 說明 |
 |---|---|
-| `-o downloads` / `-o data` / `-o <資料夾>` | 輸出位置（預設「下載\Video Notes」，其次工具的 `data\`，或自選） |
+| `-o downloads` / `-o data` / `-o <資料夾>` | 輸出位置（預設「下載\Video Notes」，其次工具旁邊的 `data\videos\`，或自選） |
 | `-p` / `-w` / `--preset` / `--focus` | 整理方式、加料、常用組合、特別想知道的主題 |
 | `--reuse` / `--redo download,transcribe,notes`（或 `all`） | 處理過的影片：一律沿用 / 指定重做。都沒給而且是互動視窗時會逐項詢問 |
 | `--provider` / `--model` | 這次用哪個 AI（不改存檔設定）。服務：`claude-sub`（預設）/ `openai` / `gemini` / `anthropic`；只給 `--model`（例如 `haiku`）會從名稱判斷服務 |
@@ -73,11 +73,12 @@ VideoNotes --dry-run -p news -w brief                               # 印出會�
 **加料（modifier，可多選）**：⏱ 時間軸、✅ 行動清單、💬 金句、📖 名詞解釋、✂ 極簡、🔍 詳細、🌐 英文輸出。
 **常用組合（preset）**：`daily-news`（新聞＋極簡）、`stock-show`（財經＋行動清單＋時間軸）、`study`（知識＋名詞解釋＋時間軸）。
 
-**自訂**：把 TOML 放到 `%APPDATA%\PersonalToolZoo\video-notes\prompts\profiles|modifiers|presets\`，
+**自訂**：把 TOML 放到工具旁邊的 `data\prompts\profiles|modifiers|presets\`
+（原始碼執行是 `tools\video-notes\data\prompts\`，exe 是 exe 旁邊的 `data\prompts\`），
 同名的會覆蓋內建的（更新程式也不會被蓋掉），GUI 重新整理就生效。格式照 `prompts/` 裡的範例，例如：
 
 ```toml
-# %APPDATA%\PersonalToolZoo\video-notes\prompts\presets\my-ai.toml
+# tools\video-notes\data\prompts\presets\my-ai.toml
 name = "AI 產業追蹤"
 profile = "finance"
 modifiers = ["timeline"]
@@ -151,9 +152,10 @@ GUI 與 CLI 批次都一樣。「同時處理幾支」在設定裡改。
 
 ### API 金鑰（OpenAI / Gemini / Claude API）
 
-和 Better Prompt 共用：環境變數 `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` →
-`%APPDATA%\PersonalToolZoo\keys.env` → 工具資料夾（或 exe 旁）的 `.env`。
-舊專案的 `.env`（`chatgpt=…`、`gemini=…`）整個複製到 `tools\video-notes\.env` 就能用。GUI 設定頁也可以直接貼金鑰。
+和 Better Prompt 共用：環境變數 `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` → 專案的 `.env`
+（原始碼執行讀 repo 根目錄的 `.env`；打包的 exe 先讀 exe 旁邊的 `.env`，在 repo 的 `dist\` 裡時也讀 repo 的那份）。
+範本與每一項的說明在 repo 根目錄的 [`.env.example`](../../.env.example)；舊專案 `.env` 的 `chatgpt=…`、`gemini=…` 寫法也認得。
+GUI 設定頁也可以直接貼金鑰，會寫進同一份 `.env`。
 
 錯誤會翻成看得懂的訊息。**舊版「LLM 無法總結」的真正原因**：2026-10-05 測試時，舊 `.env` 與
 Better Prompt 的 OpenAI 金鑰都回 `429 insufficient_quota`（帳戶額度用完），`.env` 裡的 Gemini 金鑰則已失效——
@@ -205,6 +207,7 @@ DLL 不齊時自動改用 CPU（int8，比較慢）。設定頁標題列會顯�
 | 依賴 | `yt-dlp[default]<2028`（網站常改版，上限刻意給到年底後一年）、`faster-whisper<2`、`nvidia-cublas-cu12<13`、`nvidia-cudnn-cu12<10`、`opencc-python-reimplemented<0.2`、`claude-subscription`（Claude 訂閱，釘在 GitHub tag `v0.2.1`，安裝要有 git）、`openai<3`、`anthropic<2`、`fastapi<1`、`uvicorn<1` |
 | 預設 AI | Claude 訂閱（`claude-sub`，模型 `sonnet`）——要先安裝並登入 Claude Code，**會用掉訂閱額度**；存過設定的人照原本的選擇 |
 | 共用程式 | `libs/toolzoo`：`ai`（LLM、金鑰、Better Prompt 模式庫）、`ytdlp`（JS 執行環境、ffmpeg 位置）、`webapp`（啟動器）、`appdirs` |
+| 資料與金鑰 | 工具旁邊的 `data\`：`settings.json`、`prompts\`（自訂提示詞）、`models\`（Whisper）、`videos\`（選「data」輸出時）；影片筆記預設輸出到「下載\Video Notes」；金鑰與參數在專案的 `.env` |
 | 打包額外內容 | `include`: `prompts`、`socket`、`video_notes/web/static`；`collect_all`: `yt_dlp_ejs`、`faster_whisper`（VAD 模型）、`opencc`（字典）；uvicorn 的 hiddenimports |
 | 測試 | `.\tools\video-notes\.venv\Scripts\python.exe -m unittest discover -s tools\video-notes\tests -v`（離線） |
 | Release tag | `VideoNotes_vX.Y.Z` |
@@ -213,7 +216,9 @@ DLL 不齊時自動改用 CPU（int8，比較慢）。設定頁標題列會顯�
 
 - 外部程式：ffmpeg、Node / Bun / Deno 其中一個（YouTube）。`debug/check_env.py` 會檢查。
 - YouTube 改版導致抓不到時，先在 `requirements.txt` 範圍內升級 yt-dlp：`setup-venv.ps1 video-notes -Force`。
-- Whisper 模型第一次用會從 Hugging Face 下載到 `~\.cache\huggingface`（medium 約 1.5 GB）。
+- Whisper 模型放在工具旁邊的 `data\models\`（Hugging Face 快取格式；medium 約 1.5 GB），沒有就第一次用時下載；
+  打包的 exe 在 repo 的 `dist\` 裡時直接借用 `tools\video-notes\data\models\`，也可以用 `.env` 的 `VIDEO_NOTES_MODEL_DIR` 指定。
+  程式把 `HF_HOME` 指到這裡，不會寫到使用者的 `~\.cache\huggingface`。
 - 改 `libs/toolzoo/ai` 會同時影響 Better Prompt，兩個工具都要重新測。
 - Claude 訂閱每次呼叫最多等 900 秒（`libs/toolzoo/ai/claude_code.py` 的 `DEFAULT_TIMEOUT`；套件預設 180 秒，長逐字稿不夠）。
   `claude-subscription` 不要降到 v0.2.1 以下：舊版在打包後的 exe 裡每呼叫一次就閃一個黑窗。
