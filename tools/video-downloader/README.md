@@ -54,7 +54,7 @@ VideoDownloader --help
 
 ## 設定
 
-存在 `%APPDATA%\PersonalToolZoo\video-downloader\settings.json`，GUI 的 ⚙ 設定可以改：
+存在工具旁邊的 `data\settings.json`（原始碼執行是 `tools\video-downloader\data\`，打包的 exe 是 exe 旁邊的 `data\`），GUI 的 ⚙ 設定可以改：
 下載位置（預設「下載\Video Downloader」）、檔名範本（yt-dlp 語法，例如 `%(uploader)s/%(title)s.%(ext)s`）、
 預設畫質、同時下載幾支、每支同時抓幾段、限速、Proxy、字幕（語言、自動字幕、嵌入）、寫入影片資訊、嵌入縮圖、ffmpeg 位置。
 下載紀錄在同一個資料夾的 `history.json`（最多 500 筆）。
@@ -70,6 +70,7 @@ VideoDownloader --help
 | 環境 | 有第三方套件 → `tools\video-downloader\.venv` |
 | 依賴 | `yt-dlp[default]<2028`（網站常改版要常更新，上限刻意給寬）、`fastapi<1`、`uvicorn<1` |
 | 共用程式 | `libs/toolzoo`：`ytdlp`（JS 執行環境、ffmpeg 位置）、`webapp`（啟動器）、`appdirs` |
+| 資料 | 工具旁邊的 `data\`：`settings.json`、`history.json`；影片預設下載到「下載\Video Downloader」；參數（例如 `TOOLZOO_NO_BROWSER`）可寫在專案的 `.env` |
 | 打包額外內容 | `include`: `video_downloader/web/static`；`collect_all`: `yt_dlp_ejs`；uvicorn 的 hiddenimports |
 | 測試 | `.\tools\video-downloader\.venv\Scripts\python.exe -m unittest discover -s tools\video-downloader\tests -v`（離線；web API 的 2 個測試需要先 `pip install httpx2`，沒裝會略過） |
 | Release tag | `VideoDownloader_vX.Y.Z` |
