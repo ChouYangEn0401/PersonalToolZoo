@@ -12,6 +12,10 @@ _LIBS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "li
 if not getattr(sys, "frozen", False) and os.path.isdir(_LIBS):
     sys.path.insert(0, os.path.abspath(_LIBS))
 
+from toolzoo.appdirs import load_env  # noqa: E402
+
+load_env()   # 專案 .env 的參數（例如 TOOLZOO_NO_BROWSER）；已設定的環境變數優先
+
 
 def main() -> None:
     args = sys.argv[1:]

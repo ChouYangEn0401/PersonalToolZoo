@@ -1,4 +1,4 @@
-"""設定與預設值。存在 %APPDATA%\\PersonalToolZoo\\video-downloader\\settings.json。"""
+"""設定與預設值。存在工具旁邊的 data\\settings.json（原始碼：tools\\video-downloader\\data\\；exe：exe 旁邊的 data\\）。"""
 
 from __future__ import annotations
 

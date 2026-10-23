@@ -1,4 +1,4 @@
-"""下載紀錄（%APPDATA%\\PersonalToolZoo\\video-downloader\\history.json），最多留 500 筆。"""
+"""下載紀錄（工具旁邊的 data\\history.json），最多留 500 筆。"""
 
 from __future__ import annotations
 
