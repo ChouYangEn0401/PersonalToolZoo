@@ -1,23 +1,40 @@
-"""File Renamer —— 拖進檔案，用正規表達式或雜湊批次改名。
+"""File Renamer —— 用正規表達式規則（或雜湊）批次改名：先預覽、擋下衝突、可以復原。
 
-改名前一律先預覽：新檔名重複、目標已存在、規則寫錯的列會標紅而且不會套用。
-套用後可以「復原上次改名」。
+改名的邏輯都在 renamer.py（規則、掃描資料夾、預覽、兩段式套用與復原）；這裡只有畫面。
+設定、規則組、上一批改名存在工具旁邊的 data\\（原始碼：tools\\file-renamer\\data\\；exe：exe 旁邊的 data\\）。
 """
 
-import hashlib
 import os
-import re
 import sys
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from datetime import datetime
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
-from version import __version__
+# 從原始碼執行時讓 import 找得到 repo 的 libs/（打包時由 tool.json 的 pathex 處理）
+_LIBS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "libs")
+if not getattr(sys, "frozen", False) and os.path.isdir(_LIBS):
+    sys.path.insert(0, os.path.abspath(_LIBS))
 
-MODE_REGEX = "正規表達式"
-MODE_NAME_HASH = "檔名雜湊（SHA-256）"
-MODE_CONTENT_HASH = "檔案內容雜湊（SHA-256）"
+from toolzoo.appdirs import tool_data_dir  # noqa: E402
+
+import renamer  # noqa: E402
+from renamer import MODE_CONTENT_HASH, MODE_NAME_HASH, MODE_REGEX, SCOPE_FULL, SCOPE_STEM, Rule  # noqa: E402
+from version import __version__  # noqa: E402
+
+MODES = {
+    MODE_REGEX: "正規表達式規則",
+    MODE_NAME_HASH: "檔名雜湊（SHA-256）",
+    MODE_CONTENT_HASH: "檔案內容雜湊（SHA-256）",
+}
+EXAMPLES = (r"例：\[(1080p|720p)\]\s*  →  （留空，拿掉畫質標籤）　　^IMG_(\d+)  →  照片_$1　　\s+  →  _（空白變底線）"
+            "\n取代成可以用 $1、$2 或 \\1、\\2 引用括號裡的內容；規則由上往下依序套用，前一條的結果會交給下一條。")
+
+DATA = tool_data_dir("file-renamer")
+SETTINGS_FILE = DATA / "settings.json"
+PRESETS_FILE = DATA / "presets.json"
+LAST_BATCH_FILE = DATA / "last_batch.json"
 
 
 def resource_path(*parts):
@@ -26,117 +43,133 @@ def resource_path(*parts):
     return os.path.join(base, *parts)
 
 
-def content_hash(path, block=1 << 20):
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(block), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def plan_renames(paths, mode, pattern="", replacement="", ignore_case=False):
-    """回傳 [(原路徑, 新檔名, 問題)]；問題是空字串代表可以改。"""
-    rows = []
-    regex = None
-    if mode == MODE_REGEX and pattern:
-        try:
-            regex = re.compile(pattern, re.IGNORECASE if ignore_case else 0)
-        except re.error as exc:
-            return [(p, "", f"規則錯誤：{exc}") for p in paths]
-    for path in paths:
-        name = os.path.basename(path)
-        stem, ext = os.path.splitext(name)
-        try:
-            if mode == MODE_REGEX:
-                new = regex.sub(replacement, name) if regex else name
-            elif mode == MODE_NAME_HASH:
-                new = hashlib.sha256(name.encode("utf-8")).hexdigest() + ext
-            else:
-                new = content_hash(path) + ext
-        except (OSError, re.error) as exc:
-            rows.append((path, "", f"失敗：{exc}"))
-            continue
-        rows.append((path, new, ""))
-
-    # 衝突檢查：同一個資料夾裡新檔名重複、或跟不在這批裡的既有檔案撞名
-    seen = {}
-    batch = {os.path.normcase(p) for p in paths}
-    result = []
-    for path, new, problem in rows:
-        if not problem:
-            folder = os.path.dirname(path)
-            target = os.path.normcase(os.path.join(folder, new))
-            if not new or any(c in new for c in '<>:"/\\|?*'):
-                problem = "新檔名不合法"
-            elif new == os.path.basename(path):
-                problem = "不變"
-            elif target in seen:
-                problem = f"跟「{os.path.basename(seen[target])}」的新檔名重複"
-            elif os.path.exists(target) and target not in batch:
-                problem = "目標檔名已存在"
-            seen.setdefault(target, path)
-        result.append((path, new, problem))
-    return result
-
-
 class FileRenamerApp:
-    def __init__(self, root):
+    def __init__(self, root, confirm=messagebox.askyesno):
         self.root = root
+        self.confirm = confirm            # 測試時換成永遠回答「是」
         self.root.title(f"File Renamer v{__version__}")
-        self.root.geometry("980x620")
-        self.root.minsize(760, 460)
+        self.root.geometry("1120x720")
+        self.root.minsize(900, 560)
         try:
-            self.root.iconbitmap(resource_path("data", "FileRenamer.ico"))
+            self.root.iconbitmap(resource_path("assets", "FileRenamer.ico"))
         except tk.TclError:
             pass
-        self.paths = []
-        self.plan = []
-        self.last_applied = []   # [(新路徑, 原路徑)]，給「復原」用
+
+        settings = renamer.load_json(SETTINGS_FILE, {})
+        self.paths: list[str] = []
+        self.rows: list[renamer.PlanRow] = []
+        self.item_path: dict[str, str] = {}
+        self.rules: list[Rule] = renamer.rules_from_data(settings.get("rules")) or [Rule()]
+        self.presets: dict = renamer.load_json(PRESETS_FILE, {})
+        self.last_batch: dict = renamer.load_json(LAST_BATCH_FILE, {})
+        self.mode = tk.StringVar(value=settings.get("mode", MODE_REGEX))
+        self.scope = tk.StringVar(value=settings.get("scope", SCOPE_STEM))
+        self.recursive = tk.BooleanVar(value=settings.get("recursive", True))
+        self.name_filter = tk.StringVar(value=settings.get("filter", ""))
+        self.only_changes = tk.BooleanVar(value=False)
+        self.find_var = tk.StringVar()
+        self.replace_var = tk.StringVar()
+        self.case_var = tk.BooleanVar()
+        self.preset_var = tk.StringVar()
+        self._loading_editor = False
+        self._refresh_job = None
+
         self._build()
         self.root.drop_target_register(DND_FILES)
         self.root.dnd_bind("<<Drop>>", self._on_drop)
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self._show_rules(select=0)
+        self._mode_changed(save=False)
+        self._update_undo()
+        self.refresh()
 
-    # ------------------------------------------------------------------ UI
+    # ------------------------------------------------------------------ 畫面
     def _build(self):
         top = ttk.Frame(self.root, padding=(10, 10, 10, 0))
         top.pack(fill="x")
-        ttk.Button(top, text="＋ 加入檔案", command=self._browse).pack(side="left")
-        ttk.Button(top, text="移除選取", command=self._remove_selected).pack(side="left", padx=6)
-        ttk.Button(top, text="清空", command=self._clear).pack(side="left")
-        ttk.Label(top, text="（也可以把檔案直接拖進視窗）", foreground="#777").pack(side="left", padx=10)
+        ttk.Button(top, text="＋ 加入檔案", command=self._browse_files).pack(side="left")
+        ttk.Button(top, text="＋ 加入資料夾", command=self._browse_folder).pack(side="left", padx=6)
+        ttk.Checkbutton(top, text="包含子資料夾", variable=self.recursive,
+                        command=self._save_settings).pack(side="left")
+        ttk.Label(top, text="資料夾裡只加入").pack(side="left", padx=(14, 4))
+        ttk.Entry(top, textvariable=self.name_filter, width=16).pack(side="left")
+        ttk.Label(top, text="（例如 *.mp4;*.mkv，空白 = 全部；也可以把檔案或資料夾拖進來）",
+                  foreground="#777").pack(side="left", padx=4)
+        ttk.Button(top, text="清空", command=self.clear).pack(side="right")
+        ttk.Button(top, text="移除選取", command=self._remove_selected).pack(side="right", padx=6)
 
-        rule = ttk.LabelFrame(self.root, text="改名規則", padding=10)
-        rule.pack(fill="x", padx=10, pady=8)
-        self.mode = tk.StringVar(value=MODE_REGEX)
-        ttk.Label(rule, text="方式").grid(row=0, column=0, sticky="w")
-        mode_box = ttk.Combobox(rule, textvariable=self.mode, state="readonly", width=24,
-                                values=[MODE_REGEX, MODE_NAME_HASH, MODE_CONTENT_HASH])
-        mode_box.grid(row=0, column=1, sticky="w", padx=6)
-        mode_box.bind("<<ComboboxSelected>>", lambda _e: self._refresh())
-        self.pattern = tk.StringVar()
-        self.replacement = tk.StringVar()
-        self.ignore_case = tk.BooleanVar()
-        ttk.Label(rule, text="尋找（regex）").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        self.pattern_entry = ttk.Entry(rule, textvariable=self.pattern, width=40)
-        self.pattern_entry.grid(row=1, column=1, sticky="we", padx=6, pady=(8, 0))
-        ttk.Label(rule, text="取代成").grid(row=1, column=2, sticky="w", pady=(8, 0))
-        self.replace_entry = ttk.Entry(rule, textvariable=self.replacement, width=30)
-        self.replace_entry.grid(row=1, column=3, sticky="we", padx=6, pady=(8, 0))
-        ttk.Checkbutton(rule, text="不分大小寫", variable=self.ignore_case,
-                        command=self._refresh).grid(row=1, column=4, padx=6, pady=(8, 0))
-        ttk.Label(rule, text=r"例：尋找 ^IMG_(\d+)  取代成 照片_\1　　取代成可用 \1、\2 引用括號內容",
-                  foreground="#777").grid(row=2, column=1, columnspan=4, sticky="w", pady=(4, 0))
-        rule.columnconfigure(1, weight=1)
-        rule.columnconfigure(3, weight=1)
-        for var in (self.pattern, self.replacement):
-            var.trace_add("write", lambda *_: self._refresh())
+        opts = ttk.Frame(self.root, padding=(10, 8, 10, 0))
+        opts.pack(fill="x")
+        ttk.Label(opts, text="改名方式").pack(side="left")
+        for key, label in MODES.items():
+            ttk.Radiobutton(opts, text=label, value=key, variable=self.mode,
+                            command=self._mode_changed).pack(side="left", padx=4)
+        ttk.Label(opts, text="套用到").pack(side="left", padx=(24, 4))
+        ttk.Radiobutton(opts, text="主檔名（保留副檔名）", value=SCOPE_STEM, variable=self.scope,
+                        command=self._changed).pack(side="left")
+        ttk.Radiobutton(opts, text="整個檔名", value=SCOPE_FULL, variable=self.scope,
+                        command=self._changed).pack(side="left", padx=4)
 
-        table = ttk.Frame(self.root, padding=(10, 0))
+        # 規則
+        self.rule_frame = ttk.LabelFrame(self.root, text="規則（由上往下依序套用）", padding=10)
+        self.rule_frame.pack(fill="x", padx=10, pady=8)
+        rf = self.rule_frame
+        self.rule_tree = ttk.Treeview(rf, columns=("on", "find", "replace", "case"), show="headings",
+                                      height=4, selectmode="browse")
+        for col, text, width in (("on", "啟用", 50), ("find", "尋找（regex）", 360),
+                                 ("replace", "取代成", 260), ("case", "不分大小寫", 80)):
+            self.rule_tree.heading(col, text=text)
+            self.rule_tree.column(col, width=width, anchor="w", stretch=col in ("find", "replace"))
+        self.rule_tree.grid(row=0, column=0, rowspan=5, sticky="nsew")
+        self.rule_tree.bind("<<TreeviewSelect>>", self._on_rule_select)
+        self.rule_tree.bind("<Double-1>", lambda _e: self.toggle_rule())
+        buttons = ttk.Frame(rf)
+        buttons.grid(row=0, column=1, rowspan=5, sticky="n", padx=(8, 0))
+        for text, cmd in (("＋ 新增規則", self.add_rule), ("↑ 上移", lambda: self.move_rule(-1)),
+                          ("↓ 下移", lambda: self.move_rule(1)), ("停用 / 啟用", self.toggle_rule),
+                          ("刪除", self.delete_rule)):
+            ttk.Button(buttons, text=text, command=cmd, width=12).pack(fill="x", pady=1)
+
+        editor = ttk.Frame(rf)
+        editor.grid(row=5, column=0, columnspan=2, sticky="we", pady=(8, 0))
+        ttk.Label(editor, text="尋找").pack(side="left")
+        self.find_entry = ttk.Entry(editor, textvariable=self.find_var, width=42)
+        self.find_entry.pack(side="left", padx=(4, 12), fill="x", expand=True)
+        ttk.Label(editor, text="取代成").pack(side="left")
+        ttk.Entry(editor, textvariable=self.replace_var, width=30).pack(side="left", padx=(4, 12), fill="x",
+                                                                         expand=True)
+        ttk.Checkbutton(editor, text="不分大小寫", variable=self.case_var,
+                        command=self._editor_changed).pack(side="left")
+        for var in (self.find_var, self.replace_var):
+            var.trace_add("write", lambda *_: self._editor_changed())
+
+        presets = ttk.Frame(rf)
+        presets.grid(row=6, column=0, columnspan=2, sticky="we", pady=(8, 0))
+        ttk.Label(presets, text="規則組").pack(side="left")
+        self.preset_box = ttk.Combobox(presets, textvariable=self.preset_var, state="readonly", width=24)
+        self.preset_box.pack(side="left", padx=4)
+        ttk.Button(presets, text="載入", command=self.load_preset).pack(side="left")
+        ttk.Button(presets, text="把目前的規則另存為…", command=self.save_preset).pack(side="left", padx=4)
+        ttk.Button(presets, text="刪除規則組", command=self.delete_preset).pack(side="left")
+        self._update_presets()
+        ttk.Label(rf, text=EXAMPLES, foreground="#666", justify="left").grid(row=7, column=0, columnspan=2,
+                                                                             sticky="w", pady=(8, 0))
+        rf.columnconfigure(0, weight=1)
+
+        # 預覽
+        self.preview = ttk.Frame(self.root, padding=(10, 0))
+        self.preview.pack(fill="both", expand=True)
+        bar = ttk.Frame(self.preview)
+        bar.pack(fill="x", pady=(0, 4))
+        ttk.Label(bar, text="預覽（還沒改任何檔案）").pack(side="left")
+        ttk.Checkbutton(bar, text="只顯示會改名的", variable=self.only_changes,
+                        command=self._render).pack(side="right")
+        table = ttk.Frame(self.preview)
         table.pack(fill="both", expand=True)
-        cols = ("status", "old", "new", "folder")
+        cols = ("status", "old", "new", "hits", "folder")
         self.tree = ttk.Treeview(table, columns=cols, show="headings", selectmode="extended")
-        for col, text, width in (("status", "狀態", 150), ("old", "原檔名", 260), ("new", "新檔名", 260),
-                                 ("folder", "資料夾", 220)):
+        for col, text, width in (("status", "狀態", 190), ("old", "原檔名", 290), ("new", "新檔名", 290),
+                                 ("hits", "命中", 50), ("folder", "資料夾", 260)):
             self.tree.heading(col, text=text)
             self.tree.column(col, width=width, anchor="w")
         self.tree.tag_configure("bad", foreground="#c62828")
@@ -150,94 +183,249 @@ class FileRenamerApp:
         bottom.pack(fill="x")
         self.summary = ttk.Label(bottom, text="")
         self.summary.pack(side="left")
-        self.undo_btn = ttk.Button(bottom, text="↩ 復原上次改名", command=self._undo, state="disabled")
+        self.undo_btn = ttk.Button(bottom, text="↩ 復原上次改名", command=self.undo, state="disabled")
         self.undo_btn.pack(side="right")
-        ttk.Button(bottom, text="套用改名", command=self._apply).pack(side="right", padx=6)
+        ttk.Button(bottom, text="套用改名", command=self.apply).pack(side="right", padx=6)
 
     # ------------------------------------------------------------------ 檔案清單
-    def _add_paths(self, paths):
+    def add_paths(self, paths):
         known = {os.path.normcase(p) for p in self.paths}
         for p in paths:
-            if os.path.isfile(p) and os.path.normcase(p) not in known:
-                self.paths.append(p)
-                known.add(os.path.normcase(p))
-        self._refresh()
+            found = renamer.scan_folder(p, self.recursive.get(), self.name_filter.get()) if os.path.isdir(p) else [p]
+            for f in found:
+                if os.path.isfile(f) and os.path.normcase(f) not in known:
+                    self.paths.append(f)
+                    known.add(os.path.normcase(f))
+        self._save_settings()
+        self.refresh()
 
     def _on_drop(self, event):
-        self._add_paths(self.root.tk.splitlist(event.data))
+        self.add_paths(self.root.tk.splitlist(event.data))
 
-    def _browse(self):
-        self._add_paths(filedialog.askopenfilenames(title="選擇要改名的檔案"))
+    def _browse_files(self):
+        self.add_paths(filedialog.askopenfilenames(title="選擇要改名的檔案"))
+
+    def _browse_folder(self):
+        folder = filedialog.askdirectory(title="選擇資料夾（裡面的檔案都會加入）")
+        if folder:
+            self.add_paths([folder])
 
     def _remove_selected(self):
-        drop = {self.tree.index(i) for i in self.tree.selection()}
-        self.paths = [p for i, p in enumerate(self.paths) if i not in drop]
-        self._refresh()
+        drop = {os.path.normcase(self.item_path[i]) for i in self.tree.selection() if i in self.item_path}
+        self.paths = [p for p in self.paths if os.path.normcase(p) not in drop]
+        self.refresh()
 
-    def _clear(self):
+    def clear(self):
         self.paths = []
-        self._refresh()
+        self.refresh()
 
-    # ------------------------------------------------------------------ 預覽與套用
-    def _refresh(self):
-        regex_mode = self.mode.get() == MODE_REGEX
-        for entry in (self.pattern_entry, self.replace_entry):
-            entry.configure(state="normal" if regex_mode else "disabled")
+    # ------------------------------------------------------------------ 規則
+    def _show_rules(self, select=None):
+        self.rule_tree.delete(*self.rule_tree.get_children())
+        for i, rule in enumerate(self.rules):
+            self.rule_tree.insert("", "end", iid=str(i), values=("✓" if rule.enabled else "—", rule.find,
+                                                                 rule.replace, "✓" if rule.ignore_case else ""))
+        if select is not None and self.rules:
+            index = max(0, min(select, len(self.rules) - 1))
+            self.rule_tree.selection_set(str(index))
+            self.rule_tree.see(str(index))
+            self._load_editor(index)
+
+    def _selected_rule(self):
+        sel = self.rule_tree.selection()
+        return int(sel[0]) if sel else None
+
+    def _load_editor(self, index):
+        self._loading_editor = True
+        rule = self.rules[index]
+        self.find_var.set(rule.find)
+        self.replace_var.set(rule.replace)
+        self.case_var.set(rule.ignore_case)
+        self._loading_editor = False
+
+    def _on_rule_select(self, _event=None):
+        index = self._selected_rule()
+        if index is not None:
+            self._load_editor(index)
+
+    def _editor_changed(self):
+        if self._loading_editor:
+            return
+        index = self._selected_rule()
+        if index is None:
+            return
+        rule = self.rules[index]
+        rule.find, rule.replace, rule.ignore_case = self.find_var.get(), self.replace_var.get(), self.case_var.get()
+        self.rule_tree.item(str(index), values=("✓" if rule.enabled else "—", rule.find, rule.replace,
+                                                "✓" if rule.ignore_case else ""))
+        self._changed()
+
+    def add_rule(self):
+        self.rules.append(Rule())
+        self._show_rules(select=len(self.rules) - 1)
+        self.find_entry.focus_set()
+        self._changed()
+
+    def move_rule(self, delta):
+        index = self._selected_rule()
+        if index is None or not 0 <= index + delta < len(self.rules):
+            return
+        self.rules[index], self.rules[index + delta] = self.rules[index + delta], self.rules[index]
+        self._show_rules(select=index + delta)
+        self._changed()
+
+    def toggle_rule(self):
+        index = self._selected_rule()
+        if index is not None:
+            self.rules[index].enabled = not self.rules[index].enabled
+            self._show_rules(select=index)
+            self._changed()
+
+    def delete_rule(self):
+        index = self._selected_rule()
+        if index is None:
+            return
+        del self.rules[index]
+        if not self.rules:
+            self.rules = [Rule()]
+        self._show_rules(select=index)
+        self._changed()
+
+    # ------------------------------------------------------------------ 規則組
+    def _update_presets(self):
+        names = sorted(self.presets)
+        self.preset_box.configure(values=names)
+        if self.preset_var.get() not in names:
+            self.preset_var.set(names[0] if names else "")
+
+    def load_preset(self):
+        name = self.preset_var.get()
+        if name in self.presets:
+            self.rules = renamer.rules_from_data(self.presets[name]) or [Rule()]
+            self._show_rules(select=0)
+            self._changed()
+
+    def save_preset(self, name=None):
+        name = name or simpledialog.askstring("另存規則組", "規則組的名稱：", parent=self.root)
+        if not name or not name.strip():
+            return
+        self.presets[name.strip()] = renamer.rules_to_data([r for r in self.rules if r.find])
+        renamer.save_json(PRESETS_FILE, self.presets)
+        self.preset_var.set(name.strip())
+        self._update_presets()
+
+    def delete_preset(self):
+        name = self.preset_var.get()
+        if name in self.presets and self.confirm("刪除規則組", f"要刪除規則組「{name}」嗎？"):
+            del self.presets[name]
+            renamer.save_json(PRESETS_FILE, self.presets)
+            self._update_presets()
+
+    # ------------------------------------------------------------------ 預覽
+    def _mode_changed(self, save=True):
+        regex = self.mode.get() == MODE_REGEX
+        if regex and not self.rule_frame.winfo_ismapped():
+            self.rule_frame.pack(fill="x", padx=10, pady=8, before=self.preview)
+        elif not regex:
+            self.rule_frame.pack_forget()
+        if save:
+            self._changed()
+
+    def _changed(self):
+        self._save_settings()
+        if self._refresh_job:
+            self.root.after_cancel(self._refresh_job)
+        self._refresh_job = self.root.after(150, self.refresh)   # 打字時不要每個字都重算
+
+    def refresh(self):
+        self._refresh_job = None
         if self.mode.get() == MODE_CONTENT_HASH and len(self.paths) > 200:
             self.summary.configure(text="計算內容雜湊中…")
             self.root.update_idletasks()
-        self.plan = plan_renames(self.paths, self.mode.get(), self.pattern.get(), self.replacement.get(),
-                                 self.ignore_case.get())
-        self.tree.delete(*self.tree.get_children())
-        for path, new, problem in self.plan:
-            tag = "same" if problem == "不變" else ("bad" if problem else "")
-            self.tree.insert("", "end", values=(problem or "✓ 會改名", os.path.basename(path), new,
-                                                os.path.dirname(path)), tags=(tag,))
-        ok = sum(1 for _, _, p in self.plan if not p)
-        bad = sum(1 for _, _, p in self.plan if p and p != "不變")
-        self.summary.configure(text=f"共 {len(self.plan)} 個檔案：{ok} 個會改名" + (f"、{bad} 個有問題" if bad else ""))
+        self.rows = renamer.plan(self.paths, self.mode.get(), self.rules, self.scope.get())
+        self._render()
 
-    def _apply(self):
-        todo = [(path, new) for path, new, problem in self.plan if not problem]
+    def _render(self):
+        self.tree.delete(*self.tree.get_children())
+        self.item_path = {}
+        for row in self.rows:
+            if self.only_changes.get() and not row.ok:
+                continue
+            quiet = row.status in (renamer.STATUS_SAME, renamer.STATUS_NO_MATCH, "還沒有規則")
+            tag = "" if row.ok else ("same" if quiet else "bad")
+            item = self.tree.insert("", "end", values=(row.status or "✓ 會改名", os.path.basename(row.path),
+                                                       row.new_name, row.hits or "", os.path.dirname(row.path)),
+                                    tags=(tag,))
+            self.item_path[item] = row.path
+        ok = sum(1 for r in self.rows if r.ok)
+        bad = sum(1 for r in self.rows if not r.ok and r.status not in
+                  (renamer.STATUS_SAME, renamer.STATUS_NO_MATCH, "還沒有規則"))
+        text = f"共 {len(self.rows)} 個檔案：{ok} 個會改名"
+        self.summary.configure(text=text + (f"、{bad} 個有問題（紅字）" if bad else ""))
+
+    # ------------------------------------------------------------------ 套用與復原
+    def apply(self):
+        self.refresh()
+        todo = [r for r in self.rows if r.ok]
         if not todo:
             messagebox.showinfo("沒有要改的", "目前沒有可以套用的改名（看「狀態」欄）。")
             return
-        if not messagebox.askyesno("確認改名", f"要把 {len(todo)} 個檔案改名嗎？"):
+        if not self.confirm("確認改名", f"要把 {len(todo)} 個檔案改名嗎？（之後可以按「復原上次改名」改回來）"):
             return
-        done, failed = [], []
-        for path, new in todo:
-            target = os.path.join(os.path.dirname(path), new)
-            try:
-                os.rename(path, target)
-                done.append((target, path))
-            except OSError as exc:
-                failed.append(f"{os.path.basename(path)}：{exc}")
-        self.last_applied = done
-        self.undo_btn.configure(state="normal" if done else "disabled")
-        renamed = {os.path.normcase(old): new for new, old in done}
-        self.paths = [renamed.get(os.path.normcase(p), p) for p in self.paths]
-        self._refresh()
-        if failed:
-            messagebox.showwarning("部分失敗", f"成功 {len(done)} 個，失敗 {len(failed)} 個：\n\n" + "\n".join(failed[:20]))
+        try:
+            pairs = renamer.apply(self.rows)
+        except renamer.RenameError as exc:
+            messagebox.showerror("改名失敗", str(exc))
+            self.refresh()
+            return
+        self.last_batch = {"time": datetime.now().strftime("%Y-%m-%d %H:%M"), "pairs": pairs}
+        renamer.save_json(LAST_BATCH_FILE, self.last_batch)
+        moved = {os.path.normcase(old): new for old, new in pairs}
+        self.paths = [moved.get(os.path.normcase(p), p) for p in self.paths]
+        self._update_undo()
+        self.refresh()
 
-    def _undo(self):
-        failed = []
-        for new, old in reversed(self.last_applied):
-            try:
-                os.rename(new, old)
-            except OSError as exc:
-                failed.append(f"{os.path.basename(new)}：{exc}")
-        back = {os.path.normcase(new): old for new, old in self.last_applied}
+    def undo(self):
+        pairs = [tuple(p) for p in self.last_batch.get("pairs", [])]
+        if not pairs:
+            return
+        try:
+            renamer.undo(pairs)
+        except renamer.RenameError as exc:
+            messagebox.showerror("無法復原", str(exc))
+            return
+        back = {os.path.normcase(new): old for old, new in pairs}
         self.paths = [back.get(os.path.normcase(p), p) for p in self.paths]
-        self.last_applied = []
-        self.undo_btn.configure(state="disabled")
-        self._refresh()
-        if failed:
-            messagebox.showwarning("部分無法復原", "\n".join(failed[:20]))
+        self.last_batch = {}
+        try:
+            LAST_BATCH_FILE.unlink()
+        except OSError:
+            pass
+        self._update_undo()
+        self.refresh()
+
+    def _update_undo(self):
+        pairs = self.last_batch.get("pairs", [])
+        if pairs:
+            self.undo_btn.configure(state="normal",
+                                    text=f"↩ 復原上次改名（{self.last_batch.get('time', '')}，{len(pairs)} 個）")
+        else:
+            self.undo_btn.configure(state="disabled", text="↩ 復原上次改名")
+
+    # ------------------------------------------------------------------ 設定
+    def _save_settings(self):
+        renamer.save_json(SETTINGS_FILE, {
+            "rules": renamer.rules_to_data(self.rules), "mode": self.mode.get(), "scope": self.scope.get(),
+            "recursive": self.recursive.get(), "filter": self.name_filter.get(),
+        })
+
+    def close(self):
+        self._save_settings()
+        self.root.destroy()
 
 
 def main():
-    root = TkinterDnD.Tk()   # 拖放要用 TkinterDnD 的視窗（舊版另外多開了一個空白的 tk.Tk）
+    root = TkinterDnD.Tk()   # 拖放要用 TkinterDnD 的視窗
     FileRenamerApp(root)
     root.mainloop()
 
