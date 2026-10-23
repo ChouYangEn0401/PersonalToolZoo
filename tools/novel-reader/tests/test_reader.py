@@ -120,5 +120,28 @@ class PlayerTest(unittest.TestCase):
         self.assertNotIn("一", [t for t, _ in FakeEngine.made])
 
 
+class CacheDirTest(unittest.TestCase):
+    """暫存語音檔放在指定的 cache_dir：關閉時清掉自己的，啟動時清掉上次被強制結束留下的舊暫存。"""
+
+    def test_session_lives_in_cache_dir_and_stale_ones_are_removed(self):
+        tts.ENGINES["fake"] = FakeEngine
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp) / "cache"
+            stale = cache / "session-old"
+            fresh = cache / "session-recent"
+            stale.mkdir(parents=True)
+            fresh.mkdir()
+            old = time.time() - 7 * 3600
+            os.utime(stale, (old, old))
+            player = Player(lambda kind, data: None, "fake", "", 1.5, cache_dir=cache)
+            try:
+                self.assertEqual(player._tmp.parent, cache)
+                self.assertFalse(stale.exists())        # 超過 6 小時的舊暫存被清掉
+                self.assertTrue(fresh.exists())         # 近期的不動（可能是另一個視窗正在用）
+            finally:
+                player.close()
+            self.assertFalse(player._tmp.exists())     # 正常關閉時清掉自己的
+
+
 if __name__ == "__main__":
     unittest.main()

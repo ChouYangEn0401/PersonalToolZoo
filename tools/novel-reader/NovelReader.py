@@ -17,11 +17,24 @@ from reader.segments import split_into_segments
 from reader.tts import ENGINES, GoogleEngine, SapiEngine
 from version import __version__
 
+# 從原始碼執行時讓 import 找得到 repo 的 libs/（打包時由 tool.json 的 pathex 處理）
+_LIBS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "libs")
+if not getattr(sys, "frozen", False) and os.path.isdir(_LIBS):
+    sys.path.insert(0, os.path.abspath(_LIBS))
+
+from toolzoo.appdirs import tool_data_dir  # noqa: E402
+
+TOOL_NAME = "novel-reader"
+
 
 def settings_file() -> Path:
-    base = Path(os.environ.get("APPDATA") or Path.home()) / "PersonalToolZoo" / "novel-reader"
-    base.mkdir(parents=True, exist_ok=True)
-    return base / "settings.json"
+    """設定與每個檔案讀到哪一段：工具旁邊的 data\\settings.json（原始碼：tools\\novel-reader\\data\\）。"""
+    return tool_data_dir(TOOL_NAME) / "settings.json"
+
+
+def cache_dir() -> Path:
+    """邊播邊產生的語音檔放這裡，播完就刪。"""
+    return tool_data_dir(TOOL_NAME) / "cache"
 
 
 def load_settings() -> dict:
@@ -56,7 +69,7 @@ class ReaderApp:
         self._build()
         self._refresh_voices()
         self.player = Player(lambda kind, data: self.events.put((kind, data)),
-                             self.engine.get(), self.voice.get(), self.speed.get())
+                             self.engine.get(), self.voice.get(), self.speed.get(), cache_dir=cache_dir())
         self.root.protocol("WM_DELETE_WINDOW", self._close)
         self.root.after(100, self._loop)
 

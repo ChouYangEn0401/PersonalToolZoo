@@ -5,6 +5,8 @@
 - 播放與切換由主執行緒每 100 ms 呼叫一次 tick() 推進（Tk 的 after），不會卡住畫面。
 - 換語速、聲音、引擎時，預先產生好的檔案作廢、從目前段落重新產生。
 - 播過的語音檔隨播隨刪，關閉時整個暫存資料夾清掉。
+- 暫存資料夾放在呼叫端給的 cache_dir（GUI 給工具旁邊的 data\\cache\\）。程式被強制結束時來不及清，
+  下次啟動會把超過 STALE_HOURS 的舊暫存一起清掉。
 """
 
 from __future__ import annotations
@@ -13,18 +15,35 @@ import os
 import shutil
 import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Callable
 
 from reader.tts import ENGINES
 
 AHEAD = 3
+STALE_HOURS = 6
 
 Notify = Callable[[str, object], None]   # (事件, 資料)；可能從背景執行緒呼叫，UI 要自己轉回主執行緒
 
 
+def remove_stale_sessions(cache_dir: Path, older_than_hours: float = STALE_HOURS) -> int:
+    """清掉上次沒正常關閉留下的暫存資料夾，回傳清了幾個。"""
+    cutoff = time.time() - older_than_hours * 3600
+    removed = 0
+    for folder in cache_dir.glob("session-*"):
+        try:
+            if folder.is_dir() and folder.stat().st_mtime < cutoff:
+                shutil.rmtree(folder, ignore_errors=True)
+                removed += 1
+        except OSError:
+            pass
+    return removed
+
+
 class Player:
-    def __init__(self, notify: Notify, engine: str = "sapi", voice: str = "", speed: float = 1.5):
+    def __init__(self, notify: Notify, engine: str = "sapi", voice: str = "", speed: float = 1.5,
+                 cache_dir: Path | None = None):
         os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
         import pygame
 
@@ -40,7 +59,10 @@ class Player:
         self._cond = threading.Condition()
         self._closed = False
         self._loaded: Path | None = None
-        self._tmp = Path(tempfile.mkdtemp(prefix="novel-reader-"))
+        if cache_dir is not None:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            remove_stale_sessions(cache_dir)
+        self._tmp = Path(tempfile.mkdtemp(prefix="session-", dir=cache_dir))
         threading.Thread(target=self._produce, daemon=True, name="tts").start()
 
     # ------------------------------------------------------------------ 設定
