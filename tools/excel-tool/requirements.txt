@@ -9,5 +9,5 @@ infinity-treeview @ git+https://github.com/ChouYangEn0401/Python-Infinity-Treevi
 # pandas 3 的 astype(str) 會保留 NaN，「合併濃縮」(aggregate_with_separator)
 # 遇到有空格的欄位就 TypeError。要升 3.x 得先改那段並重跑全部操作。
 pandas>=2.0,<3
-openpyxl>=3.1
-tkinterdnd2>=0.3.0
+openpyxl>=3.1,<4
+tkinterdnd2>=0.3.0,<1
