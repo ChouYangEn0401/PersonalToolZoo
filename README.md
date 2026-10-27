@@ -7,20 +7,20 @@
 
 | 工具 | 說明 | 版本 | 指令裡的簡稱 | 原始碼 |
 |---|---|---|---|---|
-| **Git Helper Pro** | Git 指令 GUI 助手：多專案分頁、危險指令攔截、rebase/merge/stash 引導、繁中／簡中／英三語切換 | v1.6.4 | `githelper` | [tools/git-helper-pro/](tools/git-helper-pro/) |
+| **Git Helper Pro** | Git 指令 GUI 助手：多專案分頁、危險指令攔截、rebase/merge/stash 引導、繁中／簡中／英三語切換 | v1.6.5 | `githelper` | [tools/git-helper-pro/](tools/git-helper-pro/) |
 | **Encrypter** | 檔案／文字加密 GUI，自訂 `.isd` 格式，支援多種演算法與 Mixture（多階段）加密模式 | v0.3.0 | `enc` | [tools/encrypter/](tools/encrypter/) |
 | **Table Format Converter** | 貼上 Tab 分隔或 Markdown 表格即時預覽，一鍵輸出 MD／Tab／CSV／XLSX | v1.0.0 | `table` | [tools/table-format-converter/](tools/table-format-converter/) |
 | **HashMyFile** | 拖放檔案或資料夾計算 MD5／SHA-1／SHA-256／CRC32，內容相同的檔案自動標色；貼上雜湊值即可驗證 | v0.2.0 | `hash` | [tools/hash-my-file/](tools/hash-my-file/) |
 | **Advanced Excel Tool** | 分頁式 Excel 工作台：核心整理（可疊加／undo）、多檔合併、diff 比較＋AB 審核 | v0.1.0 | `excel` | [tools/excel-tool/](tools/excel-tool/) |
 | **Git Diff Statistics** | 指定兩個 commit／branch，統計各副檔名的檔案數與增刪行數 | v1.0.0 | `diff` | [tools/git-diff-stats/](tools/git-diff-stats/) |
-| **Video Notes** | 影片網址 → 下載 → 逐字稿（GPU Whisper）→ AI 依影片類型整理成 Notion 筆記；本機網頁 GUI＋CLI＋HTTP 串接 | v2.0.0 | `notes` | [tools/video-notes/](tools/video-notes/) |
-| **Video Downloader** | yt-dlp 的本機網頁 GUI：約 1800 個網站與 m3u8 串流、畫質預設、播放清單、佇列與續傳、書籤小工具 | v2.0.0 | `downloader` | [tools/video-downloader/](tools/video-downloader/) |
-| **Better Prompt** | 貼上文字選模式，交給 AI 改寫：整理、摘要、Prompt 優化等 24 種模式。預設用 Claude 訂閱（不需要金鑰），也可以選 OpenAI／Gemini／Claude API | v1.1.0 | `prompt` | [tools/better-prompt/](tools/better-prompt/) |
+| **Video Notes** | 影片網址 → 下載 → 逐字稿（GPU Whisper）→ AI 依影片類型整理成 Notion 筆記；本機網頁 GUI＋CLI＋HTTP 串接 | v2.1.0 | `notes` | [tools/video-notes/](tools/video-notes/) |
+| **Video Downloader** | yt-dlp 的本機網頁 GUI：約 1800 個網站與 m3u8 串流、畫質預設、播放清單、佇列與續傳、書籤小工具 | v2.1.0 | `downloader` | [tools/video-downloader/](tools/video-downloader/) |
+| **Better Prompt** | 貼上文字選模式，交給 AI 改寫：整理、摘要、Prompt 優化等 24 種模式。預設用 Claude 訂閱（不需要金鑰），也可以選 OpenAI／Gemini／Claude API | v1.2.0 | `prompt` | [tools/better-prompt/](tools/better-prompt/) |
 | **Super File Converter** | 圖片／影片／PDF／表格轉換工作台，含「設好規則直接拖檔」的快速轉換分頁 | v1.1.0 | `fast` | [tools/fast-file-converter/](tools/fast-file-converter/) |
-| **Novel Reader** | 長文朗讀：Windows 內建語音或 Google 語音、可調語速、KTV 式字幕、記住讀到哪 | v2.0.0 | `reader` | [tools/novel-reader/](tools/novel-reader/) |
-| **File Renamer** | 拖放檔案，用正規表達式或雜湊批次改名；先預覽、擋下衝突、可以復原 | v1.1.0 | `renamer` | [tools/file-renamer/](tools/file-renamer/) |
+| **Novel Reader** | 長文朗讀：Windows 內建語音或 Google 語音、可調語速、KTV 式字幕、記住讀到哪 | v2.1.0 | `reader` | [tools/novel-reader/](tools/novel-reader/) |
+| **File Renamer** | 用一串正規表達式規則（或雜湊）批次改名，可整個資料夾掃、預設只改主檔名；先預覽、擋下衝突、關掉再開也能復原 | v2.0.0 | `renamer` | [tools/file-renamer/](tools/file-renamer/) |
 | **Better File Finder** | 多關鍵字、排除、模糊比對的檔案搜尋，也能搜尋文字檔內容 | v1.1.0 | `finder` | [tools/better-file-finder/](tools/better-file-finder/) |
-| **Random Icon Maker** | 輸入種子產生 9 種演算法的隨機圖示，預覽後存成 ICO／PNG | v1.1.0 | `icon` | [tools/random-icon-maker/](tools/random-icon-maker/) |
+| **Random Icon Maker** | 輸入種子產生 9 種演算法的隨機圖示，預覽後存成 ICO／PNG | v1.2.0 | `icon` | [tools/random-icon-maker/](tools/random-icon-maker/) |
 | **Folder Cover** | 把資料夾在檔案總管裡的圖示換成裡面的一張圖；可整批套用、隨時恢復預設 | v1.0.0 | `cover` | [tools/folder-cover/](tools/folder-cover/) |
 
 Video Notes 與 Video Downloader 是本機網頁程式：執行後會開瀏覽器，主控台視窗關掉就停止。
