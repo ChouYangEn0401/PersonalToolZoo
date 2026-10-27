@@ -31,7 +31,7 @@
 ## 🚀 快速上手
 1. 執行程式： 
 ```powershell
-.\tools\hash-my-file\.venv\Scripts\python.exe tools\hash-my-file\HashMyFile.py
+.\tools\hash-my-file\run.bat                 # 從原始碼執行（自動用 tools\hash-my-file\.venv）
 
 # 打包成 exe → dist\hash-my-file\
 .\scripts\build.ps1 hash-my-file

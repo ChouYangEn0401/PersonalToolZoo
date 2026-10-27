@@ -23,8 +23,7 @@
 以下在 PersonalToolZoo repo 根目錄執行：
 
 ```powershell
-.\scripts\setup-venv.ps1 better-file-finder        # 只用標準庫 → 共用根目錄的 .venv
-.\.venv\Scripts\python.exe tools\better-file-finder\main.py
+.\tools\better-file-finder\run.bat                 # 從原始碼執行（只用標準庫 → 共用根目錄的 .venv，沒有就自動建）
 .\scripts\build.ps1 better-file-finder
 ```
 

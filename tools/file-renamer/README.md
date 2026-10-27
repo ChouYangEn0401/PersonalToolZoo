@@ -24,8 +24,7 @@
 以下在 PersonalToolZoo repo 根目錄執行：
 
 ```powershell
-.\scripts\setup-venv.ps1 file-renamer
-.\tools\file-renamer\.venv\Scripts\python.exe tools\file-renamer\main.py
+.\tools\file-renamer\run.bat                 # 從原始碼執行（自動用 tools\file-renamer\.venv，沒有就建好）
 .\scripts\build.ps1 file-renamer             # 打包成 exe
 ```
 

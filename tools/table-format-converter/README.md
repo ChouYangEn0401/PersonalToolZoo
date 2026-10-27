@@ -43,7 +43,7 @@ cd PersonalToolZoo
 ## 使用方式
 
 ```powershell
-.\tools\table-format-converter\.venv\Scripts\python.exe tools\table-format-converter\GUI_TableFormatConverter.py
+.\tools\table-format-converter\run.bat       # 從原始碼執行（自動用 tools\table-format-converter\.venv）
 
 # 打包成 exe → dist\table-format-converter\
 .\scripts\build.ps1 table-format-converter

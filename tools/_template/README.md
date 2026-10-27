@@ -14,8 +14,9 @@
 # 建環境（有第三方套件 → tools\__TOOL_NAME__\.venv；只用標準庫 → 根目錄共用 .venv）
 .\scripts\setup-venv.ps1 __TOOL_NAME__
 
-# 直接跑（有專屬 venv 的話把 .\.venv 換成 .\tools\__TOOL_NAME__\.venv）
-.\.venv\Scripts\python.exe tools\__TOOL_NAME__\main.py
+# 從原始碼執行（雙擊也可以）：run.bat 會自動用這個工具自己的環境，沒有就建好
+.\tools\__TOOL_NAME__\run.bat
+.\tools\__TOOL_NAME__\run.bat --check     # 只確認環境與 import，不開程式
 
 # 打包成 exe，並實際開起來檢查有沒有崩潰
 .\scripts\build.ps1 __TOOL_NAME__

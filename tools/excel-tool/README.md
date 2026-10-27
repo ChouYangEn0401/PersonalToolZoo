@@ -23,8 +23,9 @@ pandas 釘在 2.x（原因見該檔註解）。
 ```powershell
 .\scripts\setup-venv.ps1 excel-tool          # 建立隔離環境（只要一次，需要 git 與網路）
 
+.\tools\excel-tool\run.bat                  # GUI（從原始碼執行，自動用 tools\excel-tool\.venv）
+
 cd tools\excel-tool
-.\.venv\Scripts\python.exe GUI_AdvancedExcelTool.py   # GUI
 .\.venv\Scripts\python.exe -m excel_tool.cli list     # 列出可用操作（CLI 與 GUI 共用核心）
 .\.venv\Scripts\python.exe -m excel_tool.cli apply drop_columns --in a.xlsx --out b.xlsx --param columns=foo,bar
 cd ..\..

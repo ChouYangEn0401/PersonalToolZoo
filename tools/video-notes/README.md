@@ -10,11 +10,9 @@
 以下在 PersonalToolZoo repo 根目錄執行：
 
 ```powershell
-.\scripts\setup-venv.ps1 video-notes          # 建專屬環境（含 GPU 用的 cuBLAS / cuDNN，約 2 GB）
-$py = ".\tools\video-notes\.venv\Scripts\python.exe"
-
-& $py tools\video-notes\VideoNotes.py                         # GUI：自動開瀏覽器 http://127.0.0.1:8766
-& $py tools\video-notes\VideoNotes.py <網址> [選項]            # CLI
+.\tools\video-notes\run.bat                               # GUI：自動開瀏覽器 http://127.0.0.1:8766
+.\tools\video-notes\run.bat <網址> [選項]                     # CLI（後面的參數原封不動交給程式）
+# 第一次會自動建 tools\video-notes\.venv（含 GPU 用的 cuBLAS / cuDNN，約 2 GB）
 .\scripts\build.ps1 video-notes                               # 打包成 exe（雙擊開 GUI，帶參數就是 CLI）
 ```
 

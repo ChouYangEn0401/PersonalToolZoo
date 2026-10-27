@@ -16,9 +16,9 @@
 .\scripts\setup-venv.ps1 encrypter
 ```
 
-啟動 GUI：
+啟動 GUI（從原始碼執行，自動用 tools\encrypter\.venv；雙擊 run.bat 也可以）：
 ```powershell
-.\tools\encrypter\.venv\Scripts\python.exe tools\encrypter\crypto_tool\GUI__Encrypter.py
+.\tools\encrypter\run.bat
 ```
 
 執行測試（pytest 是開發用，不在 requirements 裡；要在 `tools\encrypter` 底下跑，測試才 import 得到 `crypto_tool`）：

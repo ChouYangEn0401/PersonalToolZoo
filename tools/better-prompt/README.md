@@ -20,8 +20,7 @@
 以下在 PersonalToolZoo repo 根目錄執行：
 
 ```powershell
-.\scripts\setup-venv.ps1 better-prompt                                   # 建專屬環境 tools\better-prompt\.venv
-.\tools\better-prompt\.venv\Scripts\python.exe tools\better-prompt\GUI__BetterPrompt.py
+.\tools\better-prompt\run.bat                                            # 從原始碼執行（自動用 tools\better-prompt\.venv，沒有就建好）
 .\scripts\build.ps1 better-prompt -Smoke                                 # 打包成 exe
 ```
 

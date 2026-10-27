@@ -11,11 +11,8 @@
 以下在 PersonalToolZoo repo 根目錄執行：
 
 ```powershell
-.\scripts\setup-venv.ps1 video-downloader
-$py = ".\tools\video-downloader\.venv\Scripts\python.exe"
-
-& $py tools\video-downloader\VideoDownloader.py                     # GUI：自動開瀏覽器 http://127.0.0.1:8765
-& $py tools\video-downloader\VideoDownloader.py <網址> -p 1080p      # CLI
+.\tools\video-downloader\run.bat                                # GUI：自動開瀏覽器 http://127.0.0.1:8765
+.\tools\video-downloader\run.bat <網址> -p 1080p                    # CLI（後面的參數原封不動交給程式）
 .\scripts\build.ps1 video-downloader                                # 打包成 exe（雙擊開 GUI，帶參數就是 CLI）
 ```
 

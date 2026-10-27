@@ -22,8 +22,7 @@
 以下在 PersonalToolZoo repo 根目錄執行：
 
 ```powershell
-.\scripts\setup-venv.ps1 novel-reader
-.\tools\novel-reader\.venv\Scripts\python.exe tools\novel-reader\NovelReader.py
+.\tools\novel-reader\run.bat                 # 從原始碼執行（自動用 tools\novel-reader\.venv，沒有就建好）
 .\scripts\build.ps1 novel-reader
 ```
 

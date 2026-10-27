@@ -7,7 +7,7 @@
 只用標準庫，用 PersonalToolZoo 根目錄共用的 `.venv` 即可。在 repo 根目錄執行：
 
 ```powershell
-.\.venv\Scripts\python.exe tools\git-diff-stats\GUI_GitDiffStatistics.py
+.\tools\git-diff-stats\run.bat               # 從原始碼執行（只用標準庫 → 共用根目錄的 .venv）
 
 # 打包成 exe → dist\git-diff-stats\
 .\scripts\build.ps1 git-diff-stats

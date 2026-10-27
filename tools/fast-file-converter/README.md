@@ -25,8 +25,7 @@
 以下在 PersonalToolZoo repo 根目錄執行：
 
 ```powershell
-.\scripts\setup-venv.ps1 fast-file-converter
-.\tools\fast-file-converter\.venv\Scripts\python.exe tools\fast-file-converter\GUI__FastFileConverter.py
+.\tools\fast-file-converter\run.bat         # 從原始碼執行（自動用 tools\fast-file-converter\.venv，沒有就建好）
 .\scripts\build.ps1 fast-file-converter
 ```
 

@@ -16,8 +16,7 @@
 以下在 PersonalToolZoo repo 根目錄執行：
 
 ```powershell
-.\scripts\setup-venv.ps1 random-icon-maker
-.\tools\random-icon-maker\.venv\Scripts\python.exe tools\random-icon-maker\main.py
+.\tools\random-icon-maker\run.bat            # 從原始碼執行（自動用 tools\random-icon-maker\.venv，沒有就建好）
 .\scripts\build.ps1 random-icon-maker
 ```
 
