@@ -1,0 +1,8 @@
+{
+  "name": "FolderCover",
+  "entry": "main.py",
+  "console": false,
+  "version_from": "version.py",
+  "tag_prefix": "FolderCover",
+  "collect_all": ["tkinterdnd2"]
+}

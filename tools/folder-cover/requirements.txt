@@ -1,0 +1,3 @@
+# Folder Cover 執行時依賴（打包工具在根目錄 requirements-dev.txt）
+pillow>=11.0,<13      # 把圖片裁成正方形、轉成多尺寸的 .ico
+tkinterdnd2>=0.4,<1   # 把資料夾或圖片拖進視窗
