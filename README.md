@@ -333,6 +333,7 @@ spec 裡所有路徑都以它為基準解析，**完全不依賴當下的工作�
 
 原本散在 `Python Projects\` 底下、各自有 git（或沒有）的小工具整批搬進來。
 工作在 worktree 的分支 `feat/tool-migration` 上做；2026-10-23 整理成 80 個小 commit，直接接在 master 後面（線性歷史，沒有 merge commit）。
+那條分支 2026-10-27 已經刪除：把它 merge 進 80 個 commit 的最後一個（`fb94f8e`）得到的內容完全不變，表示它的東西都在 master 裡。
 這些不是這個 repo 的分支，所以不走 merge：每個工具先有一個 **「原封不動搬進來」** 的 commit
 （`chore(<tool>): import … verbatim`，commit 訊息寫了來源的 commit），之後才是整理與修正的 commit——
 想看改了什麼，對那個 import commit 做 diff 就好。
@@ -353,7 +354,18 @@ spec 裡所有路徑都以它為基準解析，**完全不依賴當下的工作�
 | `。HashMyFile` | 併進既有的 `tools/hash-my-file` | 它就是表格版的前身；CRC32 與「貼上雜湊值比對」併回來，沒有另開工具 |
 | `Change Folder Cover (failes)` | `tools/folder-cover` | 作者標了 failed；2026-10-23 改用 Windows 的 `SHGetSetFolderCustomSettings` 重做成能用的工具（失敗原因見工具 README） |
 
-沒搬的東西：各專案的 `.venv`、`.env`（API 金鑰）、`data/`、`output/`、`downloads/`（產生的影音與個人資料）。
-原本的資料夾都還留在 `Python Projects\`，沒有刪除。刪之前注意：上面這些沒搬的東西只存在原資料夾裡，
-例如 `VideoDownloader\downloads\`（約 21 GB 下載的影片）、`VideoToSimpleNotion\data\`（約 1.7 GB）、各專案 `.env` 裡的金鑰，要留的先備份；
-原本有 git 的專案，也先確認沒有只存在本機、還沒推上遠端的 commit。
+程式碼之外的東西 2026-10-23～27 也搬好了，每一項都比對過搬前搬後的檔案數與大小，全部不進版控：
+
+| 東西 | 搬到 |
+|---|---|
+| `VideoDownloader\downloads\`（2385 個檔案、約 20.6 GB 影片） | 「下載」資料夾的 `Video Downloader\舊版 VideoDownloader\` |
+| `VideoToSimpleNotion\data\`（42 個檔案、約 1.6 GB） | 「下載」資料夾的 `Video Notes\舊版 VideoToSimpleNotion\` |
+| `VideoToSimpleNotion\extensions\` | `tools\video-notes\data\legacy\extensions\` |
+| `。My Internet Novel Reader\output\`、`data\book_links.json`、`My Voice Assistant\temp\` | `tools\novel-reader\data\legacy\` |
+| `64x64 Random Icon Maker\ouputs\`（167 個圖示） | `tools\random-icon-maker\data\icons\` |
+| `。Better Prompt` 的 `model_recommendations.json`（改過的模型對照）與設定 | `tools\better-prompt\data\` |
+| 各專案 `.env`、`%APPDATA%\PersonalToolZoo\keys.env` 裡的金鑰 | 專案根目錄的 `.env` |
+| Whisper 模型（原本在 `~\.cache\huggingface`，約 1.5 GB） | `tools\video-notes\data\models\` |
+
+原本的資料夾還留在 `Python Projects\`，裡面只剩舊的 venv、build 產物與腳手架；
+各專案的 git 歷史只在本機，使用者決定不另外保存。要不要刪見 [docs/OPEN_ISSUES.md](docs/OPEN_ISSUES.md)。
