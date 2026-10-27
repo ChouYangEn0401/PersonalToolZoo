@@ -1,7 +1,7 @@
 # PersonalToolZoo
 
-個人小工具集散地。一個 repo、一條 branch，每個工具住在 `tools/` 底下自己的資料夾裡，
-各自有隔離的環境，共用同一套 build／release 流程。
+個人小工具集散地。每個工具住在 `tools/` 底下自己的資料夾裡，有自己的環境、版本號、release tag
+和開發線（`dev/<工具資料夾>` 分支），共用同一套 build／release 流程；`master` 是主線。
 
 ## 工具一覽
 
@@ -146,6 +146,28 @@ Advanced Excel Tool、Better Prompt、Video Notes 第一次建環境還需要 gi
 - build 或冒煙測試失敗 → 把版本檔還原，不 commit、不打 tag
 
 產物在 `dist\<工具資料夾>\` 裡，拿去上傳／發給別人即可。
+
+## 開發線（每個工具一條 branch）
+
+`master` 是主線：發版、tag、跨工具的修改都在這裡。每個工具另外有自己的開發線 `dev/<工具資料夾>`
+（例如 `dev/file-renamer`），新功能在那裡做，做完 merge 回 master 再發版：
+
+```powershell
+git switch dev/file-renamer            # 1. 切到這個工具的開發線
+git merge master                       # 2. 先把 master 的新東西帶進來（共用程式、其他工具的修正、上次的 release commit）
+#    …改 tools\file-renamer\、用 run.bat 試跑、跑交接段落寫的測試、commit…
+git switch master
+git merge --no-ff dev/file-renamer     # 3. 收回 master（--no-ff 會留一個 merge commit，看得出這段是在開發線上做的）
+.\scripts\release.ps1 renamer minor    # 4. 在 master 上發版
+git push origin master dev/file-renamer --follow-tags
+```
+
+- 開發線只改自己的 `tools/<工具>/`（和本頁工具表的那一列）。`libs/`、`scripts/`、根目錄的文件會影響好幾個工具，直接在 master 上改。
+- **發版只在 master 上做**：`release.ps1` 在哪個分支執行，release commit 和 tag 就落在哪個分支。
+- `.venv\`、`data\`、`.env` 不進版控，切換分支不會動到它們。
+- 想同時開兩個工具、或不想切換主資料夾的分支，用 worktree：
+  `git worktree add ..\_worktrees\file-renamer dev/file-renamer`，做完 `git worktree remove ..\_worktrees\file-renamer`。
+  worktree 是另一份資料夾：第一次 `run.bat` 會在裡面另建環境，`.env` 和 `data\` 也不會跟過去（需要就複製一份）。
 
 ## 環境隔離規則
 

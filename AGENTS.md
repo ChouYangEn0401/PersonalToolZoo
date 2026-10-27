@@ -6,7 +6,8 @@
 ## 這個 repo 是什麼
 
 個人小工具的 monorepo。每個工具住在 `tools/<kebab-name>/`，彼此獨立：
-各自的依賴、各自的 venv、各自的版本號與 release tag，共用 `scripts/` 裡的一套 build／release 流程。
+各自的依賴、各自的 venv、各自的版本號與 release tag、各自的開發線 `dev/<kebab-name>`，
+共用 `scripts/` 裡的一套 build／release 流程。`master` 是主線。
 平台是 **Windows**（主要是 Windows PowerShell 5.1、繁中系統 = cp950）。
 
 ## 不能破壞的規則
@@ -80,6 +81,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1 --chec
 它用 build 同一套規則選環境並自動修好，確保跑的跟打包的是同一組套件。
 
 選單收到空行／EOF 會當成取消，不會卡住，但也什麼都不會做。
+
+## 開發線
+
+使用者要每個工具在自己的分支上開發、做完再 merge 回來（2026-10-23）。流程與指令見 README「開發線」：
+
+- **改某個工具的程式**：在 `dev/<tool>` 上做（`git switch dev/<tool>`，或用 worktree），開工前先 `git merge master`。
+  做完、驗證過，回 master 用 `git merge --no-ff dev/<tool>` 收回來。
+- **跨工具的修改**（`libs/`、`scripts/`、根目錄文件、多個工具一起改）直接在 master 上做，不屬於任何一條開發線。
+- **發版只在 master**：先 merge 回 master 再跑 `release.ps1`（它在哪個分支執行就 commit／tag 在哪個分支）。
+- 新工具：`new-tool.ps1` 之後從 master 開 `git branch dev/<tool>`。
+- 使用者要求 push 時，連同動到的開發線一起推：`git push origin master dev/<tool> --follow-tags`。
 
 ## Commit 慣例
 
