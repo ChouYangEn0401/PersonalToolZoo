@@ -4,4 +4,4 @@ Package version source.
 Edit the __version__ value here to control application and build version.
 """
 
-__version__ = "1.6.4"
+__version__ = "1.6.5"
