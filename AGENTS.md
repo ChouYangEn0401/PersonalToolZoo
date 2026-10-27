@@ -102,6 +102,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1 --chec
 - 不 commit：`dist/`、`build/`、`.venv/`、`__pycache__/`（`.gitignore` 已擋）。
 - 不要 push、不要打 tag，除非使用者要求。`release(<tool>): vX.Y.Z` commit 與 tag 只由 `release.ps1` 產生。
 - 修改某個工具時，同一個 commit（或緊接的 docs commit）要更新該工具 README 的「交接」段落。
+- 做完一個階段（發版、收工具、改規則、搬資料）要更新 `docs/HANDOFF.html`（整個 repo 的現況）與
+  `docs/OPEN_ISSUES.md`（還沒處理、要使用者決定的事；處理完的移到「已解決」）。
+  HANDOFF.html 是獨立的 HTML（有自己的 `<!doctype>`、`<head>`），在本機用瀏覽器就能看；repo 是公開的，
+  裡面不要寫金鑰、個人資料、不在這個 repo 的私人專案細節。
 
 ## 把封存分支上的工具收進來
 

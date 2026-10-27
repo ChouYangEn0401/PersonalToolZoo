@@ -3,6 +3,12 @@
 個人小工具集散地。每個工具住在 `tools/` 底下自己的資料夾裡，有自己的環境、版本號、release tag
 和開發線（`dev/<工具資料夾>` 分支），共用同一套 build／release 流程；`master` 是主線。
 
+**交接文件**：整個 repo 現在的狀態（每個工具的用途、版本、開發線、資料放哪、驗證結果，AI 用金鑰還是 Claude 訂閱，
+舊專案去了哪裡）在 [docs/HANDOFF.html](docs/HANDOFF.html)
+（GitHub 只顯示 HTML 原始碼，要看排版請在本機用瀏覽器打開，或用
+[htmlpreview](https://htmlpreview.github.io/?https://github.com/ChouYangEn0401/PersonalToolZoo/blob/master/docs/HANDOFF.html)）；
+還沒處理、要決定的事在 [docs/OPEN_ISSUES.md](docs/OPEN_ISSUES.md)。
+
 ## 工具一覽
 
 | 工具 | 說明 | 版本 | 指令裡的簡稱 | 原始碼 |
@@ -217,6 +223,9 @@ PersonalToolZoo/
 ├─ build.bat / release.bat ← 雙擊用的入口
 ├─ requirements-dev.txt    ← 共用 build 工具鏈（pyinstaller 等），所有 venv 都裝
 ├─ .env.example            ← 金鑰與參數的範本；複製成 .env 再填（.env 不進版控）
+├─ docs/
+│  ├─ HANDOFF.html         ← 整個 repo 的交接（每個工具的現況、AI、資料、驗證、舊專案去處）
+│  └─ OPEN_ISSUES.md       ← 問題交接報告書：還沒處理、要決定的事
 ├─ .venv/                  ← 共用虛擬環境（只給只用標準庫的工具）
 ├─ libs/toolzoo/           ← 工具之間共用的程式（AI 呼叫層、yt-dlp 設定、web app 啟動器…），見 libs/README.md
 ├─ scripts/

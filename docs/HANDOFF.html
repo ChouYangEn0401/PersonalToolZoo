@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PersonalToolZoo 交接</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* 版面：單欄文件。現況 → 工具總表 → 每個工具一張百科卡 → AI → 資料與金鑰 → 分支 → 舊專案 → 驗證 → 時間線 → 要你決定 */
+:root {
+  --bg: #F3F5F8;
+  --panel: #FFFFFF;
+  --ink: #18202D;
+  --muted: #586274;
+  --line: #DAE0E8;
+  --accent: #2F55C4;
+  --accent-soft: #E6ECFB;
+  --ok: #24724A; --ok-bg: #E2F2E8;
+  --warn: #8F5800; --warn-bg: #FBEFD8;
+  --info: #5A4BB5; --info-bg: #ECE9FA;
+  --code-bg: #EEF1F6;
+  --font-display: "IBM Plex Sans", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-body: "Noto Sans TC", "IBM Plex Sans", "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, "Cascadia Mono", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11151C; --panel: #181E28; --ink: #E4E9F1; --muted: #9AA5B6; --line: #2A3342;
+  --accent: #8EA9F5; --accent-soft: #1E2945;
+  --ok: #7FD1A2; --ok-bg: #18301F; --warn: #F0B65C; --warn-bg: #36290F; --info: #B5AAF5; --info-bg: #262046;
+  --code-bg: #202836; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #11151C; --panel: #181E28; --ink: #E4E9F1; --muted: #9AA5B6; --line: #2A3342;
+  --accent: #8EA9F5; --accent-soft: #1E2945;
+  --ok: #7FD1A2; --ok-bg: #18301F; --warn: #F0B65C; --warn-bg: #36290F; --info: #B5AAF5; --info-bg: #262046;
+  --code-bg: #202836; color-scheme: dark }
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+[hidden] { display: none !important; }
+.wrap { max-width: 960px; margin: 0 auto; padding-block: 32px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 40px; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.3; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(1.7rem, 5vw, 2.3rem); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.3rem; font-weight: 700; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; scroll-margin-top: 16px; }
+h3 { font-size: 1.05rem; font-weight: 600; }
+p { margin: 0; }
+ul { margin: 0; padding-left: 1.2em; }
+li { margin: 2px 0; }
+.eyebrow { font-family: var(--font-mono); font-size: .78rem; color: var(--muted); letter-spacing: .05em; }
+.lead { color: var(--muted); max-width: 48em; }
+section { display: grid; gap: 14px; }
+.note { color: var(--muted); font-size: .92rem; max-width: 52em; }
+code { font-family: var(--font-mono); font-size: .84em; background: var(--code-bg); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+b { font-weight: 600; }
+
+/* 文件地圖與目錄 */
+.map { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.map > div { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; font-size: .9rem; min-width: 0; }
+.map .k { font-family: var(--font-mono); font-size: .82rem; color: var(--accent); overflow-wrap: anywhere; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 8px; font-size: .88rem; }
+.toc a { text-decoration: none; padding: 3px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); }
+.toc a:hover { border-color: var(--accent); color: var(--accent); }
+
+/* 現況 */
+.status { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; min-width: 0; align-content: start; }
+.stat .k { font-size: .8rem; color: var(--muted); letter-spacing: .03em; }
+.stat .v { font-family: var(--font-display); font-weight: 600; font-size: 1.08rem; font-variant-numeric: tabular-nums; }
+.stat .d { font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
+.stat.warn { border-color: var(--warn); }
+
+/* 標籤 */
+.pill { font-size: .74rem; font-weight: 500; letter-spacing: .03em; padding: 1px 9px; border-radius: 999px; white-space: nowrap; font-family: var(--font-body); }
+.ok { color: var(--ok); background: var(--ok-bg); }
+.warn { color: var(--warn); background: var(--warn-bg); }
+.info { color: var(--info); background: var(--info-bg); }
+.plain { color: var(--muted); background: var(--code-bg); }
+
+/* 表格 */
+.tablewrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: .88rem; line-height: 1.55; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font-size: .75rem; letter-spacing: .05em; color: var(--muted); font-weight: 600; background: var(--bg); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.mono { font-family: var(--font-mono); font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.num { font-family: var(--font-mono); font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.group td { background: var(--accent-soft); font-weight: 600; font-size: .8rem; letter-spacing: .03em; }
+td a { text-decoration: none; }
+.tools-table td:nth-child(5), .tools-table td:nth-child(8) { white-space: nowrap; }
+
+/* 工具百科卡 */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; font-size: .84rem; }
+.chips a { text-decoration: none; font-family: var(--font-mono); font-size: .8rem; padding: 2px 9px; border-radius: 6px; background: var(--code-bg); color: var(--ink); }
+.chips a:hover { color: var(--accent); }
+.cards { display: grid; gap: 14px; }
+.tool { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 10px; min-width: 0; scroll-margin-top: 16px; }
+.tool header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+.tool header .short { font-family: var(--font-mono); font-size: .8rem; color: var(--muted); }
+.tool header .ver { font-family: var(--font-mono); font-size: .85rem; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+.tool .purpose { max-width: 52em; }
+dl.facts { display: grid; grid-template-columns: 4.6em minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: .9rem; border-top: 1px solid var(--line); padding-top: 10px; }
+dl.facts dt { color: var(--muted); font-size: .8rem; letter-spacing: .04em; padding-top: 2px; }
+dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+/* 清單列 */
+.list { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 4px 14px; padding: 13px 16px; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.id { font-family: var(--font-mono); font-weight: 600; font-size: .85rem; color: var(--accent); padding-top: 2px; }
+.date { font-family: var(--font-mono); font-size: .82rem; color: var(--muted); padding-top: 2px; font-variant-numeric: tabular-nums; }
+.body { min-width: 0; display: grid; gap: 4px; }
+.name { font-weight: 600; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; overflow-wrap: anywhere; }
+.what { color: var(--muted); font-size: .92rem; overflow-wrap: anywhere; }
+pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 14px; font-family: var(--font-mono); font-size: .8rem; line-height: 1.6; overflow-x: auto; max-width: 100%; }
+.answer { background: var(--panel); border: 1px solid var(--accent); border-radius: 10px; padding: 14px 16px; display: grid; gap: 6px; }
+.private { background: var(--panel); border: 1px dashed var(--info); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; }
+
+@media (max-width: 560px) {
+  .row { grid-template-columns: 1fr; }
+  .id, .date { padding-top: 0; }
+  dl.facts { grid-template-columns: 1fr; gap: 2px; }
+  dl.facts dd { margin-bottom: 6px; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header style="display:grid; gap:12px">
+    <div class="eyebrow">2026-10-27 · PersonalToolZoo · master</div>
+    <h1>PersonalToolZoo 交接</h1>
+    <p class="lead">整個 repo 的大交接。hub 裡 15 個工具各自的用途、版本、開發線、資料放哪、驗證結果；AI 用的是金鑰還是 Claude 訂閱；<code>Python Projects\</code> 底下的舊專案去了哪裡。還沒處理、要你決定的事寫在另一份問題交接報告書 <a href="OPEN_ISSUES.md">docs/OPEN_ISSUES.md</a>。</p>
+    <div class="map">
+      <div><div class="k"><a href="../README.md">README.md</a></div>怎麼用、指令速查、規則的由來</div>
+      <div><div class="k"><a href="../AGENTS.md">AGENTS.md</a></div>動手之前必須知道的規則（給 AI agent 與接手的人）</div>
+      <div><div class="k">tools/&lt;工具&gt;/README.md</div>最後一段「交接」：入口、依賴、測試、已知問題</div>
+      <div><div class="k"><a href="OPEN_ISSUES.md">docs/OPEN_ISSUES.md</a></div>問題交接報告書：要你決定的事</div>
+    </div>
+    <nav class="toc" aria-label="目錄">
+      <a href="#now">現在的狀態</a><a href="#table">工具總表</a><a href="#wiki">工具百科</a><a href="#ai">AI 與金鑰</a>
+      <a href="#data">資料與金鑰放哪裡</a><a href="#branches">分支與開發線</a><a href="#old">舊專案去了哪裡</a>
+      <a href="#verify">怎麼驗證的</a><a href="#timeline">時間線</a><a href="#decide">要你決定</a>
+    </nav>
+  </header>
+
+  <section aria-labelledby="now">
+    <h2 id="now">現在的狀態</h2>
+    <div class="status">
+      <div class="stat"><span class="k">工具</span><span class="v">15 個</span><span class="d">每個都有自己的版本、tag 與開發線</span></div>
+      <div class="stat"><span class="k">打包</span><span class="v">15 / 15 OK</span><span class="d"><code>build.ps1 -All</code>，每個 exe 開 10 秒冒煙測試</span></div>
+      <div class="stat"><span class="k">測試</span><span class="v">12 組全過</span><span class="d">123 個測試＋Git Helper Pro 的語言載入檢查；3 個工具沒有自動化測試</span></div>
+      <div class="stat"><span class="k">從原始碼執行</span><span class="v">15 / 15 OK</span><span class="d"><code>run.ps1 --check-all</code>：每個工具用自己的環境 import 成功</span></div>
+      <div class="stat"><span class="k">機密掃描</span><span class="v">0 件</span><span class="d">所有分支與 tag 的每個檔案版本與 commit 訊息；<code>.env</code> 裡的金鑰值逐一比對</span></div>
+      <div class="stat"><span class="k">GitHub</span><span class="v">已 push</span><span class="d">master、26 個 tag、15 條開發線（2026-10-27）</span></div>
+      <div class="stat warn"><span class="k">要你決定</span><span class="v">5 件</span><span class="d">刪舊資料夾、舊分支、沒額度的金鑰等，見 <a href="#decide">最下面</a></span></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="table">
+    <h2 id="table">工具總表</h2>
+    <p class="note">「簡稱」是 <code>build.ps1</code>／<code>release.ps1</code>／<code>run.ps1</code> 用的名字。程式都在 <code>master</code>；每個工具的開發線 <code>dev/&lt;工具資料夾&gt;</code> 在 2026-10-27 從 master 開出來。版本號的唯一來源是各工具的 <code>__version__</code>，目前的版本都有對應的 tag。</p>
+    <div class="tablewrap">
+      <table class="tools-table">
+        <thead><tr><th scope="col">工具</th><th scope="col">簡稱</th><th scope="col">版本</th><th scope="col">開發線</th><th scope="col">類型</th><th scope="col">AI</th><th scope="col">打包</th><th scope="col">測試</th></tr></thead>
+        <tbody>
+          <tr class="group"><td colspan="8">原本就在 hub（從各自的封存分支收進來）</td></tr>
+          <tr><td><a href="#t-git-helper-pro">Git Helper Pro</a></td><td class="mono">githelper</td><td class="mono">1.6.5</td><td class="mono">dev/git-helper-pro</td><td>視窗＋主控台</td><td>無</td><td><span class="pill ok">OK</span></td><td>語言載入 ✓</td></tr>
+          <tr><td><a href="#t-encrypter">Encrypter</a></td><td class="mono">enc</td><td class="mono">0.3.0</td><td class="mono">dev/encrypter</td><td>視窗</td><td>無</td><td><span class="pill ok">OK</span></td><td>7 ✓</td></tr>
+          <tr><td><a href="#t-table-format-converter">Table Format Converter</a></td><td class="mono">table</td><td class="mono">1.0.0</td><td class="mono">dev/table-format-converter</td><td>視窗＋主控台</td><td>無</td><td><span class="pill ok">OK</span></td><td>沒有自動化測試</td></tr>
+          <tr><td><a href="#t-hash-my-file">HashMyFile</a></td><td class="mono">hash</td><td class="mono">0.2.0</td><td class="mono">dev/hash-my-file</td><td>視窗＋主控台</td><td>無</td><td><span class="pill ok">OK</span></td><td>3 ✓</td></tr>
+          <tr><td><a href="#t-excel-tool">Advanced Excel Tool</a></td><td class="mono">excel</td><td class="mono">0.1.0</td><td class="mono">dev/excel-tool</td><td>視窗＋CLI</td><td>無</td><td><span class="pill ok">OK</span></td><td>沒有自動化測試</td></tr>
+          <tr><td><a href="#t-git-diff-stats">Git Diff Statistics</a></td><td class="mono">diff</td><td class="mono">1.0.0</td><td class="mono">dev/git-diff-stats</td><td>視窗＋主控台</td><td>無</td><td><span class="pill ok">OK</span></td><td>沒有自動化測試</td></tr>
+          <tr class="group"><td colspan="8">2026-10 從 Python Projects\ 搬進來</td></tr>
+          <tr><td><a href="#t-video-notes">Video Notes</a></td><td class="mono">notes</td><td class="mono">2.1.0</td><td class="mono">dev/video-notes</td><td>本機網頁＋CLI</td><td>Claude 訂閱（預設）</td><td><span class="pill ok">OK</span></td><td>33 ✓</td></tr>
+          <tr><td><a href="#t-video-downloader">Video Downloader</a></td><td class="mono">downloader</td><td class="mono">2.1.0</td><td class="mono">dev/video-downloader</td><td>本機網頁＋CLI</td><td>無</td><td><span class="pill ok">OK</span></td><td>10 ✓</td></tr>
+          <tr><td><a href="#t-better-prompt">Better Prompt</a></td><td class="mono">prompt</td><td class="mono">1.2.0</td><td class="mono">dev/better-prompt</td><td>視窗</td><td>Claude 訂閱（預設）</td><td><span class="pill ok">OK</span></td><td>共用層 25 ✓</td></tr>
+          <tr><td><a href="#t-fast-file-converter">Super File Converter</a></td><td class="mono">fast</td><td class="mono">1.1.0</td><td class="mono">dev/fast-file-converter</td><td>視窗</td><td>無</td><td><span class="pill ok">OK</span></td><td>5 ✓</td></tr>
+          <tr><td><a href="#t-novel-reader">Novel Reader</a></td><td class="mono">reader</td><td class="mono">2.1.0</td><td class="mono">dev/novel-reader</td><td>視窗</td><td>無（Google 語音不需要金鑰）</td><td><span class="pill ok">OK</span></td><td>8 ✓</td></tr>
+          <tr><td><a href="#t-file-renamer">File Renamer</a></td><td class="mono">renamer</td><td class="mono">2.0.0</td><td class="mono">dev/file-renamer</td><td>視窗</td><td>無</td><td><span class="pill ok">OK</span></td><td>16 ✓</td></tr>
+          <tr><td><a href="#t-better-file-finder">Better File Finder</a></td><td class="mono">finder</td><td class="mono">1.1.0</td><td class="mono">dev/better-file-finder</td><td>視窗</td><td>無</td><td><span class="pill ok">OK</span></td><td>7 ✓</td></tr>
+          <tr><td><a href="#t-random-icon-maker">Random Icon Maker</a></td><td class="mono">icon</td><td class="mono">1.2.0</td><td class="mono">dev/random-icon-maker</td><td>視窗</td><td>無</td><td><span class="pill ok">OK</span></td><td>2 ✓</td></tr>
+          <tr><td><a href="#t-folder-cover">Folder Cover</a></td><td class="mono">cover</td><td class="mono">1.0.0</td><td class="mono">dev/folder-cover</td><td>視窗</td><td>無</td><td><span class="pill ok">OK</span></td><td>7 ✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="wiki">
+    <h2 id="wiki">工具百科</h2>
+    <p class="note">每個工具一張卡。「資料」寫的是它執行時存什麼、放哪裡，以及舊資料有沒有搬好、有沒有比對過；「驗證」是 2026-10-27 在 master 上實際跑的結果。更細的入口、依賴與坑在各工具 README 最後的「交接」。</p>
+    <div class="chips">
+      <a href="#t-git-helper-pro">git-helper-pro</a><a href="#t-encrypter">encrypter</a><a href="#t-table-format-converter">table-format-converter</a><a href="#t-hash-my-file">hash-my-file</a><a href="#t-excel-tool">excel-tool</a><a href="#t-git-diff-stats">git-diff-stats</a><a href="#t-video-notes">video-notes</a><a href="#t-video-downloader">video-downloader</a><a href="#t-better-prompt">better-prompt</a><a href="#t-fast-file-converter">fast-file-converter</a><a href="#t-novel-reader">novel-reader</a><a href="#t-file-renamer">file-renamer</a><a href="#t-better-file-finder">better-file-finder</a><a href="#t-random-icon-maker">random-icon-maker</a><a href="#t-folder-cover">folder-cover</a>
+    </div>
+    <div class="cards">
+
+      <article class="tool" id="t-git-helper-pro">
+        <header><h3>Git Helper Pro</h3><span class="short">githelper · tools/git-helper-pro</span><span class="ver">v1.6.5</span><span class="pill ok">穩定</span><span class="pill warn">分支上有未收的功能</span></header>
+        <p class="purpose">Git 指令的圖形介面：多專案分頁、危險指令攔截、rebase／merge／stash 引導、繁中／簡中／英三語切換。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>1.6.5（10/27 發版）修掉開發模式切換語言時會改寫有進版控的 <code>language_config.json</code>，選的語言改存 <code>data\</code>。</dd>
+          <dt>來源</dt><dd>封存分支 <code>feat/git_command_gui_helper/*</code>。開發線 <code>dev/git-helper-pro</code>，tag <code>GitHelperPro_v1.6.5</code>。</dd>
+          <dt>資料</dt><dd><code>data\language_config.json</code>（選的語言）與 log。版控裡的 <code>language_config.json</code> 只當預設值讀。沒有舊資料要搬。</dd>
+          <dt>AI</dt><dd>無</dd>
+          <dt>驗證</dt><dd>打包 OK（9.8 MB）。語言載入檢查通過（3 種語言都讀得到）。切換語言後版控檔不變（10/23 實測）。</dd>
+          <dt>注意</dt><dd>執行時電腦上要有 git。<code>feat/git_command_gui_helper/dev</code> 有一組帶參數的 fetch／pull 指令設定沒收（Q4）。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-encrypter">
+        <header><h3>Encrypter</h3><span class="short">enc · tools/encrypter</span><span class="ver">v0.3.0</span><span class="pill ok">穩定</span></header>
+        <p class="purpose">檔案與文字加密，自訂 <code>.isd</code> 格式，支援多種演算法與 Mixture（多階段）加密模式。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>這次沒改程式。10/27 幫 <code>pycryptodome</code>、<code>tkinterdnd2</code> 補上主版本上限（原本只寫 <code>&gt;=</code>）。</dd>
+          <dt>來源</dt><dd>封存分支 <code>feat/Encrypter/all_platform</code>。開發線 <code>dev/encrypter</code>，tag <code>Encrypter_v0.3.0</code>。</dd>
+          <dt>資料</dt><dd>不存設定，只寫你選的加密／解密輸出檔。</dd>
+          <dt>AI</dt><dd>無</dd>
+          <dt>驗證</dt><dd>打包 OK（19.3 MB）。7 個測試全過（用不需要 pytest 的方式跑，沒有往環境裡另外裝套件）。</dd>
+          <dt>注意</dt><dd><code>ttkbootstrap</code> 不能升 2.x（打包後一啟動就崩潰）。版本照 0.3.x 往下發；文件裡的 1.0～1.4 是開發時的內部編號。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-table-format-converter">
+        <header><h3>Table Format Converter</h3><span class="short">table · tools/table-format-converter</span><span class="ver">v1.0.0</span><span class="pill ok">穩定</span></header>
+        <p class="purpose">貼上 Tab 分隔或 Markdown 表格即時預覽，一鍵輸出 MD／Tab／CSV／XLSX。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>這次沒改程式。10/27 幫 <code>openpyxl</code> 補上主版本上限。</dd>
+          <dt>來源</dt><dd>封存分支 <code>feat/table_form_converter</code>。開發線 <code>dev/table-format-converter</code>，tag <code>TableFormatConverter_v1.0.0</code>。</dd>
+          <dt>資料</dt><dd>不存設定，只寫你選的輸出檔。</dd>
+          <dt>AI</dt><dd>無</dd>
+          <dt>驗證</dt><dd>打包 OK（10.9 MB）。沒有自動化測試。</dd>
+          <dt>注意</dt><dd>另有一個舊的重複 tag <code>Table_Format_Converter_v1.0.0</code>，可以不理它。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-hash-my-file">
+        <header><h3>HashMyFile</h3><span class="short">hash · tools/hash-my-file</span><span class="ver">v0.2.0</span><span class="pill ok">穩定</span><span class="pill warn">分支上有未收的功能</span></header>
+        <p class="purpose">拖放檔案或資料夾計算 MD5／SHA-1／SHA-256／CRC32，內容相同的檔案自動標色；貼上雜湊值就能驗證。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>0.2.0（10/23）把最早獨立版「。HashMyFile」的 CRC32 和「貼上雜湊值比對」併回來，沒有另開一個重複的工具（回饋 3-6）。10/27 補上 <code>tkinterdnd2</code> 上限。</dd>
+          <dt>來源</dt><dd>封存分支 <code>feat/hash_my_file_gui/all_platform</code>＋獨立版的功能。開發線 <code>dev/hash-my-file</code>，tag <code>HashMyFile_v0.2.0</code>。</dd>
+          <dt>資料</dt><dd>不寫任何檔案。</dd>
+          <dt>AI</dt><dd>無</dd>
+          <dt>驗證</dt><dd>打包 OK（9.8 MB）。3 個測試全過（四種雜湊、資料夾展開、比對）。</dd>
+          <dt>注意</dt><dd>分支上「只留重複檔、開啟、刪除」那個 commit 還沒收尾，沒收（Q4）。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-excel-tool">
+        <header><h3>Advanced Excel Tool</h3><span class="short">excel · tools/excel-tool</span><span class="ver">v0.1.0</span><span class="pill ok">穩定</span></header>
+        <p class="purpose">分頁式 Excel 工作台：核心整理（可疊加、可 undo）、多檔合併、diff 比較＋AB 審核。同一套操作也有命令列版。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>這次沒改程式。10/27 幫 <code>openpyxl</code>、<code>tkinterdnd2</code> 補上主版本上限。</dd>
+          <dt>來源</dt><dd>封存分支 <code>feat/ExcelTool</code>。開發線 <code>dev/excel-tool</code>，tag <code>ExcelTool_v0.1.0</code>。</dd>
+          <dt>資料</dt><dd>不存設定，只寫你選的輸出檔。</dd>
+          <dt>AI</dt><dd>無</dd>
+          <dt>驗證</dt><dd>打包 OK（33.4 MB）。沒有自動化測試；改了 <code>excel_tool/core</code> 就用 CLI 把動到的操作跑一次。</dd>
+          <dt>注意</dt><dd><code>pandas</code> 不能直接升 3.x（「合併濃縮」會壞）。第一次建環境要 git 與網路（<code>infinity-treeview</code> 從 GitHub 裝）。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-git-diff-stats">
+        <header><h3>Git Diff Statistics</h3><span class="short">diff · tools/git-diff-stats</span><span class="ver">v1.0.0</span><span class="pill ok">穩定</span><span class="pill warn">分支上有未收的功能</span></header>
+        <p class="purpose">指定兩個 commit 或 branch，統計各副檔名的檔案數與增刪行數。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>這次沒改程式。</dd>
+          <dt>來源</dt><dd>封存分支 <code>feat/git_diff_shower</code>（收到 BUILD 點 <code>0aba850</code>）。開發線 <code>dev/git-diff-stats</code>，tag <code>GitDiffStatistics_v1.0.0</code>。</dd>
+          <dt>資料</dt><dd>不寫任何檔案。</dd>
+          <dt>AI</dt><dd>無</dd>
+          <dt>驗證</dt><dd>打包 OK（9.7 MB）。沒有自動化測試。</dd>
+          <dt>注意</dt><dd>執行時電腦上要有 git。分支上之後的 3 個 commit（副檔名篩選分類、no-git snapshot 分頁）沒收（Q4）。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-video-notes">
+        <header><h3>Video Notes</h3><span class="short">notes · tools/video-notes</span><span class="ver">v2.1.0</span><span class="pill info">重寫</span><span class="pill ok">Claude 訂閱</span></header>
+        <p class="purpose">貼上影片網址 → 下載 → 語音辨識成逐字稿（GPU Whisper）→ AI 依影片類型整理成可以直接貼進 Notion 的筆記。本機網頁介面、命令列、HTTP 串接都能用。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>2.0 照你寫的 <code>update_plan.txt</code> 重寫。2.1.0（10/27）資料與 Whisper 模型改放 <code>data\</code>，金鑰改讀專案的 <code>.env</code>。</dd>
+          <dt>來源</dt><dd><code>Python Projects\VideoToSimpleNotion</code>。開發線 <code>dev/video-notes</code>，tag <code>VideoNotes_v2.1.0</code>。</dd>
+          <dt>資料</dt><dd><code>data\settings.json</code>、<code>prompts\</code>（自訂提示詞）、<code>models\</code>（Whisper medium 1.5 GB，從 <code>~\.cache\huggingface</code> 搬來，離線找得到）、<code>legacy\extensions\</code>。筆記預設輸出到「下載\Video Notes」；舊專案的 42 個檔案（1.6 GB）在「下載\Video Notes\舊版 VideoToSimpleNotion」，搬前搬後檔案數與大小一致。</dd>
+          <dt>AI</dt><dd>預設 Claude 訂閱（sonnet），可選 OpenAI／Gemini／Claude API（金鑰在 <code>.env</code>）。逐字稿用本機的 Whisper，不經過 AI 服務。</dd>
+          <dt>驗證</dt><dd>打包 OK（104.4 MB）。33 個測試全過（離線）。10/06 打包版實際跑完一支影片（自動判斷類型 → 筆記）。</dd>
+          <dt>注意</dt><dd>要 ffmpeg，以及 Node／Bun／Deno 其中一個（yt-dlp 抓 YouTube 用）。Claude 訂閱每次最多等 900 秒。import commit 少了 3 個小腳手架檔案，見<a href="#old">舊專案去了哪裡</a>。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-video-downloader">
+        <header><h3>Video Downloader</h3><span class="short">downloader · tools/video-downloader</span><span class="ver">v2.1.0</span><span class="pill info">重寫</span></header>
+        <p class="purpose">yt-dlp 的本機網頁介面：約 1800 個網站與 m3u8 串流、畫質預設、播放清單、佇列與續傳、書籤小工具。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>2.0 改用 yt-dlp 重寫成本機網頁程式。2.1.0（10/27）設定與紀錄改放 <code>data\</code>。</dd>
+          <dt>來源</dt><dd><code>Python Projects\VideoDownloader</code>（舊的 M3U8 下載器只留在 import commit）。開發線 <code>dev/video-downloader</code>，tag <code>VideoDownloader_v2.1.0</code>。</dd>
+          <dt>資料</dt><dd><code>data\settings.json</code>、<code>history.json</code>。影片下載到「下載\Video Downloader」；舊專案下載的 2385 個檔案（20.6 GB）在「下載\Video Downloader\舊版 VideoDownloader」，搬前搬後一致。</dd>
+          <dt>AI</dt><dd>無</dd>
+          <dt>驗證</dt><dd>打包 OK（21.9 MB）。10 個測試全過：自己的環境沒有 <code>httpx2</code>，web API 那 2 個會略過；用 Video Notes 的環境跑是 10 / 10。</dd>
+          <dt>注意</dt><dd>只做通用下載，不寫繞過存取限制的程式，DRM 內容不支援。YouTube 抓不到時先在範圍內升級 yt-dlp。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-better-prompt">
+        <header><h3>Better Prompt</h3><span class="short">prompt · tools/better-prompt</span><span class="ver">v1.2.0</span><span class="pill ok">Claude 訂閱</span></header>
+        <p class="purpose">貼上一段文字、選一種模式（整理、摘要、Prompt 優化等 24 種），交給 AI 改寫成更好的版本。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>1.2.0（10/27）金鑰改讀專案的 <code>.env</code>、設定改放 <code>data\</code>，不再讀寫家目錄和 <code>%APPDATA%</code>。</dd>
+          <dt>來源</dt><dd><code>Python Projects\。Better Prompt</code>（轉換引擎搬進 <code>libs/toolzoo/ai</code>，跟 Video Notes 共用）。開發線 <code>dev/better-prompt</code>，tag <code>BetterPrompt_v1.2.0</code>。</dd>
+          <dt>資料</dt><dd><code>data\settings.json</code>（v1 設定裡的 OpenAI 模型 gpt-5.2 與 temperature 1.4 都搬過來，服務用新的預設 Claude 訂閱）、<code>model_recommendations.json</code>（從舊版 <code>dist\</code> 搬來，含你改過的模型對照）。金鑰在專案的 <code>.env</code>。</dd>
+          <dt>AI</dt><dd>預設 Claude 訂閱（sonnet），可選 OpenAI／Gemini／Claude API。</dd>
+          <dt>驗證</dt><dd>打包 OK（20.1 MB）。共用層 25 個測試全過。用假的 Claude 回覆把畫面走一遍（預設服務、轉換、切換服務、存設定）通過。10/27 用 Claude 訂閱實際呼叫 haiku，6.7 秒回覆正常。</dd>
+          <dt>注意</dt><dd>Claude 訂閱一次回整段，沒有串流。改 <code>libs/toolzoo/ai</code> 會同時影響 Video Notes，兩個都要重新測。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-fast-file-converter">
+        <header><h3>Super File Converter</h3><span class="short">fast · tools/fast-file-converter</span><span class="ver">v1.1.0</span><span class="pill ok">穩定</span></header>
+        <p class="purpose">圖片、影片、PDF、表格的常用轉換都在一個視窗裡，也有「設好規則直接拖檔」的快速轉換分頁。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>1.1.0（10/23）兩個舊視窗合成一個，修掉 ffmpeg 警告一多就卡死、轉完 Excel 原檔一直被鎖。</dd>
+          <dt>來源</dt><dd><code>Python Projects\。Fast File Converter</code>。開發線 <code>dev/fast-file-converter</code>，tag <code>SuperFileConverter_v1.1.0</code>。</dd>
+          <dt>資料</dt><dd>不存設定，只寫轉換的輸出檔。舊專案沒有資料要搬。</dd>
+          <dt>AI</dt><dd>無</dd>
+          <dt>驗證</dt><dd>打包 OK（135.4 MB）。5 個測試全過（圖片、影片、表格、PDF 實際轉檔，主視窗 7 個分頁）。</dd>
+          <dt>注意</dt><dd>這個工具用 pandas 3.x（跟 Excel Tool 相反）。影片轉換要 ffmpeg。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-novel-reader">
+        <header><h3>Novel Reader</h3><span class="short">reader · tools/novel-reader</span><span class="ver">v2.1.0</span><span class="pill info">重寫</span></header>
+        <p class="purpose">長文朗讀：Windows 內建語音或 Google 語音、可調語速、KTV 式字幕跟著目前這一段走、記住讀到哪。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>2.0 重寫（直接呼叫 SAPI、邊播邊產生）。2.1.0（10/27）設定與語音暫存改放 <code>data\</code>。</dd>
+          <dt>來源</dt><dd><code>Python Projects\。My Internet Novel Reader</code>＋<code>My Voice Assistant</code>（變成 Google 語音引擎）。開發線 <code>dev/novel-reader</code>，tag <code>NovelReader_v2.1.0</code>。</dd>
+          <dt>資料</dt><dd><code>data\settings.json</code>（語音、語速、每個檔案讀到哪）、<code>cache\</code>（播完就刪）、<code>legacy\</code>（舊的 <code>output\</code>、<code>book_links.json</code>、Voice Assistant 的 <code>temp\</code>，共 4 個檔案 26.9 MB，搬前搬後一致）。</dd>
+          <dt>AI</dt><dd>無。Google 語音（gTTS）不需要金鑰。</dd>
+          <dt>驗證</dt><dd>打包 OK（19.6 MB）。8 個測試全過（分段、SAPI 連續產生、播放流程、暫存清理）。</dd>
+          <dt>注意</dt><dd>不要改回 pyttsx3（第二次朗讀就永遠卡住）。只針對單一小說網站的爬蟲實驗沒帶過來，原始碼留在 import commit。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-file-renamer">
+        <header><h3>File Renamer</h3><span class="short">renamer · tools/file-renamer</span><span class="ver">v2.0.0</span><span class="pill info">重寫</span></header>
+        <p class="purpose">用一串正規表達式規則（或雜湊）批次改名，可以整個資料夾掃、預設只改主檔名；改之前先預覽，衝突會擋下，關掉程式再開也能復原。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>2.0.0（10/27）照回饋 3-5 重寫：規則清單由上往下套用、規則組、資料夾掃描與篩選、兩段式套用（互換、連鎖改名不會撞名，任何一個失敗整批還原）、跨次復原。</dd>
+          <dt>來源</dt><dd><code>Python Projects\。File Renamer</code>。開發線 <code>dev/file-renamer</code>，tag <code>FileRenamer_v2.0.0</code>。</dd>
+          <dt>資料</dt><dd><code>data\settings.json</code>（目前的規則）、<code>presets.json</code>（規則組）、<code>last_batch.json</code>（上一批，給復原用）。舊專案沒有資料要搬。</dd>
+          <dt>AI</dt><dd>無</dd>
+          <dt>驗證</dt><dd>打包 OK（10.6 MB）。16 個測試全過，包含把畫面走一遍到重開後復原。</dd>
+          <dt>注意</dt><dd>改名邏輯都在 <code>renamer.py</code>，新功能先在 <code>tests/test_renamer.py</code> 加測試。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-better-file-finder">
+        <header><h3>Better File Finder</h3><span class="short">finder · tools/better-file-finder</span><span class="ver">v1.1.0</span><span class="pill ok">穩定</span></header>
+        <p class="purpose">多關鍵字、排除、模糊比對、副檔名篩選的檔案搜尋，也能搜尋文字檔的內容。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>1.1.0（10/23）修掉寫反的排除條件、「匹配文件內容」沒作用、大資料夾卡住視窗、關閉時崩潰。</dd>
+          <dt>來源</dt><dd><code>Python Projects\。Better File Finder</code>。開發線 <code>dev/better-file-finder</code>，tag <code>BetterFileFinder_v1.1.0</code>。</dd>
+          <dt>資料</dt><dd>不寫任何檔案。</dd>
+          <dt>AI</dt><dd>無</dd>
+          <dt>驗證</dt><dd>打包 OK（9.7 MB）。7 個測試全過（含舊 bug 的回歸測試）。</dd>
+          <dt>注意</dt><dd>只用標準庫，用根目錄共用的 <code>.venv</code>。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-random-icon-maker">
+        <header><h3>Random Icon Maker</h3><span class="short">icon · tools/random-icon-maker</span><span class="ver">v1.2.0</span><span class="pill ok">穩定</span></header>
+        <p class="purpose">輸入一個種子，用 9 種演算法產生隨機圖示（漸層、條紋、棋盤格、雜訊…），預覽後存成 ICO 或 PNG。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>1.1.0 把命令列改成預覽視窗。1.2.0（10/27）圖示預設存到 <code>data\icons\</code>。</dd>
+          <dt>來源</dt><dd><code>Python Projects\64x64 Random Icon Maker</code>。開發線 <code>dev/random-icon-maker</code>，tag <code>RandomIconMaker_v1.2.0</code>。</dd>
+          <dt>資料</dt><dd><code>data\icons\</code>：舊版 <code>ouputs\</code> 的 167 個圖示搬到這裡，搬前搬後一致。</dd>
+          <dt>AI</dt><dd>無</dd>
+          <dt>驗證</dt><dd>打包 OK（17.5 MB）。2 個測試全過（同一個種子產生的圖跟舊版逐像素相同）。</dd>
+          <dt>注意</dt><dd>不要改 <code>ALGORITHMS</code> 的順序或演算法裡的亂數呼叫順序，同一個種子的圖會變。</dd>
+        </dl>
+      </article>
+
+      <article class="tool" id="t-folder-cover">
+        <header><h3>Folder Cover</h3><span class="short">cover · tools/folder-cover</span><span class="ver">v1.0.0</span><span class="pill info">新做</span></header>
+        <p class="purpose">把資料夾在檔案總管裡的圖示換成裡面的一張圖，相簿、漫畫、影集資料夾一眼就認得；可以整批套用，隨時恢復預設。</p>
+        <dl class="facts">
+          <dt>現況</dt><dd>1.0.0（10/27）新做（回饋 3-8）。前身一直沒成功：沒先裁成正方形、<code>desktop.ini</code> 寫正斜線的絕對路徑、沒通知檔案總管更新。新版用 Windows 的 <code>SHGetSetFolderCustomSettings</code>，圖示寫相對路徑。</dd>
+          <dt>來源</dt><dd><code>Python Projects\Change Folder Cover (failes)</code>（舊資料夾已刪，原始碼在 import commit）。開發線 <code>dev/folder-cover</code>，tag <code>FolderCover_v1.0.0</code>。</dd>
+          <dt>資料</dt><dd>不存設定。只寫入你選的資料夾裡的 <code>folder-cover.ico</code> 與 <code>desktop.ini</code>。</dd>
+          <dt>AI</dt><dd>無</dd>
+          <dt>驗證</dt><dd>打包 OK（18.1 MB）。7 個測試全過（ico 尺寸與裁切、在暫存資料夾實際套用與移除、保留 <code>desktop.ini</code> 其他設定、畫面走一遍）。</dd>
+          <dt>注意</dt><dd>只支援 Windows。檔案總管偶爾沿用舊的圖示快取，按 F5 即可。</dd>
+        </dl>
+      </article>
+
+    </div>
+  </section>
+
+  <section aria-labelledby="ai">
+    <h2 id="ai">AI 與金鑰</h2>
+    <p class="note">以前 Better Prompt 和 VideoToSimpleNotion 都用 OpenAI 金鑰，金鑰散在各專案的 <code>.env</code>、<code>~\.better_prompt_settings.json</code>、<code>%APPDATA%\PersonalToolZoo\keys.env</code>。現在兩個工具預設用 Claude 訂閱，不需要金鑰；要用 OpenAI／Gemini／Claude API 時，金鑰統一放專案的 <code>.env</code>。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th scope="col">工具</th><th scope="col">以前</th><th scope="col">現在</th><th scope="col">狀態</th></tr></thead>
+        <tbody>
+          <tr><td>Better Prompt</td><td>OpenAI 金鑰（v1 存在 <code>~\.better_prompt_settings.json</code> 與專案的 <code>.env</code>）</td><td>預設 Claude 訂閱（sonnet），可選 OpenAI／Gemini／Claude API</td><td><span class="pill ok">完成</span> 10/05 接上 Claude 訂閱；10/27 金鑰改讀專案 <code>.env</code>，實際呼叫成功</td></tr>
+          <tr><td>Video Notes</td><td>VideoToSimpleNotion 用 OpenAI 金鑰；「LLM 無法總結」的原因是金鑰沒額度</td><td>預設 Claude 訂閱，可選 OpenAI／Gemini／Claude API；逐字稿用本機 Whisper</td><td><span class="pill ok">完成</span> 10/06 打包版實際跑完一支影片</td></tr>
+          <tr><td>Novel Reader</td><td>Google 語音（gTTS）</td><td>一樣，不需要金鑰</td><td><span class="pill plain">不用改</span></td></tr>
+          <tr><td>其他 12 個工具</td><td>沒有用 AI</td><td>沒有用 AI</td><td><span class="pill plain">不用改</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="list">
+      <div class="row"><div class="id">訂閱</div><div class="body"><div class="name">Claude 訂閱怎麼運作</div><div class="what"><ul>
+        <li>透過 <code>claude-subscription</code> 套件（你的獨立專案 ClaudeLogin，釘在 GitHub tag <code>v0.2.1</code>）呼叫電腦上已登入的 Claude Code。</li>
+        <li>不需要金鑰，但每次呼叫都用掉訂閱額度。要先安裝 Claude Code，並執行一次 <code>claude</code> 登入。</li>
+        <li>v0.2.1 修掉打包後的視窗程式每呼叫一次就閃一個黑窗，不要降版。</li>
+        <li>「檢查 Claude Code」只確認找得到執行檔，登入過期要到第一次真的呼叫才知道。</li>
+      </ul></div></div></div>
+      <div class="row"><div class="id">.env</div><div class="body"><div class="name">專案 <code>.env</code> 裡現在有的金鑰（只列名稱，不列值）</div><div class="what"><ul>
+        <li><code>OPENAI_API_KEY</code>：2 把（一把啟用、一把註解起來備查）。2026-10-05 實測都回 <code>429 insufficient_quota</code>，額度用完。</li>
+        <li><code>GEMINI_API_KEY</code>：1 把，2026-10-05 實測無效。</li>
+        <li><code>ANTHROPIC_API_KEY</code>：沒有。Claude API 按量計費、跟訂閱分開，用訂閱不需要它。</li>
+        <li>要用 OpenAI／Gemini 就換新的，不用就刪掉那幾行（問題報告書 Q5）。</li>
+      </ul></div></div></div>
+    </div>
+    <!--private-appendix-->
+    <p class="note">另外也盤點了 <code>Python Projects\</code> 底下其他還沒收進來的專案用了哪些 AI 服務。那些專案不在這個 repo，而這個 repo 是公開的，所以那份盤點只放在 claude.ai 上的私人版交接頁。</p>
+  </section>
+
+  <section aria-labelledby="data">
+    <h2 id="data">資料與金鑰放哪裡</h2>
+    <p class="note">工具不寫使用者資料夾（<code>%APPDATA%</code>、家目錄、<code>~\.cache</code>），這是你在回饋 3-11 明確要求的。規則寫在 <code>libs/toolzoo/appdirs.py</code> 與 AGENTS.md 規則 6。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th scope="col">東西</th><th scope="col">從原始碼執行（run.bat）</th><th scope="col">打包的 exe</th></tr></thead>
+        <tbody>
+          <tr><td>設定、紀錄、快取、模型</td><td><code>tools\&lt;工具&gt;\data\</code></td><td>exe 旁邊的 <code>data\</code></td></tr>
+          <tr><td>金鑰與參數</td><td>repo 根目錄的 <code>.env</code></td><td>exe 旁邊的 <code>.env</code>；exe 在 repo 的 <code>dist\</code> 裡時也讀 repo 的 <code>.env</code></td></tr>
+          <tr><td>下載的影片、影片筆記</td><td colspan="2">使用者的「下載」資料夾（你同意的例外，可在設定裡改）</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="note">
+      <li><code>data\</code>、<code>.env</code> 都不進版控（<code>.gitignore</code> 擋 <code>tools/*/data/</code>、<code>.env</code>、<code>*.env</code>）。</li>
+      <li><a href="../.env.example"><code>.env.example</code></a> 說明每一項設定，複製成 <code>.env</code> 再填。環境變數優先於 <code>.env</code>。</li>
+      <li>第三方套件的快取也導進 <code>data\</code>：Video Notes 把 <code>HF_HOME</code> 指到 <code>data\models\</code>，不會寫 <code>~\.cache\huggingface</code>。</li>
+      <li>每個工具的 <code>run.bat</code> 一律用那個工具自己的環境（有第三方套件用 <code>tools\&lt;工具&gt;\.venv</code>，只用標準庫用根目錄 <code>.venv</code>），不會載到別的套件（回饋 3-2）。</li>
+      <li>電腦上還留著的舊位置（<code>%APPDATA%\PersonalToolZoo</code>、<code>~\.better_prompt_settings.json</code>、<code>%TEMP%</code> 裡的測試殘留）內容都已經搬進來，刪不刪見問題報告書 Q3。</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="branches">
+    <h2 id="branches">分支與開發線</h2>
+    <div class="list">
+      <div class="row"><div class="id">主線</div><div class="body"><div class="name"><code>master</code></div><div class="what">所有工具的程式、發版 commit、tag 都在這裡。跨工具的修改（<code>libs/</code>、<code>scripts/</code>、根目錄文件）直接在 master 上做。</div></div></div>
+      <div class="row"><div class="id">開發線</div><div class="body"><div class="name"><code>dev/&lt;工具資料夾&gt;</code> × 15 <span class="pill ok">已 push</span></div><div class="what">每個工具一條，2026-10-27 從 master 開出來。新功能在開發線上做：先 <code>git merge master</code>，改完用 <code>git merge --no-ff</code> 收回 master，再在 master 上 <code>release.ps1</code>。指令見 README「開發線」。</div></div></div>
+      <div class="row"><div class="id">已刪</div><div class="body"><div class="name"><code>feat/tool-migration</code></div><div class="what">10/05 大搬家用的分支。2026-10-27 刪除前確認過：把它 merge 進重切後的最後一個 commit（<code>fb94f8e</code>），得到的內容完全不變，表示它的東西都在 master 裡。</div></div></div>
+      <div class="row"><div class="id">舊分支</div><div class="body"><div class="name">GitHub 上其他 10 條 <span class="pill warn">要你決定</span></div><div class="what">5 條已經完整併進 master，可以刪；其中 <code>feat/git_command_gui_helper/all_platform</code> 是 GitHub 的預設分支（repo 首頁顯示的是它的舊 README），要先把預設分支改成 <code>master</code>。4 條有沒收尾的 commit（Git Helper 的 fetch／pull 參數、HashMyFile 的「只留重複檔」、git_diff_shower 的 3 個 commit、標了失敗的 shell_converter）；1 條 <code>temp-save</code> 是 stash。逐條的建議見問題報告書 Q4。</div></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="old">
+    <h2 id="old">舊專案去了哪裡</h2>
+    <p class="note">程式碼都在 hub 的 <code>chore(&lt;tool&gt;): import … verbatim</code> commit 裡（commit 訊息寫了來源的 commit），之後才是整理與修正，想看改了什麼就對那個 commit 做 diff。資料逐一用腳本比對過搬前搬後的檔案數與大小。各舊專案的 git 歷史只在本機，你決定不另外保存（2026-10-23）。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th scope="col">舊資料夾（Python Projects\）</th><th scope="col">去處</th><th scope="col">資料</th><th scope="col">舊資料夾</th></tr></thead>
+        <tbody>
+          <tr><td>VideoToSimpleNotion</td><td>Video Notes</td><td><code>data\</code>（42 個檔案、1.6 GB）→「下載\Video Notes\舊版 VideoToSimpleNotion」；<code>extensions\</code> → <code>data\legacy\</code>；<code>.env</code> 的金鑰 → 專案 <code>.env</code></td><td><span class="pill warn">待刪 Q1</span></td></tr>
+          <tr><td>VideoDownloader</td><td>Video Downloader</td><td><code>downloads\</code>（2385 個檔案、20.6 GB）→「下載\Video Downloader\舊版 VideoDownloader」</td><td><span class="pill warn">待刪 Q1</span></td></tr>
+          <tr><td>。Better Prompt</td><td>Better Prompt</td><td><code>model_recommendations.json</code> 與 v1 設定 → <code>data\</code>；<code>.env</code> 的金鑰 → 專案 <code>.env</code></td><td><span class="pill warn">待刪 Q1</span></td></tr>
+          <tr><td>。Fast File Converter</td><td>Super File Converter</td><td>沒有資料</td><td><span class="pill warn">待刪 Q1</span></td></tr>
+          <tr><td>。My Internet Novel Reader</td><td>Novel Reader</td><td><code>output\</code>、<code>book_links.json</code> → <code>data\legacy\</code></td><td><span class="pill warn">待刪 Q1</span></td></tr>
+          <tr><td>My Voice Assistant</td><td>Novel Reader（Google 語音）</td><td><code>temp\</code> → <code>data\legacy\voice-assistant\</code></td><td><span class="pill warn">待刪 Q1</span></td></tr>
+          <tr><td>。File Renamer</td><td>File Renamer</td><td>沒有資料</td><td><span class="pill warn">待刪 Q1</span></td></tr>
+          <tr><td>。Better File Finder</td><td>Better File Finder</td><td>沒有資料</td><td><span class="pill warn">待刪 Q1</span></td></tr>
+          <tr><td>64x64 Random Icon Maker</td><td>Random Icon Maker</td><td><code>ouputs\</code>（167 個圖示）→ <code>data\icons\</code></td><td><span class="pill warn">待刪 Q1</span></td></tr>
+          <tr><td>。HashMyFile</td><td>併進 HashMyFile</td><td>沒有資料（功能併進 0.2.0）</td><td><span class="pill warn">待刪 Q1</span></td></tr>
+          <tr><td>Change Folder Cover (failes)</td><td>Folder Cover（重做）</td><td>沒有資料</td><td><span class="pill ok">已刪</span></td></tr>
+          <tr><td>ClaudeLogin</td><td>不搬，維持獨立專案</td><td>本機跟 GitHub 一致（最後一個 commit <code>9e2cea6</code>，2026-10-05；tag v0.1.0～v0.2.1 都在 GitHub）</td><td><span class="pill ok">保留</span></td></tr>
+          <tr><td><code>Python Projects\.git</code></td><td>不需要</td><td>2024-12 的舊 repo（15 個 commit、沒有遠端），追蹤的 18 個檔案都已經不在</td><td><span class="pill warn">待刪 Q2</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="list">
+      <div class="row"><div class="id">更正</div><div class="body"><div class="name">VideoToSimpleNotion 的 import commit 少了 3 個檔案</div><div class="what">commit 訊息寫「verbatim」，其實少了 3 個小腳手架檔案：<code>main.bat</code>（一行 <code>.venv\Scripts\python.exe main.py</code>）、<code>src\env_checks\installer.bat</code>（兩行 pip install：<code>ffmpeg-python faster-whisper</code> 與 CUDA 12.1 版 torch）、<code>src\env_checks\test_env.py</code>（用 torch 檢查有沒有 GPU）。功能已經由 <code>run.bat</code>、<code>requirements.txt</code>、<code>debug\check_env.py</code> 取代，內容記在這裡，刪掉舊資料夾也不會遺失。</div></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="verify">
+    <h2 id="verify">怎麼驗證的</h2>
+    <p class="note">全部在 2026-10-27 的 master 上實際跑過。你說過不會自己再重跑，所以每一項都是跑出來的結果，不是推論。</p>
+    <div class="list">
+      <div class="row"><div class="id">V1</div><div class="body"><div class="name">每個工具都能打包並開起來 <span class="pill ok">15 / 15</span></div><div class="what"><code>build.ps1 -All</code>：自動準備環境 → 打包 → 把 exe 開 10 秒冒煙測試，全部 OK。補上依賴上限的 4 個工具之後又各 build 一次，也都 OK。發版時 8 個工具（7 個新版本＋Folder Cover 補 tag）也各自清掉快取從頭 build 一次，都 OK。</div></div></div>
+      <div class="row"><div class="id">V2</div><div class="body"><div class="name">每個工具的測試 <span class="pill ok">12 組全過</span></div><div class="what">每組都用工具自己的環境跑：libs 25、Video Notes 33、File Renamer 16、Video Downloader 10、Novel Reader 8、Better File Finder 7、Encrypter 7、Folder Cover 7、Super File Converter 5、HashMyFile 3、Random Icon Maker 2，共 123 個，加上 Git Helper Pro 的語言載入檢查。Advanced Excel Tool、Git Diff Statistics、Table Format Converter 沒有自動化測試。</div></div></div>
+      <div class="row"><div class="id">V3</div><div class="body"><div class="name">從原始碼執行 <span class="pill ok">15 / 15</span></div><div class="what"><code>run.ps1 --check-all</code>：每個工具用自己的環境、把進入點和所有 import 都載入一次，全部成功。</div></div></div>
+      <div class="row"><div class="id">V4</div><div class="body"><div class="name">Claude 訂閱真的能用 <span class="pill ok">通過</span></div><div class="what">10/27 透過共用的 AI 層用 Claude 訂閱呼叫 haiku，6.7 秒回覆正常（用掉 1 次訂閱額度）。Better Prompt 用假的 Claude 回覆把畫面走一遍也通過。10/06 打包的 Video Notes 跑完一支影片。</div></div></div>
+      <div class="row"><div class="id">V5</div><div class="body"><div class="name">舊資料搬家 <span class="pill ok">全部一致</span></div><div class="what">搬家腳本對每一項比對搬前搬後的檔案數與總大小，全部一致才算完成。Whisper 模型搬家後在離線狀態下找得到。</div></div></div>
+      <div class="row"><div class="id">V6</div><div class="body"><div class="name">push 之前的機密掃描 <span class="pill ok">0 件</span></div><div class="what">掃所有分支與 tag 能到的每一個檔案版本與每一則 commit 訊息：金鑰格式（OpenAI、Anthropic、Google、GitHub、Telegram、私鑰…）、帳密指派、電話與身分證字號。8 筆命中全是程式碼 <code>api_key = self.api_key_var.get()</code>，不是金鑰。另外把 <code>.env</code> 與舊金鑰來源裡的每把金鑰拿去逐字比對整個歷史，0 次。<code>.env</code> 與 <code>data\</code> 都沒有被追蹤。commit 作者的 email 本來就已經在 GitHub 上。</div></div></div>
+      <div class="row"><div class="id">V7</div><div class="body"><div class="name">測試不留垃圾 <span class="pill ok">通過</span></div><div class="what">跑完全部測試後 <code>%TEMP%</code> 沒有多出資料夾、<code>git status</code> 沒有被改到的檔案（Git Helper Pro 不再改寫版控檔）。</div></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="timeline">
+    <h2 id="timeline">時間線</h2>
+    <div class="list">
+      <div class="row"><div class="date">10/05</div><div class="body"><div class="name">大搬家＋預設 AI 改成 Claude 訂閱 <span class="pill ok">完成</span></div><div class="what">在 worktree 的 <code>feat/tool-migration</code> 上把 10 個獨立專案搬進 hub；Better Prompt 與 Video Notes 接上你的 claude-subscription（ClaudeLogin v0.2.1）。</div></div></div>
+      <div class="row"><div class="date">10/06</div><div class="body"><div class="name">合併回 master、確認每個工具能 build、盤點 <span class="pill ok">10/23 完成</span></div><div class="what">交給另一個 session，它在 10/07 用 <code>git merge --no-commit</code> 開始合併就停了，151 個檔案一直攤在暫存區。</div></div></div>
+      <div class="row"><div class="date">10/07</div><div class="body"><div class="name">worktree 的原理與用法說明頁 <span class="pill ok">完成</span></div><div class="what">各種開 worktree 的方式、step by step、錯誤排除。</div></div></div>
+      <div class="row"><div class="date">10/23</div><div class="body"><div class="name">收掉卡住的合併、重切成 80 個小 commit、發版補 tag、盤點 <span class="pill ok">完成</span></div><div class="what">master 的內容跟原本那個合併逐位元相同，只改 commit 怎麼切、訊息怎麼寫。</div></div></div>
+      <div class="row"><div class="date">10/23–27</div><div class="body"><div class="name">照你的回饋全部做完 <span class="pill ok">完成</span></div><div class="what"><ul>
+        <li>資料與金鑰改放專案裡（<code>data\</code>、<code>.env</code>、<code>.env.example</code>），電腦上的舊資料全部搬進來。</li>
+        <li>每個工具一支 <code>run.bat</code>，用自己的環境從原始碼執行。</li>
+        <li>File Renamer 重寫成 2.0.0；Change Folder Cover 重做成 Folder Cover 1.0.0。</li>
+        <li>7 個工具發新版、Folder Cover 補 tag；4 個工具的依賴補上主版本上限。</li>
+        <li>每個工具開自己的開發線；寫交接文件與問題交接報告書；push 前掃描機密；push 到 GitHub；刪掉已經沒用的 <code>feat/tool-migration</code>。</li>
+      </ul></div></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="decide">
+    <h2 id="decide">要你決定 <span class="pill warn">5 件</span></h2>
+    <div class="list">
+      <div class="row"><div class="id">Q1</div><div class="body"><div class="name">刪掉 10 個已經搬完的舊專案資料夾</div><div class="what">資料都搬好也比對過了，剩下的是舊 venv、build 產物和腳手架（光 VideoToSimpleNotion 的 <code>.venv</code> 就 4.8 GB）。自動模式擋下了永久刪除，要你明確同意或自己刪。</div></div></div>
+      <div class="row"><div class="id">Q2</div><div class="body"><div class="name">刪掉 <code>Python Projects\.git</code></div><div class="what">2024-12 的舊 repo，沒有用處，而且在沒有自己 git 的子資料夾下指令會動到它。</div></div></div>
+      <div class="row"><div class="id">Q3</div><div class="body"><div class="name">清掉電腦上的舊位置</div><div class="what"><code>%APPDATA%\PersonalToolZoo\</code>、<code>~\.better_prompt_settings.json</code>、<code>%TEMP%</code> 裡以前測試留下的資料夾。內容都已經搬進專案。</div></div></div>
+      <div class="row"><div class="id">Q4</div><div class="body"><div class="name">GitHub 上的舊分支與預設分支</div><div class="what">預設分支建議改成 <code>master</code>；已併進 master 的 5 條可以刪；有未收 commit 的 4 條與 <code>temp-save</code> 決定要收、刪，或改成 tag 保存。</div></div></div>
+      <div class="row"><div class="id">Q5</div><div class="body"><div class="name">換掉或刪掉沒用的金鑰</div><div class="what"><code>.env</code> 裡的 OpenAI 金鑰沒額度、Gemini 金鑰無效。預設用 Claude 訂閱，用不到它們。</div></div></div>
+    </div>
+    <div class="answer">
+      <p><b>怎麼回我</b></p>
+      <p>直接打代號，例如 <code>Q1 刪</code>、<code>Q4 改預設分支、刪已合併的</code>。每一項的細節與建議在 <a href="OPEN_ISSUES.md">docs/OPEN_ISSUES.md</a>，處理完的會移到那份文件的「已解決」。</p>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
