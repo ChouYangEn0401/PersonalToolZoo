@@ -17,7 +17,8 @@
    - `libs` 沒有自己的 venv：它用到的第三方套件寫在**用到它的那個工具**的 `requirements.txt`。
    - 用到 `libs` 的工具：`tool.json` 加 `"pathex": ["../../libs"]`，進入點開頭把 `libs` 加進 `sys.path`
      （照 libs/README 的寫法），兩者缺一不可——前者給打包、後者給從原始碼執行。
-   - 改了 `libs` 就要把**每個**用到它的工具都重新 build 測過（目前：better-prompt、video-notes、video-downloader）。
+   - 改了 `libs` 就要把**每個**用到它的工具都重新 build 測過（目前：better-prompt、video-notes、video-downloader、
+     novel-reader、random-icon-maker、file-renamer；以 tool.json 有 `pathex` 為準）。
      `libs` 本身的測試：`python -m unittest discover -s libs\tests -v`。
 2. **環境規則**（定義在 `scripts/_common.ps1`）：
    - `requirements.txt` 有第三方套件 → `tools/<tool>/.venv`；只用標準庫 → 根目錄 `.venv`。
@@ -32,7 +33,14 @@
 4. **一份 spec：** 不要在工具資料夾放 `.spec`、`builder.bat`。差異寫進 `tool.json`
    （欄位說明見 README「build 是怎麼運作的」）。
 5. **資料檔路徑：** 打包後要讀的檔案一律走 `resource_path()`（見 `tools/_template/main.py`），不要用相對路徑。
-6. **編碼：**
+6. **執行時的資料與金鑰不寫使用者資料夾**（使用者明確要求，2026-10-23）：
+   - 設定、紀錄、快取、模型 → `libs/toolzoo/appdirs` 的 `tool_data_dir("<tool>")`：
+     原始碼執行是 `tools/<tool>/data/`（`.gitignore` 擋 `tools/*/data/`），打包的 exe 是 exe 旁邊的 `data/`。
+   - 金鑰與參數 → 專案的 `.env`（`appdirs.env_files()` / `load_env()`；範本 `.env.example` 要跟著更新）。
+   - 不要用 `%APPDATA%`、`Path.home()`、`~/.cache`、`%TEMP%` 存東西；第三方套件的快取也要導進 `data/`
+     （例如 Video Notes 把 `HF_HOME` 指到 `data/models/`）。影片類的輸出放「下載」資料夾是使用者同意的例外。
+   - `data/` 只放執行時產生的東西；會一起打包的資源（圖示等）放 `assets/`。
+7. **編碼：**
    - `scripts/*.ps1` 必須是 **UTF-8 with BOM**（PS 5.1 沒有 BOM 會把中文讀成亂碼、甚至語法錯誤）。
    - `.bat` 只寫 ASCII。
    - `requirements*.txt` 是 UTF-8（含中文註解）；呼叫 pip 時要 `PYTHONUTF8=1`，否則 cp950 會 `UnicodeDecodeError`。
@@ -64,7 +72,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 <too
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 hash -NoSmoke
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1 hash patch -Yes
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1 hash --check     # 環境＋import 檢查，不開視窗
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1 --check-all     # 全部工具
 ```
+
+從原始碼執行工具一律用 `tools\<tool>\run.bat`（或 `scripts\run.ps1 <tool>`），不要自己挑 python.exe：
+它用 build 同一套規則選環境並自動修好，確保跑的跟打包的是同一組套件。
 
 選單收到空行／EOF 會當成取消，不會卡住，但也什麼都不會做。
 
@@ -104,5 +117,6 @@ README「歷史」列了還沒收的分支。收的時候照原本的四步，�
 - **novel-reader 不要改回 pyttsx3**：2.99 在 Windows 上第二次 `runAndWait()` 就永遠卡住；現在直接呼叫 SAPI。
 - **PowerShell 的 `-match`／`-notmatch` 不分大小寫**：過濾輸出時 `'ok'` 也會濾掉結果表的 `OK` 行。
 - **增量 build**：輸入沒變時 PyInstaller 不重寫 exe（時間戳是舊的），產物要用 `Get-ToolInfo` 算出的檔名找，不要用時間戳。
-- **Git Helper Pro** 在開發模式切換語言會改寫有進版控的 `language_config.json`。
+- **Git Helper Pro** 的語言選擇存在 `data/language_config.json`；有進版控的 `language_config.json` 只是預設值，
+  不要再讓程式寫回它（2026-10-23 前開發模式切換語言會改寫它）。
 - **Encrypter** 文件裡的 1.0～1.4 是開發期間的內部迭代編號，正式版本是 `_version.py` 的 0.3.x 系列；不要把版本跳到 1.x。

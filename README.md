@@ -24,11 +24,12 @@
 
 Video Notes 與 Video Downloader 是本機網頁程式：執行後會開瀏覽器，主控台視窗關掉就停止。
 
-三個工具共用 [`libs/`](libs/README.md) 裡的程式：
+共用程式放在 [`libs/`](libs/README.md)：
 
 - **Better Prompt、Video Notes**：AI 呼叫層。預設用 **Claude 訂閱**：透過電腦上裝好、登入過的 Claude Code 呼叫，不需要 API 金鑰，但會用掉訂閱額度。
-  改用 OpenAI／Gemini／Claude API 時，金鑰放在共用的 `%APPDATA%\PersonalToolZoo\keys.env`，設一次所有工具都讀得到。
+  改用 OpenAI／Gemini／Claude API 時，金鑰放在專案的 `.env`（見下方「資料與金鑰放哪裡」），設一次所有工具都讀得到。
 - **Video Notes、Video Downloader**：yt-dlp 的設定（ffmpeg 位置、YouTube 需要的 JavaScript 執行環境）與本機網頁的啟動器。
+- **會存設定或資料的工具**（Better Prompt、Video Notes、Video Downloader、Novel Reader、Random Icon Maker、File Renamer）：`appdirs` 決定資料放哪裡。
 
 每個工具的 README 最後都有一段「**交接**」：入口、版本號在哪、用哪個環境、依賴與限制、怎麼測試、已知問題。
 
@@ -59,6 +60,25 @@ Advanced Excel Tool、Better Prompt、Video Notes 第一次建環境還需要 gi
 | Better Prompt、Video Notes | 用預設的 Claude 訂閱時，要先裝 Claude Code 並執行一次 `claude` 登入（細節見各工具 README） |
 | Novel Reader | Google 語音要調語速時用 ffmpeg（沒有就用原速） |
 
+### 從原始碼執行（不打包）
+
+**雙擊 `tools\<工具資料夾>\run.bat`**，或在終端機執行 `.\tools\<工具資料夾>\run.bat [給工具的參數]`。
+它一律用這個工具自己的環境（有第三方套件 → `tools\<工具>\.venv`；只用標準庫 → 根目錄 `.venv`），
+沒有就建好、跟 requirements 不符就同步，所以不會用到電腦上其他的 Python 或套件。
+`run.bat --check` 只準備環境並確認所有 import 都找得到（不開程式）；`.\scripts\run.ps1 --check-all` 一次檢查全部工具。
+
+## 資料與金鑰放哪裡
+
+工具**不寫使用者資料夾**（`%APPDATA%`、家目錄）。規則定義在 `libs/toolzoo/appdirs.py`：
+
+| 東西 | 從原始碼執行 | 打包的 exe |
+|---|---|---|
+| 設定、紀錄、快取、模型 | `tools\<工具>\data\`（不進版控） | exe 旁邊的 `data\` |
+| 金鑰與參數 | repo 根目錄的 `.env`（不進版控） | exe 旁邊的 `.env`；exe 在 repo 的 `dist\` 裡時也讀 repo 的 `.env` |
+
+`.env` 的每一項說明在 [`.env.example`](.env.example)：把它複製成 `.env` 再填。環境變數優先於 `.env`。
+影片類工具的輸出（下載的影片、影片筆記）預設放使用者的「下載」資料夾，可以在設定裡改。
+
 ## 指令速查
 
 都在 repo 根目錄、用 PowerShell 執行。`.\scripts\build.ps1` 和 `.\build.bat` 參數完全一樣（`.bat` 自帶執行原則 bypass）。
@@ -77,7 +97,9 @@ Advanced Excel Tool、Better Prompt、Video Notes 第一次建環境還需要 gi
 | 只改版本號 | `.\scripts\bump-version.ps1 hash patch`（`minor`／`major`／`1.2.3`） |
 | 發新版（改版號＋build＋commit＋tag） | `.\scripts\release.ps1 hash patch`（或雙擊 `release.bat`） |
 | 補打目前版本的 tag（版本不變、該版本還沒有 tag 時） | `.\scripts\release.ps1 <工具> keep` |
-| 手動建／重建環境（想直接跑原始碼時） | `.\scripts\setup-venv.ps1 hash`、整個重建加 `-Force` |
+| 從原始碼執行一個工具 | 雙擊 `tools\hash-my-file\run.bat`，或 `.\scripts\run.ps1 hash [給工具的參數]` |
+| 檢查每個工具的環境與 import（不開程式） | `.\scripts\run.ps1 --check-all` |
+| 手動建／重建環境 | `.\scripts\setup-venv.ps1 hash`、整個重建加 `-Force`（平常 `run.bat` 與 build 會自動建好） |
 | 開新工具 | `.\scripts\new-tool.ps1 my-new-tool` |
 | 清掉所有 build 產物 | `.\scripts\build.ps1 -Clean` |
 | 看某支腳本的完整說明 | `Get-Help .\scripts\build.ps1 -Detailed` |
@@ -157,9 +179,9 @@ Advanced Excel Tool、Better Prompt、Video Notes 第一次建環境還需要 gi
 從 `tools/_template/` 複製一份骨架（tkinter 視窗、`resource_path()`、`version.py`、`tool.json`、
 附「交接」段落的 README），視窗標題已經接好版本號。然後：
 
-1. 寫 `tools/my-new-tool/main.py`，版本號在 `version.py`
+1. 寫 `tools/my-new-tool/main.py`，版本號在 `version.py`；用 `tools\my-new-tool\run.bat` 從原始碼試跑
 2. 需要第三方套件就寫進 `requirements.txt`（記得給主版本上限）
-3. 有資料檔（圖片、語言檔、設定檔…）就填 `tool.json` 的 `include`
+3. 有資料檔（圖片、語言檔…）就填 `tool.json` 的 `include`；執行時產生的設定、紀錄放 `libs/toolzoo/appdirs` 的 `tool_data_dir()`，不要寫使用者資料夾
 4. `.\scripts\build.ps1 my-new-tool`（環境會自動建）
 5. 填好工具 README 的「交接」段落，回來這份 README 的工具表加一列
 
@@ -171,10 +193,12 @@ PersonalToolZoo/
 ├─ AGENTS.md               ← 給 AI agent／接手開發者的規則（CLAUDE.md 會引用它）
 ├─ build.bat / release.bat ← 雙擊用的入口
 ├─ requirements-dev.txt    ← 共用 build 工具鏈（pyinstaller 等），所有 venv 都裝
+├─ .env.example            ← 金鑰與參數的範本；複製成 .env 再填（.env 不進版控）
 ├─ .venv/                  ← 共用虛擬環境（只給只用標準庫的工具）
 ├─ libs/toolzoo/           ← 工具之間共用的程式（AI 呼叫層、yt-dlp 設定、web app 啟動器…），見 libs/README.md
 ├─ scripts/
 │  ├─ build.ps1            ← 統一 builder：選單、名稱比對、自動環境、打包、冒煙測試
+│  ├─ run.ps1              ← 用工具自己的環境從原始碼執行（每個工具的 run.bat 呼叫它）
 │  ├─ release.ps1          ← 發布：改版號 → build → commit → tag
 │  ├─ bump-version.ps1     ← 只改版本號
 │  ├─ setup-venv.ps1       ← 手動建立／重建工具的 venv
@@ -188,7 +212,9 @@ PersonalToolZoo/
 │     ├─ tool.json         ← 這個工具的 build 設定（入口、版本檔、tag 前綴…）
 │     ├─ README.md         ← 使用說明 ＋「交接」
 │     ├─ requirements.txt  ← 執行時依賴（不放 pyinstaller）
+│     ├─ run.bat           ← 雙擊就用這個工具自己的環境從原始碼執行
 │     ├─ .venv/            ← （有第三方依賴才有）這個工具專屬的隔離環境
+│     ├─ data/             ← 執行時的設定、紀錄、快取（不進版控）
 │     └─ main.py, version.py, ...
 ├─ build/<工具資料夾>/     ← PyInstaller 增量快取（-Clean 會清）
 └─ dist/<工具資料夾>/      ← 打包產物
