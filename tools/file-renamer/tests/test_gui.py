@@ -4,6 +4,7 @@
 """
 
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -11,6 +12,10 @@ from pathlib import Path
 
 DATA = tempfile.mkdtemp(prefix="file-renamer-test-")
 os.environ["TOOLZOO_DATA_DIR"] = DATA      # 必須在 import main 之前
+
+
+def tearDownModule():
+    shutil.rmtree(DATA, ignore_errors=True)   # 測試完把隔離用的資料夾清掉，不在 %TEMP% 留東西
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tkinterdnd2 import TkinterDnD  # noqa: E402
