@@ -21,6 +21,7 @@
 | **File Renamer** | 拖放檔案，用正規表達式或雜湊批次改名；先預覽、擋下衝突、可以復原 | v1.1.0 | `renamer` | [tools/file-renamer/](tools/file-renamer/) |
 | **Better File Finder** | 多關鍵字、排除、模糊比對的檔案搜尋，也能搜尋文字檔內容 | v1.1.0 | `finder` | [tools/better-file-finder/](tools/better-file-finder/) |
 | **Random Icon Maker** | 輸入種子產生 9 種演算法的隨機圖示，預覽後存成 ICO／PNG | v1.1.0 | `icon` | [tools/random-icon-maker/](tools/random-icon-maker/) |
+| **Folder Cover** | 把資料夾在檔案總管裡的圖示換成裡面的一張圖；可整批套用、隨時恢復預設 | v1.0.0 | `cover` | [tools/folder-cover/](tools/folder-cover/) |
 
 Video Notes 與 Video Downloader 是本機網頁程式：執行後會開瀏覽器，主控台視窗關掉就停止。
 
@@ -319,7 +320,7 @@ spec 裡所有路徑都以它為基準解析，**完全不依賴當下的工作�
 | `。Better File Finder` | `tools/better-file-finder` | 修掉寫反的排除條件、補上內容搜尋 |
 | `64x64 Random Icon Maker` | `tools/random-icon-maker` | 命令列改成預覽 GUI；同一個種子產生的圖跟舊版逐像素相同 |
 | `。HashMyFile` | 併進既有的 `tools/hash-my-file` | 它就是表格版的前身；CRC32 與「貼上雜湊值比對」併回來，沒有另開工具 |
-| `Change Folder Cover (failes)` | 未收 | 作者自己標了 failed |
+| `Change Folder Cover (failes)` | `tools/folder-cover` | 作者標了 failed；2026-10-23 改用 Windows 的 `SHGetSetFolderCustomSettings` 重做成能用的工具（失敗原因見工具 README） |
 
 沒搬的東西：各專案的 `.venv`、`.env`（API 金鑰）、`data/`、`output/`、`downloads/`（產生的影音與個人資料）。
 原本的資料夾都還留在 `Python Projects\`，沒有刪除。刪之前注意：上面這些沒搬的東西只存在原資料夾裡，
