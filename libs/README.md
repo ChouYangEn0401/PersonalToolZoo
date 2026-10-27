@@ -5,7 +5,7 @@
 
 | 套件 | 內容 | 誰在用 |
 |---|---|---|
-| `toolzoo.appdirs` | 使用者資料夾 `%APPDATA%\PersonalToolZoo\<tool>\`、「下載」資料夾位置 | 需要存設定的工具 |
+| `toolzoo.appdirs` | 資料放工具旁邊的 `data\`、金鑰與參數放專案的 `.env`、「下載」資料夾位置 | 需要存設定的工具 |
 | `toolzoo.ai` | LLM 呼叫層：OpenAI / Gemini / Claude 同一個介面、API 金鑰管理、提示詞工具、Better Prompt 的轉換模式庫 | better-prompt、video-notes |
 | `toolzoo.webapp` | 本機 web app 啟動器（找空的 port、開瀏覽器、跑 uvicorn） | video-downloader、video-notes |
 
@@ -58,11 +58,34 @@ text = llm.complete(system, user)           # 一次拿完整結果
 讀取順序，先找到先用：
 
 1. 環境變數 `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY`
-2. **共用金鑰檔 `%APPDATA%\PersonalToolZoo\keys.env`** —— 所有工具共用，設一次就好（Better Prompt 的設定畫面就是寫到這裡）
-3. 工具自己指定的檔案，例如工具資料夾裡的 `.env`（已被 `.gitignore` 擋掉）
+2. **專案的 `.env`** —— 從原始碼執行讀 repo 根目錄的 `.env`；打包的 exe 先讀 exe 旁邊的 `.env`，
+   exe 在 repo 的 `dist\` 裡時也讀 repo 的那份。所有工具共用，設一次就好（Better Prompt 的設定畫面就是寫到這裡）
+3. 工具自己指定的額外檔案（`find_key(provider, extra_files)`）
 
 舊專案 `.env` 的寫法（`chatgpt=...`、`gemini=...`）也認得，整個檔案複製過來就能用。
-金鑰檔是純文字，靠「放在自己的使用者資料夾」保護，不要放進 repo。
+`.env` 是純文字，已被 `.gitignore` 擋掉；每一項的說明在 repo 根目錄的 `.env.example`。
+
+## toolzoo.appdirs：資料與參數放哪裡
+
+工具**不寫使用者資料夾**（`%APPDATA%`、家目錄、`~/.cache`）：
+
+```python
+from toolzoo.appdirs import load_env, tool_data_dir
+
+load_env()                                   # 專案 .env 的參數載入環境變數（已設定的不覆蓋，佔位值 ... 不載入）
+settings = tool_data_dir("my-tool") / "settings.json"
+# 原始碼執行 → tools/my-tool/data/settings.json；打包的 exe → exe 旁邊的 data/settings.json
+```
+
+| 函式 | 用途 |
+|---|---|
+| `tool_data_dir(tool)` | 工具的資料夾（設定、紀錄、快取、模型），會自動建立 |
+| `env_files()` / `env_file()` | 要讀的 `.env`（前面的優先）／要寫入的 `.env` |
+| `load_env()` | 把 `.env` 的參數載入環境變數，回傳載入了哪些 |
+| `repo_root()` | repo 根目錄（打包的 exe 不在 repo 裡時是 `None`） |
+| `downloads_dir()` | 使用者的「下載」資料夾（影片類輸出用） |
+
+測試時設 `TOOLZOO_DATA_DIR` 可以把資料與 `.env` 整個搬到暫存資料夾。
 
 ### 為什麼不需要為每個新模型改程式
 
