@@ -19,7 +19,7 @@
 | **HashMyFile** | 拖放檔案或資料夾計算 MD5／SHA-1／SHA-256／CRC32，內容相同的檔案自動標色；貼上雜湊值即可驗證 | v0.2.0 | `hash` | [tools/hash-my-file/](tools/hash-my-file/) |
 | **Advanced Excel Tool** | 分頁式 Excel 工作台：核心整理（可疊加／undo）、多檔合併、diff 比較＋AB 審核 | v0.1.0 | `excel` | [tools/excel-tool/](tools/excel-tool/) |
 | **Git Diff Statistics** | 指定兩個 commit／branch，統計各副檔名的檔案數與增刪行數 | v1.0.0 | `diff` | [tools/git-diff-stats/](tools/git-diff-stats/) |
-| **Video Notes** | 影片網址 → 下載 → 逐字稿（GPU Whisper）→ AI 依影片類型整理成 Notion 筆記；本機網頁 GUI＋CLI＋HTTP 串接 | v2.1.0 | `notes` | [tools/video-notes/](tools/video-notes/) |
+| **Video Notes** | 影片網址 → 下載 → 逐字稿（本機 Whisper 或雲端）→ AI 分析一次存成 analysis.json → Notion 筆記、樹狀圖（XMind…）、網頁範本；多支影片可合併成一份；本機網頁 GUI＋CLI（`--json`）＋HTTP 串接 | v2.2.0-alpha（內部測試版） | `notes` | [tools/video-notes/](tools/video-notes/) |
 | **Video Downloader** | yt-dlp 的本機網頁 GUI：約 1800 個網站與 m3u8 串流、畫質預設、播放清單、佇列與續傳、書籤小工具 | v2.1.0 | `downloader` | [tools/video-downloader/](tools/video-downloader/) |
 | **Better Prompt** | 貼上文字選模式，交給 AI 改寫：整理、摘要、Prompt 優化等 24 種模式。預設用 Claude 訂閱（不需要金鑰），也可以選 OpenAI／Gemini／Claude API | v1.2.0 | `prompt` | [tools/better-prompt/](tools/better-prompt/) |
 | **Super File Converter** | 圖片／影片／PDF／表格轉換工作台，含「設好規則直接拖檔」的快速轉換分頁 | v1.1.0 | `fast` | [tools/fast-file-converter/](tools/fast-file-converter/) |

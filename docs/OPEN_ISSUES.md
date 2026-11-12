@@ -57,25 +57,18 @@
 專案 `.env` 裡的 OpenAI 金鑰（兩把）在 2026-10-05 實測都回 `429 insufficient_quota`，Gemini 金鑰無效。
 現在預設用 Claude 訂閱，用不到它們；要用 OpenAI／Gemini 就換新的，不用就刪掉那幾行。
 
-### Q6. Video Notes v2：先實測，再發版
-
-v2（分析存檔、10 種輸出、多片合併、可換的語音辨識、錯誤合約）已經併進 master，295 個離線測試與打包的 exe 都驗過，
-但這台電腦不開網路埠、也不打真的 AI，所以**下面這些還沒有人實際做過**：
-
-| 要確認的 | 怎麼做 |
-|---|---|
-| 真的影片＋真的 AI 跑一次 | 開 GUI，貼一支短影片，模式選「新聞快訊總結」，輸出勾「一小張網頁」 |
-| 多片合併 | 筆記庫勾兩支 → 合併成一份 |
-| 網頁介面與 4 個範本的畫面 | 上面兩步順便看；範例也可以直接開：用 `templates/samples/` 填進範本（做法見 `templates/README.md`） |
-| `.xmind` 能不能用 XMind 打開 | 有 XMind 的電腦開一次；打不開就改用 OPML（`tree-opml`） |
-
-| 選項 | 說明 |
-|---|---|
-| **A. 你實測沒問題 → 發 2.2.0（建議）** | 回我「Q6 發版」，我跑 `release.ps1 video-notes minor` |
-| B. 直接發版 | 先發，有問題再修 |
-| C. 先不發 | master 上的程式比 tag `VideoNotes_v2.1.0` 新，exe 檔名還是 2.1.0 |
-
 ## 之後可以做
+
+- **Video Notes 2.2.0-alpha 轉正式版**：alpha 是內部測試版，這台電腦不開網路埠、也不打真的 AI，所以下面這些還沒有人實際做過。
+  用的時候順便看，沒問題就回我「轉正式版」（`release.ps1 video-notes 2.2.0 -NoSmoke`）；有問題直接講現象，我修完再發下一個 alpha。
+
+  | 要確認的 | 怎麼做 |
+  |---|---|
+  | 真的影片＋真的 AI 跑一次 | 開 GUI，貼一支短影片，模式選「新聞快訊總結」，輸出勾「一小張網頁」 |
+  | 多片合併 | 筆記庫勾兩支 → 合併成一份 |
+  | 網頁介面與 4 個範本的畫面 | 上面兩步順便看；範例也可以直接開：用 `templates/samples/` 填進範本（做法見 `templates/README.md`） |
+  | `.xmind` 能不能用 XMind 打開 | 有 XMind 的電腦開一次；打不開就改用 OPML（`tree-opml`） |
+- **Video Downloader 的 403 提示修正還沒發版**（11/12 併進 master，版本仍 2.1.0）：要用時跑 `release.ps1 video-downloader patch -NoSmoke`。
 
 - **Video Notes：OpenAI 語音辨識模型將停用**：OpenAI 文件寫 `whisper-1`、`gpt-4o-transcribe`、`gpt-4o-mini-transcribe` 於 2027-02-26 停用，
   改推 `gpt-transcribe`（2026-11-12 查到；回傳格式還沒查證）。目前預設 `gpt-4o-transcribe`，到時在設定的語音辨識模型改填新名稱，或改程式預設值。
@@ -108,4 +101,6 @@ v2（分析存檔、10 種輸出、多片合併、可換的語音辨識、錯誤
 | 2026-10-27 | 每個工具沒有自己的開發線 | 開 15 條 `dev/<工具資料夾>`，流程寫進 README「開發線」與 AGENTS.md |
 | 2026-10-27 | GitHub 上的 `feat/tool-migration`（舊的 41 個 commit） | 確認它的內容都在 master 之後刪除 |
 | 2026-10-27 | push 前要確認沒有機密 | 掃完所有分支與 tag 的歷史：沒有金鑰、`.env` 與 `data\` 沒被追蹤；之後 push 到 GitHub |
-| 2026-11-12 | Video Notes：內建語音辨識不夠好、只能一片一片整理、輸出只有文字筆記 | v2：可換的語音辨識（本機／OpenAI／Gemini）、分析存成 `analysis.json` 重複利用、10 種輸出、多片合併、錯誤合約與自我檢查。規劃與驗收在 `tools/video-notes/docs/handoffs/`；實測與發版見 Q6 |
+| 2026-11-12 | Video Notes：內建語音辨識不夠好、只能一片一片整理、輸出只有文字筆記 | v2：可換的語音辨識（本機／OpenAI／Gemini）、分析存成 `analysis.json` 重複利用、10 種輸出、多片合併、錯誤合約與自我檢查。規劃與驗收在 `tools/video-notes/docs/handoffs/` |
+| 2026-11-12 | Q6 Video Notes v2 要不要發版 | 你選「直接發、標 alpha」：發 `2.2.0-alpha`（`release.ps1` 改成接受預覽版號、加 `-NoSmoke`）。實測後轉正式版列在「之後可以做」 |
+| 2026-11-12 | `dev/video-downloader` 上另一個 session 留下的修正沒收 | 測試 11 個全過、打包 OK 後 `--no-ff` 收進 master |
