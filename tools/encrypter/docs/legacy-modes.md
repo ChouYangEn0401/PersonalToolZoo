@@ -64,3 +64,20 @@ v0.3.0 的功能從主視窗下架了，但**程式一行沒刪**，仍然可以
 ## 建議
 
 手上還有重要的舊 `.isd` 檔的話：用舊版工具解開，再用新格式重新加密一次，之後就不必再依賴舊版工具。
+
+## 附：舊版 README 裡的 Mixture 手動驗證步驟（原文保留）
+
+下面是改版前 `tools/encrypter/README.md` 的內容。注意它用的是**更早的名字**：這裡的 Layered＝現在程式裡的 All-In-One，
+這裡的 Nested＝現在程式裡的 Layered（名字撞名的問題見上面第 6 點）。
+
+> 此專案提供多種加密工具與 GUI，重點功能包含 `Layered` 與 `Nested` 兩種 Mixture 加密模式：
+>
+> - Layered：多階段加密結果融合成單一 `.isd`（fused）。單次用 File Tab 解密通常無法還原原始資料；必須以完整的 stage chain 在 Mixture Tab 中執行還原。
+> - Nested：每次加密會產生一個完整的 `.isd`（outer→inner→...）。用 File Tab 可逐層解鎖（每次解密會得到下一層 `.isd`），最終還原原始檔案。
+>
+> 關於 Mixture 模式的驗證
+>
+> 1. 測試 Nested：使用 Mixture Tab 建立兩層（例如 AES with keyA, then AES with keyB）並輸出 `outer.isd`；在 File Tab 用外層密碼解出 `inner.isd`，再用內層密碼還原原始檔案。
+> 2. 測試 Layered：使用相同兩個 stage 選 Layered 模式，產生 `fused.isd`；用 File Tab 解密一次通常會得到不可識別的亂碼，完整還原需在 Mixture Tab 以相同 chain 做 Decrypt。
+>
+> 更多細節請見 `del_dev_plan.md`。
