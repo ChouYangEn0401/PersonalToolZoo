@@ -6,7 +6,8 @@
       環境  - 工具的 requirements.txt 有第三方套件 → tools\<name>\.venv（專屬）
               只用標準庫                          → 根目錄 .venv（共用）
       版本  - tool.json 的 version_from 指到的檔案裡的 __version__ = "X.Y.Z" 是唯一來源
-      tag   - <tag_prefix>_v<X.Y.Z>
+              內部測試版可以加預覽標記：X.Y.Z-alpha、X.Y.Z-beta.2（semver 的 pre-release；只接受英數字與點）
+      tag   - <tag_prefix>_v<版本>
 #>
 
 $Root       = Split-Path -Parent $PSScriptRoot
@@ -16,6 +17,8 @@ $CheckDeps  = Join-Path $PSScriptRoot 'check_deps.py'
 $RootPython = Join-Path $Root '.venv\Scripts\python.exe'
 $Utf8NoBom  = New-Object System.Text.UTF8Encoding $false
 $VersionPattern = '(__version__\s*=\s*)([''"])([^''"]*)([''"])'
+# 合法的版本號：X.Y.Z，可以接預覽標記（例如 2.2.0-alpha、1.0.0-beta.2）
+$VersionSyntax = '\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?'
 
 
 # ================================================================ 外部程式
@@ -111,16 +114,18 @@ function Set-ToolVersion([pscustomobject] $info, [string] $newVersion) {
     [System.IO.File]::WriteAllText($info.VersionFile, $new, $Utf8NoBom)
 }
 
-# patch / minor / major / X.Y.Z → 新版本號
+# patch / minor / major / X.Y.Z（可帶預覽標記，例如 2.2.0-alpha）→ 新版本號
+# 目前是預覽版時，patch / minor / major 只看數字部分（2.2.0-alpha + patch → 2.2.1）；
+# 預覽版要轉成正式版請直接指定版本號（例如 2.2.0）。
 function Get-BumpedVersion([string] $current, [string] $bump) {
-    if ($bump -match '^v?(\d+\.\d+\.\d+)$') { return $Matches[1] }
-    if ($current -notmatch '^(\d+)\.(\d+)\.(\d+)$') { throw "目前版本 '$current' 不是 X.Y.Z 格式，請直接指定新版本號" }
+    if ($bump -match "^v?($VersionSyntax)$") { return $Matches[1] }
+    if ($current -notmatch '^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.]+)?$') { throw "目前版本 '$current' 不是 X.Y.Z 格式，請直接指定新版本號" }
     $maj, $min, $pat = [int]$Matches[1], [int]$Matches[2], [int]$Matches[3]
     switch ($bump.ToLower()) {
         'patch' { return "$maj.$min.$($pat + 1)" }
         'minor' { return "$maj.$($min + 1).0" }
         'major' { return "$($maj + 1).0.0" }
-        default { throw "看不懂 '$bump'：請用 patch / minor / major 或 X.Y.Z" }
+        default { throw "看不懂 '$bump'：請用 patch / minor / major 或 X.Y.Z（內部測試版可加 -alpha，例如 2.2.0-alpha）" }
     }
 }
 
@@ -139,14 +144,14 @@ function Read-BumpChoice([string] $current, [bool] $allowKeep = $false) {
     while ($true) {
         $a = Read-Answer "  編號；Enter 取消"
         if (-not $a) { return $null }
-        if ($a -match '^v?\d+\.\d+\.\d+$') { return $a.TrimStart('v') }
+        if ($a -match "^v?$VersionSyntax$") { return $a.TrimStart('v') }
         $pick = $null
         if ($a -match '^\d+$' -and [int]$a -ge 1 -and [int]$a -le $opts.Count) { $pick = $opts[[int]$a - 1][0] }
         elseif ($opts | Where-Object { $_[0] -eq $a.ToLower() }) { $pick = $a.ToLower() }
         if ($pick -eq 'custom') {
-            $v = Read-Answer "  新版本號 (X.Y.Z)"
-            if ($v -match '^v?\d+\.\d+\.\d+$') { return $v.TrimStart('v') }
-            Write-Host "  格式要是 X.Y.Z" -ForegroundColor Yellow
+            $v = Read-Answer "  新版本號 (X.Y.Z，內部測試版可加 -alpha)"
+            if ($v -match "^v?$VersionSyntax$") { return $v.TrimStart('v') }
+            Write-Host "  格式要是 X.Y.Z 或 X.Y.Z-alpha" -ForegroundColor Yellow
             continue
         }
         if ($pick) { return $pick }

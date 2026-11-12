@@ -18,6 +18,10 @@
     .\scripts\release.ps1 hash 1.0.0            # 直接指定版本
     .\scripts\release.ps1 hash keep             # 不改版本，發布目前版本（例如補打漏掉的 tag）
     .\scripts\release.ps1 hash patch -NoTag     # 不打 tag
+    .\scripts\release.ps1 notes 2.2.0-alpha     # 內部測試版：版本號加 -alpha（exe 檔名與 tag 都會帶著）
+    .\scripts\release.ps1 notes 2.2.0-alpha -NoSmoke
+                                                # 不開 exe 冒煙測試：web app 型工具一開就會在本機開網路埠，
+                                                # 不能開埠的電腦用這個，改用工具自己的 CLI 驗證打包結果
 #>
 [CmdletBinding()]
 param(
@@ -35,6 +39,8 @@ param(
     [string] $Bump,
 
     [switch] $NoTag,
+    # 不做冒煙測試（照樣清快取從頭 build）
+    [switch] $NoSmoke,
     # 不問確認（給自動化用）
     [switch] $Yes
 )
@@ -99,7 +105,7 @@ if (-not $keep) {
 }
 try {
     $global:LASTEXITCODE = 0
-    & (Join-Path $PSScriptRoot 'build.ps1') -Tool $info.Name -Clean | Out-Host
+    & (Join-Path $PSScriptRoot 'build.ps1') -Tool $info.Name -Clean -NoSmoke:$NoSmoke | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "build 或冒煙測試失敗" }
 
     if (-not $keep) {
