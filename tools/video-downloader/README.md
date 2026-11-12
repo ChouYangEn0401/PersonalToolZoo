@@ -76,6 +76,10 @@ VideoDownloader --help
 
 - 參數的組法：`options.py` 先組成 yt-dlp 命令列參數，再用 `yt_dlp.parse_options()` 轉成 API 選項——
   要加新選項時照 yt-dlp 的命令列文件加參數就好，不要手寫 postprocessor 的 dict。
-- YouTube 抓不到時，先在範圍內升級 yt-dlp：`setup-venv.ps1 video-downloader -Force`。
+- YouTube 抓不到時（403、「page needs to be reloaded」、格式不見了），幾乎都是 yt-dlp 跟不上 YouTube 改版，
+  只升級 yt-dlp 就好，不用重建整個 venv：
+  `tools\video-downloader\.venv\Scripts\python.exe -m pip install -U "yt-dlp[default]<2028"`（會連同 yt-dlp-ejs 一起更新）。
+  exe 版的 yt-dlp 是打包時固定的，升級後要重新 `build.ps1 video-downloader`。
+  下載失敗訊息遇到 YouTube 的這類錯誤，會直接提示這個指令（`options.explain_error` 要帶網址才分得出是不是 YouTube）。
 - GUI 的 API 只聽 127.0.0.1，寫入請求要帶 `X-Video-Downloader: 1`，「開啟位置」只限下載資料夾或下載過的檔案。
 - 只做通用下載：不針對特定網站寫破解或繞過存取限制的程式，DRM 內容不支援。
