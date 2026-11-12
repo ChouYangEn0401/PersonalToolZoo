@@ -37,9 +37,13 @@ class SourceAdapter(Protocol):
 REGISTRY: Registry[SourceAdapter] = Registry("影片來源")
 
 
+BUILTIN_MODULES = ("source_ytdlp",)   # 通用的 yt-dlp 放最後（專用來源加在前面）
+
+
 def load_builtin() -> None:
-    # 第 1 波的來源／錯誤合約 agent 在這裡加上 import
-    pass
+    from video_notes.adapters import import_builtin
+
+    import_builtin(BUILTIN_MODULES)
 
 
 def for_url(url: str, settings) -> SourceAdapter:

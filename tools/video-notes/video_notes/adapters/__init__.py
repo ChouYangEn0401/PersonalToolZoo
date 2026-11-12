@@ -14,10 +14,17 @@
 
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass
 from typing import Any, Callable, Generic, TypeVar
 
 T = TypeVar("T")
+
+
+def import_builtin(modules: tuple[str, ...]) -> None:
+    """import video_notes.adapters.<名稱>（模組在 import 時自己註冊；重複呼叫沒有副作用）。"""
+    for name in modules:
+        importlib.import_module(f"video_notes.adapters.{name}")
 
 
 @dataclass

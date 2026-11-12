@@ -54,10 +54,14 @@ class Renderer(Protocol):
 
 REGISTRY: Registry[Renderer] = Registry("輸出格式")
 
+BUILTIN_MODULES = ("render_markdown", "render_tree", "render_html")
+
 
 def load_builtin() -> None:
-    """import 內建實作（各自註冊）。"""
-    # 第 1 波 agent 在這裡加上 import
+    """import 內建實作（各自在 import 時註冊）。"""
+    from video_notes.adapters import import_builtin
+
+    import_builtin(BUILTIN_MODULES)
 
 
 def get(name: str) -> Renderer:
