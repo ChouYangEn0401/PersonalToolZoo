@@ -23,7 +23,8 @@
 .\scripts\build.ps1 video-notes                               # 打包成 exe（雙擊開 GUI，帶參數就是 CLI）
 ```
 
-需要：**ffmpeg**（PATH 上，或裝在 `C:\ffmpeg\bin`）、**Node（≥ 22）或 Deno（≥ 2.3）**（yt-dlp 抓 YouTube 要用），
+需要：**ffmpeg**（PATH 上，或裝在 `C:\ffmpeg\bin`）、**Node（≥ 22）或 Deno（≥ 2.3）**（yt-dlp 抓 YouTube 要用）——
+**沒有的話不用自己找**：GUI 頂端會出現「缺少 ffmpeg → 一鍵下載」（或 CLI `--install-deps`），見下方「缺 ffmpeg／Deno：一鍵補齊」；
 以及 AI：預設用 **Claude 訂閱**（電腦上裝好並登入 Claude Code，不需要金鑰），也可以改用 OpenAI / Gemini / Claude API 的金鑰
 （見下方「AI 服務」；只要逐字稿可以不用）。
 
@@ -76,6 +77,7 @@ VideoNotes --library --json                                         # 筆記庫�
 | `--combine`（`--folders a,b,c`、`--title`） | 把這次處理的網址（或指定的既有影片資料夾）合併成一份；至少兩支 |
 | `-y` / `--yes` | 合併規模超過確認門檻時視為同意。非互動或 `--json` 時必須加，否則回「輸入有問題」 |
 | `--check` / `--recheck` | 自我檢查；`--recheck` 先清掉「壞掉」記帳再檢查。有錯誤等級時退出碼 3 |
+| `--install-deps [ffmpeg\|deno\|all]` | 從官方下載 ffmpeg／Deno 到 `data\bin\`（不給名稱 = 缺的才裝）；先問過才下載，非互動或 `--json` 要加 `--yes` |
 | `--status` / `--library` | 目前工作與依賴健康狀態／筆記庫（只讀、不連網） |
 | `--json` | 機器可讀輸出（見下方「給程式呼叫」）；進度改印到 stderr |
 | 環境變數 `VIDEO_NOTES_OUT` | 預設輸出位置，用法同 `-o`。優先序：`-o` > 環境變數 > 設定 |
@@ -239,6 +241,24 @@ GUI 與 CLI 批次都一樣。「同時處理幾支」在設定裡改。
   GPU、各服務的金鑰**有沒有設**（不顯示內容）、各 adapter 的自我檢查。
 - 程式**不會**自動升級任何套件，只告訴你指令。
 
+### 缺 ffmpeg／Deno：一鍵補齊
+
+不做 installer、也不把它們打包進 exe（ffmpeg 約 110 MB 而且是 GPLv3、Deno 約 100 MB；打包會讓 exe 變很大、每次上游更新都要重發）。
+改成**你按了才從官方下載**：
+
+| 元件 | 用途 | 官方來源（下載後核對 SHA-256） | 自己裝 |
+|---|---|---|---|
+| ffmpeg | 下載合併、抽音訊 | gyan.dev `ffmpeg-release-essentials.zip`（GPLv3） | `winget install Gyan.FFmpeg` |
+| Deno | yt-dlp 抓 YouTube（有 Node 22 以上就不需要） | GitHub `deno-x86_64-pc-windows-msvc.zip`（MIT） | `winget install DenoLand.Deno` |
+
+- **GUI**：缺的時候頂端出現「缺少 ffmpeg」與「一鍵下載」按鈕、官網連結、winget 指令；下載進度即時顯示，裝好不用重開程式。
+- **CLI**：`VideoNotes --install-deps`（缺的才裝）／`--install-deps ffmpeg`／`all`；會先列出要下載什麼、從哪裡、多大，問過你才下載
+  （非互動或 `--json` 時要加 `--yes`）。
+- 放在工具旁邊的 `data\bin\<名稱>\`（只取 `ffmpeg.exe`、`ffprobe.exe`、`deno.exe` 與一份 `source.json` 記錄來源與雜湊），
+  程式啟動時自動加進 PATH；不改系統設定、不寫使用者資料夾。刪掉 `data\bin\` 就等於解除安裝。
+- 安全：只接受 https；校驗碼不符就整個刪掉；壓縮檔裡只看檔名不照路徑寫檔；安裝過程不執行下載來的程式；
+  重裝失敗會保留舊的那一份。
+
 ## socket 模式（把結果送給別的程式）
 
 處理完每支影片，把結果用 HTTP POST（JSON）送出——例如另一個程式收到後自動寫進 Notion、丟到 Telegram。
@@ -333,7 +353,7 @@ DLL 不齊時自動改用 CPU（int8，比較慢）。設定頁標題列會顯�
 | 依賴 | `yt-dlp[default]<2028`（網站常改版，上限刻意給到年底後一年）、`faster-whisper<2`、`nvidia-cublas-cu12<13`、`nvidia-cudnn-cu12<10`、`opencc-python-reimplemented<0.2`、`claude-subscription`（Claude 訂閱，釘在 GitHub tag `v0.2.1`，安裝要有 git）、`openai<3`、`anthropic<2`、`fastapi<1`、`uvicorn<1` |
 | 預設 AI | Claude 訂閱（`claude-sub`，模型 `sonnet`）——要先安裝並登入 Claude Code，**會用掉訂閱額度**；存過設定的人照原本的選擇 |
 | 共用程式 | `libs/toolzoo`：`ai`（LLM、金鑰、Better Prompt 模式庫）、`ytdlp`（JS 執行環境、ffmpeg 位置）、`webapp`（啟動器）、`appdirs` |
-| 資料與金鑰 | 工具旁邊的 `data\`：`settings.json`、`prompts\`（自訂提示詞）、`templates\`（自訂網頁範本）、`models\`（Whisper）、`health.json`（壞掉記帳）、`videos\`（選「data」輸出時）；影片筆記預設輸出到「下載\Video Notes」；金鑰與參數在專案的 `.env` |
+| 資料與金鑰 | 工具旁邊的 `data\`：`settings.json`、`prompts\`（自訂提示詞）、`templates\`（自訂網頁範本）、`models\`（Whisper）、`health.json`（壞掉記帳）、`bin\`（一鍵下載的 ffmpeg／Deno，`deps.py`）、`videos\`（選「data」輸出時）；影片筆記預設輸出到「下載\Video Notes」；金鑰與參數在專案的 `.env` |
 | 打包額外內容 | `include`: `prompts`、`socket`、`templates`、`video_notes/web/static`；`collect_all`: `yt_dlp_ejs`、`faster_whisper`（VAD 模型）、`opencc`（字典）；uvicorn 的 hiddenimports |
 | 測試 | `.\tools\video-notes\.venv\Scripts\python.exe -m unittest discover -s tools\video-notes\tests -v`（離線；假的 LLM／STT／來源，不打 API、不開網路埠） |
 | v2 架構（2026-11） | 核心資產 `analysis.<slug>.json`（`analysis.py`、[docs/analysis-schema.md](docs/analysis-schema.md)，改 schema 兩邊一起改並加 `SCHEMA_VERSION`）。四層 adapter 在 `video_notes/adapters/`：`source.py`（`source_ytdlp`）、`stt.py`（`stt_local`／`stt_openai`／`stt_gemini`＋`stt_chunk` 切段；`build_stt` 負責退路）、`llm.py`（`openai-compat`、`capabilities_for`）、`render.py`（`render_markdown`／`render_tree`／`render_html`）。每個 adapter 有 `capabilities()` 與不連網的 `check()`，失敗一律丟 `errors.ToolError`。分析在 `analyze.py`（驗證→修復一次→降級）、合併在 `collection.py`、筆記庫在 `library.py`、自我檢查 `doctor.py`、壞掉記帳 `health.py` |

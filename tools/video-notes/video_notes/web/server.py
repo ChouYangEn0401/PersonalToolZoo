@@ -31,6 +31,7 @@ from version import __version__
 from video_notes.config import (OUTPUT_CUSTOM, OUTPUT_DATA, OUTPUT_DOWNLOADS, Settings, load_settings,
                                 save_settings)
 from video_notes import collection, doctor
+from video_notes import deps as deps_mod
 from video_notes import health as health_mod
 from video_notes.adapters import render as render_mod
 from video_notes.adapters import stt as stt_mod
@@ -69,6 +70,8 @@ class Hub:
         self.locks = Locks.from_settings(self.settings)
         self.manager = JobManager(self._pipeline(), self.settings.parallel_jobs)
         self.lock = threading.Lock()
+        # 「一鍵下載 ffmpeg／Deno」的進度（一次只跑一個）：{name, state: running/done/failed, value, detail, error}
+        self.deps_job: dict = {}
 
     def _pipeline(self) -> Pipeline:
         return Pipeline(self.settings, library(), self.locks)
@@ -109,6 +112,10 @@ def tool_error(code: str, reason: str, action: str = "", kind: str = "none") -> 
 
 class CheckRequest(BaseModel):
     urls: list[str]
+
+
+class DepsRequest(BaseModel):
+    name: str
 
 
 class JobRequest(BaseModel):
@@ -363,6 +370,8 @@ def create_app() -> FastAPI:
             "stt_providers": stt_list(s),
             "ytdlp": ytdlp_info(),
             "degraded": degraded_list(),
+            "deps": deps_mod.status(),
+            "deps_job": dict(hub.deps_job),
             "text_modes": {mode: list(data.submodes) for mode, data in text_modes.MODES.items()},
         }
 
@@ -609,6 +618,38 @@ def create_app() -> FastAPI:
         if ext in INLINE_TEXT:
             return FileResponse(path, media_type=INLINE_TEXT[ext] + "; charset=utf-8", headers=headers)
         return FileResponse(path, media_type="application/octet-stream", filename=path.name, headers=headers)
+
+    @app.get("/api/deps")
+    def deps_status():
+        """ffmpeg／Deno 找不找得到、在哪、怎麼手動裝，以及一鍵下載的進度。不連網、不執行任何程式。"""
+        return {"items": deps_mod.status(), "job": dict(hub.deps_job)}
+
+    @app.post("/api/deps/install")
+    def deps_install(req: DepsRequest):
+        """使用者在 GUI 頂端的提醒按「一鍵下載」：背景從官方下載、核對 SHA-256、放到 data\\bin\\。"""
+        if req.name not in deps_mod.COMPONENTS:
+            raise tool_error("bad_input", f"不認得的元件：{req.name}")
+        with hub.lock:
+            if hub.deps_job.get("state") == "running":
+                raise tool_error("rate_limited", "已經有一個下載在進行中，等它結束再試")
+            hub.deps_job = {"name": req.name, "state": "running", "value": 0.0, "detail": "準備下載…", "error": None}
+
+        def progress(value: float, detail: str) -> None:
+            hub.deps_job.update(value=round(value, 3), detail=detail)
+
+        def run() -> None:
+            try:
+                path = deps_mod.install(req.name, on_progress=progress)
+                hub.deps_job.update(state="done", value=1.0, detail=f"安裝完成：{path}")
+                hub.manager.pipeline.ffmpeg = None    # 下一個工作重新找 ffmpeg
+            except ToolError as err:
+                hub.deps_job.update(state="failed", error=err.to_dict(), detail=err.reason)
+            except Exception as exc:  # noqa: BLE001 —— 背景執行緒：轉成錯誤合約顯示在畫面上
+                err = as_tool_error(exc, "deps", "下載")
+                hub.deps_job.update(state="failed", error=err.to_dict(), detail=err.reason)
+
+        threading.Thread(target=run, name=f"deps-{req.name}", daemon=True).start()
+        return {"job": dict(hub.deps_job)}
 
     @app.post("/api/health/recheck")
     def health_recheck():

@@ -188,6 +188,7 @@ async function init() {
   $("#version").textContent = `v${state.app.version}`;
   renderEnv();
   renderAlerts();
+  if ((state.app.deps_job || {}).state === "running") pollDeps();   // 重新整理頁面時下載還在跑
   fillForm();
   fillRefine();
   bindEvents();
@@ -217,20 +218,67 @@ function renderEnv() {
   $("#out-hint").textContent = `輸出到：${state.app.output_root}`;
 }
 
-// 頂端警示條：被標成「壞掉」的依賴（中文原因＋怎麼辦）＋「重新檢查」
+// 頂端警示條：缺少的外部程式（一鍵下載）＋被標成「壞掉」的依賴（中文原因＋怎麼辦）＋「重新檢查」
 function renderAlerts() {
   const { degraded, ytdlp } = state.app;
+  const job = state.app.deps_job || {};
+  const depItems = (state.app.deps || []).filter(d => d.needed || (job.name === d.name && job.state !== "done"))
+    .map(d => depAlert(d, job));
   const items = degraded.map(d => ({ title: `${d.label} 目前被標記為壞掉`, reason: d.reason, action: d.action }));
   if (ytdlp.level !== "ok" && !degraded.some(d => d.source === "yt-dlp")) {
     items.push({ title: `yt-dlp 已經 ${ytdlp.days} 天沒更新`, reason: "網站改版後可能抓不到影片。", action: ytdlp.action });
   }
   const bar = $("#alert-bar");
-  bar.hidden = !items.length;
+  bar.hidden = !items.length && !depItems.length;
   bar.replaceChildren(
-    h("div", { class: "alert-list" }, items.map(it => h("div", { class: "alert-item" },
+    h("div", { class: "alert-list" }, depItems, items.map(it => h("div", { class: "alert-item" },
       h("strong", { text: it.title }), h("span", { text: `　${it.reason}` }),
       it.action ? h("div", { class: "small", text: `怎麼辦：${it.action}` }) : null))),
-    h("button", { type: "button", id: "btn-recheck", onclick: recheck, text: "重新檢查" }));
+    items.length ? h("button", { type: "button", id: "btn-recheck", onclick: recheck, text: "重新檢查" }) : null);
+}
+
+// 缺少 ffmpeg／Deno：一鍵從官方下載（使用者按了才下載），或自己到官網／用 winget 裝
+function depAlert(d, job) {
+  const mine = job.name === d.name;
+  const running = job.state === "running";
+  let status = null;
+  if (mine && job.state === "failed") status = h("div", { class: "small bad", text: `下載失敗：${errText(job.error)}` });
+  else if (mine && running) status = h("div", { class: "small", text: `${job.detail || "下載中…"}` });
+  return h("div", { class: "alert-item" },
+    h("strong", { text: `缺少 ${d.label}` }), h("span", { text: `　${d.purpose}` }),
+    h("div", { class: "dep-actions" },
+      h("button", { type: "button", disabled: running, onclick: () => installDep(d.name),
+        text: mine && running ? "下載中…" : `一鍵下載 ${d.label}（${d.size_hint}）` }),
+      h("a", { href: d.homepage, target: "_blank", rel: "noopener noreferrer", text: "到官網自己下載" }),
+      h("code", { text: d.winget, title: "也可以在終端機執行這一行" })),
+    h("div", { class: "small", text: `從官方下載並核對 SHA-256，放在工具旁邊的 data\\bin\\，不會動到系統設定。授權：${d.license}` }),
+    status);
+}
+
+async function installDep(name) {
+  try {
+    const r = await post("/api/deps/install", { name });
+    state.app.deps_job = r.job;
+    renderAlerts();
+    pollDeps();
+  } catch (e) {
+    toast(`沒辦法開始下載：${e.message}`);
+  }
+}
+
+async function pollDeps() {
+  let r;
+  try { r = await api("/api/deps"); } catch (e) { setTimeout(pollDeps, 2000); return; }
+  state.app.deps = r.items;
+  state.app.deps_job = r.job;
+  renderAlerts();
+  if (r.job.state === "running") { setTimeout(pollDeps, 1000); return; }
+  if (r.job.state === "done") {
+    toast(r.job.detail || "安裝完成");
+    state.app = await api("/api/state");   // ffmpeg／JS 的狀態晶片一起更新
+    renderEnv();
+    renderAlerts();
+  }
 }
 
 async function recheck() {

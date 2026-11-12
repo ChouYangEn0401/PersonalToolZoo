@@ -106,7 +106,18 @@ class Pipeline:
         self.llm_factory = llm_factory or _default_llm
         self.source_factory = source_factory or (lambda url, s: _default_source(url, s))
         self.stt_factory = stt_factory or (lambda s: _default_stt(s))
-        self.ffmpeg = ytdlp.find_ffmpeg()
+        self._ffmpeg: str | None = ytdlp.find_ffmpeg()
+
+    @property
+    def ffmpeg(self) -> str | None:
+        """找不到時每次重找：使用者在 GUI 按「一鍵下載」裝好 ffmpeg 後，不用重開程式。"""
+        if not self._ffmpeg:
+            self._ffmpeg = ytdlp.find_ffmpeg()
+        return self._ffmpeg
+
+    @ffmpeg.setter
+    def ffmpeg(self, value: str | None) -> None:
+        self._ffmpeg = value
 
     # ------------------------------------------------------------------ 壞掉記帳（health）
     def _tracked(self, source: str | Callable[[], str], fn: Callable[[], object], version: str = ""):
