@@ -48,8 +48,21 @@ v0.3.0 的功能從主視窗下架了，但**程式一行沒刪**，仍然可以
 
 ## 現在用什麼取代
 
-新格式 **ISD2**（`crypto_tool/sealed/`）：AES-256-GCM 或 ChaCha20-Poly1305，密語用 scrypt，分塊加密，
-檔頭與每一塊都經過驗證。資料夾、大檔、命令列都是同一套。見 `tools/encrypter/README.md`。
+0.4.0 起只產生**公開標準格式**：簡單模式＝**age v1**（預設）、PGP 模式＝**OpenPGP**（呼叫系統 gpg）。
+都有驗證（被改過、截斷都會明確失敗）、都支援多收件人（萬用鎖）、資料夾、大檔、命令列。見 `tools/encrypter/README.md`。
+舊 PGP 系列（RSA＋AES 的自排信封）的真正需求「多人各自能開」「有第三方也能開」，現在就是 age／OpenPGP 的多收件人。
+
+## ISD2 預覽格式（已停用，只能解密）
+
+| | |
+|---|---|
+| 是什麼 | 2026-11-12 在 `dev/encrypter` 上做過的自有格式：64 bytes 固定檔頭（魔術字 `ISD2`、格式版本 1）、AES-256-GCM 或 ChaCha20-Poly1305、密語走 scrypt、1 MiB 分塊、整個檔頭參與每一塊的驗證。副檔名 `.isd2`。**從沒發版** |
+| 為什麼停用 | 0.4.0 決定只產生公開格式：自己排的格式沒有人審過，災難時還得靠這個工具才解得開；也只能有一把鑰匙 |
+| 現在能做什麼 | **只能解密與看資訊**。命令列 `decrypt` 自動辨識，用 `--key-file`／`--key-env`（舊金鑰檔，已停用的選項）或 `--passphrase`；視窗的解密頁也認得。`rewrap`／`rekey` 不支援，請先解開再用新模式加密 |
+| 程式 | `crypto_tool/sealed/container.py`（格式）、`ops.py`（解密、資訊）、`keys.py`（讀舊金鑰檔）。產生樣本的函式只剩給測試用的 `ops._encrypt_preview_for_tests`、`keys._generate_preview_key_for_tests` |
+| 名字的混淆 | 設計稿 `handoffs/20261112-221100-design-new-crypto-core.md` 裡另有一個也叫 ISD2 的「金鑰槽版」規格（8 bytes 魔術字、JSON 檔頭），**從來沒有實作，未採用**。之後提到 ISD2 一律指這裡的「預覽格式（已停用）」 |
+
+手上有 `.isd2` 的話（只可能是開發期間的測試檔）：解開後用簡單模式重新加密一次。
 
 ## 怎麼救回
 
@@ -58,12 +71,13 @@ v0.3.0 的功能從主視窗下架了，但**程式一行沒刪**，仍然可以
   改成建一個 `TkinterDnD.Tk()`、`ttk.Style(theme="darkly")`、呼叫 `legacy_app.apply_gold_overrides(style)`，
   再把 `legacy_app.open_legacy_window(root)` 裡的分頁放進去（或直接把 `gui/legacy_app.py` 還原成原本的 `gui/app.py`）。
 - **要一模一樣的 v0.3.0**：`git checkout Encrypter_v0.3.0 -- tools/encrypter`（或只取 `crypto_tool/gui/app.py`）。
-- **想把某個想法做成正式功能**（多把鑰匙缺一不可、多人各自能解、分段授權）：不要從舊程式改，
-  照交接單「選項表」裡寫的標準做法，在 ISD2 上加。
+- **想把某個想法做成正式功能**：「多人各自能解」＝多收件人（已做，萬用鎖）；「分段授權、一關一關解」＝剝洋蔥
+  （每層一個完整的 age／OpenPGP 檔，`decrypt --all-layers`，已做）；「多把鑰匙缺一不可」還沒做，要做也不要從舊程式改，
+  用標準做法（例如把幾個鑰匙來源合成一把再加密一次），不要疊加密。
 
 ## 建議
 
-手上還有重要的舊 `.isd` 檔的話：用舊版工具解開，再用新格式重新加密一次，之後就不必再依賴舊版工具。
+手上還有重要的舊 `.isd` 檔的話：用舊版工具解開，再用簡單模式（age）重新加密一次，之後就不必再依賴舊版工具。
 
 ## 附：舊版 README 裡的 Mixture 手動驗證步驟（原文保留）
 

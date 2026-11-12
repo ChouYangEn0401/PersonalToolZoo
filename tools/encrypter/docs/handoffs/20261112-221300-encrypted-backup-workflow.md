@@ -1,6 +1,6 @@
 # 加密備份流程：打包 → 加密 → 驗證 → 放到可上傳的位置 → 定期演練
 
-- **狀態：待處理**（設計稿；需要擁有者決定第 5 張文件的 Q4）
+- **狀態：待處理（第 5 包「備份流程」還沒做，2026-11-13）**：0.4.0 的 `encrypt`（多個輸入、資料夾）、`decrypt`、`inspect`、萬用鎖是它的基礎；`backup run／check／drill` 等指令沒有實作。Q4 照建議（A）。見 `20261113-013906-format-decision-age-openpgp.md`。
 - 建立：2026-11-12 ｜ 範圍：`tools/encrypter/` 內新增「備份」指令；**不含上傳**（上傳是另一個步驟，不在這個工具裡連網）
 - 開發線：`dev/encrypter`
 - 前提：`20261112-221100-design-new-crypto-core.md`、`20261112-221200-key-custody-and-recovery.md`

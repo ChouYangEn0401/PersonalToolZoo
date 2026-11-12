@@ -1,6 +1,10 @@
 # 萬用鎖＋本次金鑰：研究、設計與原型
 
-> 狀態：研究完成、原型可跑、**尚未**進入 Encrypter 正式功能。
+> **已落地（2026-11-13，Encrypter 0.4.0）：萬用鎖用 age／OpenPGP 的標準多收件人實作，加上 `rewrap`（換鎖）與 `rekey`（換檔案金鑰）；**
+> **下面的 MLOCK 自有格式原型保留為研究參考，不打包、不被工具匯入，也不會產生使用者的檔案。**
+> 用法見工具 README「萬用鎖」；格式決定見 `handoffs/20261113-013906-format-decision-age-openpgp.md`。
+>
+> 狀態（研究當時）：研究完成、原型可跑、尚未進入 Encrypter 正式功能。
 > 原型：[`../prototype/master_lock/`](../prototype/master_lock/)（`mlock.py` ＋ `test_mlock.py`）。
 > 給雲端實作用的 prompt：[`master-lock-cloud-prompt.md`](master-lock-cloud-prompt.md)。
 

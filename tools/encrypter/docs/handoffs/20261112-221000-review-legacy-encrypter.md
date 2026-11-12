@@ -1,6 +1,7 @@
 # Encrypter 現況審查：哪些可以留、哪些不該再用來保護重要資料
 
-- **狀態：待處理**（本張只有審查結論，沒有改任何程式）
+- **狀態：已處理（結論已採用，2026-11-13，Encrypter 0.4.0 在 `dev/encrypter`，待合併回 master）**：新版只產生公開的 age／OpenPGP，主視窗沒有舊演算法；舊 `.isd` 留在舊版工具只建議解舊檔（舊視窗仍能加密，見第 5 張 Q5 的現況）。決定與後續見 `20261113-013906-format-decision-age-openpgp.md`。
+  （本張原本只有審查結論，沒有改任何程式）
 - 建立：2026-11-12 ｜ 範圍：`tools/encrypter/crypto_tool/`（`core/`、`gui/`）、`tests/`、`.isd` 格式
 - 開發線：`dev/encrypter`
 - 同批文件（建議照順序讀）：

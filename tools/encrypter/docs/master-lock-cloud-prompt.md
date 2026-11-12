@@ -1,5 +1,8 @@
 # 實作用 prompt：Encrypter「萬用鎖」金鑰槽格式（給雲端 Claude Code）
 
+> **已不需要執行（2026-11-13）**：萬用鎖已經在 Encrypter 0.4.0 用 age／OpenPGP 的標準多收件人＋`rewrap`／`rekey` 落地，
+> 0.4.0 決定不再產生任何自有格式。這份 prompt 只保留為研究紀錄；**不要再照它實作 MLOCK 格式**。
+
 > 這份可以整段貼給雲端的 Claude Code session。內容自給自足：規格、測試要求、驗收條件都在下面。
 > 背景說明與設計理由在同目錄的 `master-lock-research.md`（若該檔已在你的分支上，可以讀；沒有也能照本 prompt 完成）。
 
