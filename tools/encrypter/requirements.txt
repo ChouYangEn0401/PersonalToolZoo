@@ -5,3 +5,6 @@ pycryptodome>=3.20.0,<4
 # 打包後一啟動就 FileNotFoundError。要升 2.x 得先在 tool.json 加 collect_all 並重新驗證 UI。
 ttkbootstrap>=1.10.1,<2
 tkinterdnd2>=0.3.0,<1
+# 現行格式 ISD2（crypto_tool/sealed，CLI 與新介面用）：AES-256-GCM／ChaCha20-Poly1305、scrypt、HKDF。
+# 上面的 pycryptodome 只剩舊版 .isd（core/）在用。
+cryptography>=42.0,<51
