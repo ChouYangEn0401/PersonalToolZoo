@@ -8,6 +8,8 @@
 退路規則（build_stt 負責）：
 - 雲端失敗 → 只有 settings.stt_fallback_local 為 True 時才退回本機，並在 analysis 標 quality flag "stt_fallback_local"。
 - 本機 → 雲端 **絕不**自動發生（不在使用者沒選的情況下上傳音訊）。
+- 讓 pipeline 知道有退路：build_stt 回傳的包裝（FallbackStt）有 `fell_back: bool` 與 `fallback_error`；
+  沒有退路能力的 adapter 沒有這兩個屬性，用 getattr(adapter, "fell_back", False) 讀。
 """
 
 from __future__ import annotations
@@ -49,9 +51,80 @@ REGISTRY: Registry[SttAdapter] = Registry("語音辨識服務")
 
 def load_builtin() -> None:
     """import 內建實作（各自註冊）。沒裝某家 SDK 不影響其他家：SDK 只在 transcribe() 裡才 import。"""
-    # 第 1 波的 STT agent 在這裡加上 import（local 一定要第一個）
+    from video_notes.adapters import import_builtin
+
+    import_builtin(("stt_local", "stt_openai", "stt_gemini"))   # local 一定要第一個
+
+
+class FallbackStt:
+    """雲端 adapter 的包裝：雲端丟 ToolError（或任何非取消的例外）就改用本機 Whisper。
+
+    讓 pipeline 知道發生了退路（選擇的方式：adapter 上的屬性，不改 Transcript）：
+        fell_back: bool                    最近一次 transcribe() 有沒有退回本機（每次呼叫開頭重設為 False）
+        fallback_error: ToolError | None   雲端為什麼失敗（pipeline 可寫進工作紀錄）
+    pipeline 在 transcribe() 之後讀 `getattr(adapter, "fell_back", False)`，為 True 就在 analysis 的
+    quality_flags 加 "stt_fallback_local"；provenance 讀 name／model，退路後它們會變成本機的值。
+    取消（transcribe.Cancelled）不算失敗，原樣往上丟。
+    """
+
+    def __init__(self, primary: SttAdapter, local: SttAdapter):
+        self.primary = primary
+        self.local = local
+        self.fell_back = False
+        self.fallback_error: ToolError | None = None
+
+    @property
+    def _active(self) -> SttAdapter:
+        return self.local if self.fell_back else self.primary
+
+    @property
+    def name(self) -> str:
+        return self._active.name
+
+    @property
+    def model(self) -> str:
+        return self._active.model
+
+    def capabilities(self) -> dict:
+        return self.primary.capabilities()
+
+    def check(self) -> ToolError | None:
+        return self.primary.check()
+
+    def describe(self) -> str:
+        text = self._active.describe()
+        return f"{text}（雲端失敗，已退回本機）" if self.fell_back else text
+
+    def transcribe(self, wav: Path, *, language: str | None = None, on_progress: Progress | None = None,
+                   cancel: threading.Event | None = None) -> Transcript:
+        from video_notes.errors import as_tool_error
+        from video_notes.transcribe import Cancelled
+
+        self.fell_back = False
+        self.fallback_error = None
+        try:
+            error = self.primary.check()
+            if error is not None:
+                raise error
+            return self.primary.transcribe(wav, language=language, on_progress=on_progress, cancel=cancel)
+        except Cancelled:
+            raise
+        except Exception as exc:  # noqa: BLE001 — 雲端的任何失敗都走退路
+            self.fallback_error = as_tool_error(exc, f"stt:{self.primary.name}", "雲端語音辨識")
+        self.fell_back = True
+        if on_progress:
+            on_progress(0.0, "")
+        return self.local.transcribe(wav, language=language, on_progress=on_progress, cancel=cancel)
 
 
 def build_stt(settings) -> SttAdapter:
-    """依 settings.stt_provider 建立 adapter；雲端且 settings.stt_fallback_local 時回傳「失敗會退回本機」的包裝。"""
-    raise NotImplementedError("第 1 波 STT agent 實作")
+    """依 settings.stt_provider 建立 adapter；雲端且 settings.stt_fallback_local 時回傳「失敗會退回本機」的包裝。
+
+    本機 adapter 永遠不包退路（本機絕不自動退到雲端）。名稱不存在丟 ToolError(config_invalid)。
+    """
+    load_builtin()
+    name = (getattr(settings, "stt_provider", "") or LOCAL).strip() or LOCAL
+    adapter = REGISTRY.create(name, settings)
+    if name == LOCAL or not getattr(settings, "stt_fallback_local", False):
+        return adapter
+    return FallbackStt(adapter, REGISTRY.create(LOCAL, settings))
