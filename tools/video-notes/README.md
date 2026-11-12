@@ -213,7 +213,10 @@ DLL 不齊時自動改用 CPU（int8，比較慢）。設定頁標題列會顯�
 ### 注意事項
 
 - 外部程式：ffmpeg、Node / Bun / Deno 其中一個（YouTube）。`debug/check_env.py` 會檢查。
-- YouTube 改版導致抓不到時，先在 `requirements.txt` 範圍內升級 yt-dlp：`setup-venv.ps1 video-notes -Force`。
+- YouTube 改版導致抓不到時（403、「page needs to be reloaded」、格式不見了），只升級 yt-dlp 就好：
+  `tools\video-notes\.venv\Scripts\python.exe -m pip install -U "yt-dlp[default]<2028"`（會連同 yt-dlp-ejs 一起更新）。
+  **不要**為了這件事跑 `setup-venv.ps1 video-notes -Force`：那會砍掉整個 venv 重裝，包含約 2 GB 的 CUDA 套件。
+  exe 版的 yt-dlp 是打包時固定的，升級後要重新 `build.ps1 video-notes`。
 - Whisper 模型放在工具旁邊的 `data\models\`（Hugging Face 快取格式；medium 約 1.5 GB），沒有就第一次用時下載；
   打包的 exe 在 repo 的 `dist\` 裡時直接借用 `tools\video-notes\data\models\`，也可以用 `.env` 的 `VIDEO_NOTES_MODEL_DIR` 指定。
   程式把 `HF_HOME` 指到這裡，不會寫到使用者的 `~\.cache\huggingface`。
