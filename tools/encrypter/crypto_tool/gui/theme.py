@@ -56,7 +56,7 @@ FONT_HEADING = ("Microsoft JhengHei UI", 16, "bold")
 FONT_DROP = ("Microsoft JhengHei UI", 12)
 FONT_BUTTON = ("Microsoft JhengHei UI", 11, "bold")
 
-WINDOW_SIZE = (860, 720)
-WINDOW_MIN = (720, 620)
+WINDOW_SIZE = (900, 780)
+WINDOW_MIN = (760, 600)
 GAP = 10      # 區塊之間
 PAD_X = 18    # 分頁內容左右留白

@@ -61,7 +61,7 @@ def _recipient_flags(p, *, pgp: bool = True) -> None:
     p.add_argument("-r", "--recipient", action="append", default=[], metavar="age1…",
                    help="簡單模式的收件人公鑰（可給多個）")
     p.add_argument("-R", "--recipients-file", action="append", default=[], metavar="檔案",
-                   help="收件人清單檔：一行一把 age1 公鑰（# 開頭是註解）")
+                   help="收件人清單檔：一行一把 age1 公鑰（# 開頭是註解）；也接受自己的身分檔（用它的公鑰）")
     p.add_argument("--with-master", action="store_true",
                    help="也讓設定好的萬用鎖打得開（.env 的 ENCRYPTER_MASTER_RECIPIENT／ENCRYPTER_MASTER_PGP_KEY）")
     if pgp:

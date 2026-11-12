@@ -213,11 +213,18 @@ def _read_recipients_file(path) -> list:
     try:
         if p.stat().st_size > 1 << 20:
             raise SealError("bad_key_format", "收件人清單檔太大，看起來不是收件人清單。")
-        text = p.read_text(encoding="utf-8-sig")
-    except UnicodeDecodeError:
-        raise SealError("bad_key_format", "收件人清單檔不是 UTF-8 文字。") from None
+        blob = p.read_bytes()
     except OSError as exc:
         raise SealError("io_error", "讀不到收件人清單檔。", detail=type(exc).__name__) from None
+    if agefmt.is_encrypted_identity_file(blob):
+        raise SealError("bad_key_format", "這是有密語保護的身分檔，不能直接當收件人。",
+                        action="改用它的公鑰（age1…，產生時有印出來，或在「金鑰」分頁檢查這個檔案）。")
+    try:
+        text = blob.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise SealError("bad_key_format", "收件人清單檔不是 UTF-8 文字。") from None
+    if "AGE-SECRET-KEY-" in text.upper():   # 自己的身分檔：加密給它對應的公鑰（age -e -i 的行為）
+        return [ident.recipient for ident in agefmt.parse_identity_file(text)]
     return agefmt.parse_recipients(text)
 
 
