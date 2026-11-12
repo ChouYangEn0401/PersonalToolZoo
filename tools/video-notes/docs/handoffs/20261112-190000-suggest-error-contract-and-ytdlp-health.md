@@ -1,6 +1,6 @@
 # Video Notes：錯誤合約、yt-dlp 維護與批次節流（建議修改，搭配 v2 計畫一起做）
 
-- **狀態：已修**（2026-11-12，`dev/video-notes` 併進 master；merge commit 與驗收結果見檔尾「收尾紀錄」）
+- **狀態：已修**（2026-11-12，`dev/video-notes` 併進 master；merge commit `d47f868`，驗收結果見檔尾「收尾紀錄」）
 - 建立：2026-11-12 ｜ 範圍：`tools/video-notes/`（先只改這個工具；共用的 `libs/toolzoo/ytdlp.py` 先不動，見選項表）
 - 開發線：`dev/video-notes`，開工前 `git merge master`
 - **寫給接手的 agent**：這張跟旁邊的 `20261112-182622-v2-analysis-adapters-plan.md` 是同一個開發週期。

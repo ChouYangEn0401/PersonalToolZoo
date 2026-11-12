@@ -1,6 +1,6 @@
 # Video Notes v2：adapter 加固與 analysis.json 補強（建議修改，搭配 v2 計畫一起做）
 
-- **狀態：已修**（2026-11-12，`dev/video-notes` 併進 master；merge commit 與驗收結果見檔尾「收尾紀錄」）
+- **狀態：已修**（2026-11-12，`dev/video-notes` 併進 master；merge commit `d47f868`，驗收結果見檔尾「收尾紀錄」）
 - 建立：2026-11-12 ｜ 範圍：`tools/video-notes/`（adapters、analysis、render、prompts）
 - 開發線：`dev/video-notes`，開工前 `git merge master`
 - **寫給接手的 agent**：這張補充旁邊的 `20261112-182622-v2-analysis-adapters-plan.md`。計畫裡的設計決定不要推翻，

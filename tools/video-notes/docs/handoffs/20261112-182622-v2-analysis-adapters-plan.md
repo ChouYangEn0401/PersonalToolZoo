@@ -1,6 +1,6 @@
 # Video Notes v2：分析暫存 + 可換的 adapter + 多片合併 + 多種輸出
 
-- **狀態：已修**（2026-11-12，`dev/video-notes` 併進 master；merge commit 與驗收結果見檔尾「收尾紀錄」）
+- **狀態：已修**（2026-11-12，`dev/video-notes` 併進 master；merge commit `d47f868`，驗收結果見檔尾「收尾紀錄」）
 - 建立：2026-11-12 ｜ 範圍：`tools/video-notes/`（必要時 `libs/toolzoo/`）
 - 開發線：`dev/video-notes`（remote 有；本機沒有就 `git switch -c dev/video-notes origin/dev/video-notes`），開工前 `git merge master`
 - 下一個 session 只要使用者說 **continue**：讀完這張，從「## 執行計畫」的第 0 波開始，照做。
@@ -131,7 +131,7 @@ Video Notes 現在是「一條流程跑到底就丟掉」：語音辨識只有�
 
 ## 收尾紀錄（2026-11-12）
 
-照上面的四波做完，並把同資料夾三張 `suggest-*` 一起收掉。merge commit：見 master 上 `Merge dev/video-notes: Video Notes v2 …`（下一個 commit 會把雜湊補在這裡）。
+照上面的四波做完，並把同資料夾三張 `suggest-*` 一起收掉。merge commit：`d47f868`（Merge dev/video-notes: Video Notes v2 …）。
 
 | 波 | 做了什麼 | commit（dev/video-notes） |
 |---|---|---|

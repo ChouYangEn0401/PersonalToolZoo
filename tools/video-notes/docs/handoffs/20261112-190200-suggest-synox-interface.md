@@ -1,6 +1,6 @@
 # Video Notes：預留給外部 AI 助理核心（SYNOX）呼叫的介面（建議，本期只留介面）
 
-- **狀態：已修（本期範圍：1～3 與草稿 4）**（2026-11-12；merge commit 與驗收結果見檔尾「收尾紀錄」）
+- **狀態：已修（本期範圍：1～3 與草稿 4）**（2026-11-12；merge commit `d47f868`，驗收結果見檔尾「收尾紀錄」）
 - 建立：2026-11-12 ｜ 範圍：`tools/video-notes/video_notes/cli.py`、`docs/`；不新增對外部專案的相依
 - 開發線：`dev/video-notes`，開工前 `git merge master`
 - **寫給接手的 agent**：這張是三張 `suggest-*` 裡最輕的一張。做 v2 的時候順手把介面留好即可，
