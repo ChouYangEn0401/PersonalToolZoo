@@ -83,6 +83,10 @@
 - **Video Downloader 的 web API 測試**需要 `httpx2`，它不在工具自己的環境裡，所以在自己的 `.venv` 跑時那 2 個測試會略過
   （用 Video Notes 的環境跑就 10/10）。要的話把測試依賴寫成獨立的 requirements。
 - **Encrypter 改版（`dev/encrypter`，2026-11-12）還沒驗收、還沒合併**：命令列、新格式 ISD2、新介面都寫好了，新測試 76 個全過。
+  **先要你決定一件事**：加密檔的格式維持現在這版（自己排的、只用 `cryptography`、還沒有人審過），還是發版前換成公開的 age 格式
+  （同一天另一批設計文件的建議；災難時不必靠這個工具也解得開）。建議後者；決定前不要用它加密要長期保存的真資料。
+  兩邊的差異表在 `tools/encrypter/docs/handoffs/20261112-223325-encrypter-intent-and-redesign.md`，其餘待決事項（Q1～Q7）在同資料夾的
+  `20261112-221400-workpackages-and-decisions.md`。
   剩下三件要在真的電腦上做：① 跑 `tools\encrypter\run.bat`，照 `tools/encrypter/docs/ui-spec.md` 最後的清單把畫面看一遍（畫面沒有人看過）；
   ② 用工具自己的環境跑 `python -m unittest discover -s tools\encrypter\tests -v`（應該 83 個，含舊的 7 個）；
   ③ `build.ps1 enc`（新增了 `cryptography`，要確認打包後開得起來）。都過了再 `git merge --no-ff dev/encrypter`，建議發 0.4.0。
