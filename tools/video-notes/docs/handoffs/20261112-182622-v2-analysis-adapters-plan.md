@@ -156,6 +156,8 @@ Video Notes 現在是「一條流程跑到底就丟掉」：語音辨識只有�
 - **發版**：擁有者選「直接發、標 alpha」（2026-11-12）→ `release(video-notes): v2.2.0-alpha`（a5b74c8），tag `VideoNotes_v2.2.0-alpha`，
   exe `VideoNotes(v2.2.0-alpha).exe`（107.0 MB，`release.ps1 -NoSmoke`；打包後用 exe 的 `--library`、`--render --outputs all` 驗證）。
   為此 `scripts/` 改成接受預覽版號並加了 `release.ps1 -NoSmoke`（985462b）。
+- **2.2.0-alpha.2**（2026-11-13）：擁有者想省掉使用者自己找 ffmpeg，選「程式內建檢查＋一鍵補齊」（不做 installer）→
+  `deps.py`、GUI 頂端「一鍵下載」、`--install-deps`（merge 1e73280）；`release(video-notes): v2.2.0-alpha.2`（343a5ef），已 push。
 - `tree-xmind` 沒用真的 XMind 打開過；Mermaid 的跳脫寫法、Gemini 的 mp3 輸入沒實測（docs/tree-formats.md、OPEN_ISSUES）。
 - HTML 範本：程式把 analysis 直接填進範本（AI 不另外為範本產生內容），因為 analysis 本身就是 AI 整理好的乾淨資料；這樣換範本完全不花 token。
 - 本檔原本寫「主 session 不派 agent 做第 0 波」——照做；第 2 波原計畫的「G 輸出」併進第 1 波的 D（HTML 填範本不需要 AI），第 2 波改成 F 合併、G CLI、H 網頁。

@@ -154,7 +154,7 @@ pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 1
     <div class="status">
       <div class="stat"><span class="k">工具</span><span class="v">15 個</span><span class="d">每個都有自己的版本、tag 與開發線</span></div>
       <div class="stat"><span class="k">打包</span><span class="v">15 / 15 OK</span><span class="d"><code>build.ps1 -All</code>，每個 exe 開 10 秒冒煙測試</span></div>
-      <div class="stat"><span class="k">測試</span><span class="v">12 組全過</span><span class="d">385 個測試＋Git Helper Pro 的語言載入檢查；3 個工具沒有自動化測試</span></div>
+      <div class="stat"><span class="k">測試</span><span class="v">12 組全過</span><span class="d">404 個測試＋Git Helper Pro 的語言載入檢查；3 個工具沒有自動化測試</span></div>
       <div class="stat"><span class="k">從原始碼執行</span><span class="v">15 / 15 OK</span><span class="d"><code>run.ps1 --check-all</code>：每個工具用自己的環境 import 成功</span></div>
       <div class="stat"><span class="k">機密掃描</span><span class="v">0 件</span><span class="d">所有分支與 tag 的每個檔案版本與 commit 訊息；<code>.env</code> 裡的金鑰值逐一比對</span></div>
       <div class="stat"><span class="k">GitHub</span><span class="v">已 push</span><span class="d">master、26 個 tag、15 條開發線（2026-10-27）</span></div>
@@ -177,7 +177,7 @@ pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 1
           <tr><td><a href="#t-excel-tool">Advanced Excel Tool</a></td><td class="mono">excel</td><td class="mono">0.1.0</td><td class="mono">dev/excel-tool</td><td>視窗＋CLI</td><td>無</td><td><span class="pill ok">OK</span></td><td>沒有自動化測試</td></tr>
           <tr><td><a href="#t-git-diff-stats">Git Diff Statistics</a></td><td class="mono">diff</td><td class="mono">1.0.0</td><td class="mono">dev/git-diff-stats</td><td>視窗＋主控台</td><td>無</td><td><span class="pill ok">OK</span></td><td>沒有自動化測試</td></tr>
           <tr class="group"><td colspan="8">2026-10 從 Python Projects\ 搬進來</td></tr>
-          <tr><td><a href="#t-video-notes">Video Notes</a></td><td class="mono">notes</td><td class="mono">2.2.0-alpha</td><td class="mono">dev/video-notes</td><td>本機網頁＋CLI</td><td>Claude 訂閱（預設）</td><td><span class="pill ok">OK</span></td><td>295 ✓</td></tr>
+          <tr><td><a href="#t-video-notes">Video Notes</a></td><td class="mono">notes</td><td class="mono">2.2.0-alpha.2</td><td class="mono">dev/video-notes</td><td>本機網頁＋CLI</td><td>Claude 訂閱（預設）</td><td><span class="pill ok">OK</span></td><td>314 ✓</td></tr>
           <tr><td><a href="#t-video-downloader">Video Downloader</a></td><td class="mono">downloader</td><td class="mono">2.1.0</td><td class="mono">dev/video-downloader</td><td>本機網頁＋CLI</td><td>無</td><td><span class="pill ok">OK</span></td><td>10 ✓</td></tr>
           <tr><td><a href="#t-better-prompt">Better Prompt</a></td><td class="mono">prompt</td><td class="mono">1.2.0</td><td class="mono">dev/better-prompt</td><td>視窗</td><td>Claude 訂閱（預設）</td><td><span class="pill ok">OK</span></td><td>共用層 25 ✓</td></tr>
           <tr><td><a href="#t-fast-file-converter">Super File Converter</a></td><td class="mono">fast</td><td class="mono">1.1.0</td><td class="mono">dev/fast-file-converter</td><td>視窗</td><td>無</td><td><span class="pill ok">OK</span></td><td>5 ✓</td></tr>
@@ -278,18 +278,18 @@ pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 1
       </article>
 
       <article class="tool" id="t-video-notes">
-        <header><h3>Video Notes</h3><span class="short">notes · tools/video-notes</span><span class="ver">v2.2.0-alpha</span><span class="pill warn">內部測試版</span><span class="pill ok">Claude 訂閱</span></header>
+        <header><h3>Video Notes</h3><span class="short">notes · tools/video-notes</span><span class="ver">v2.2.0-alpha.2</span><span class="pill warn">內部測試版</span><span class="pill ok">Claude 訂閱</span></header>
         <p class="purpose">貼上影片網址 → 下載 → 語音辨識成逐字稿 → AI 依影片類型分析一次、存成 <code>analysis.json</code> → 產生 Notion 筆記、樹狀圖（XMind／Mermaid／OPML…）、網頁範本，或把好幾支影片合併成一份。本機網頁介面、命令列（含給程式用的 <code>--json</code>）、HTTP 串接都能用。</p>
         <dl class="facts">
           <dt>現況</dt><dd>2.0 照你寫的 <code>update_plan.txt</code> 重寫。2.1.0（10/27）資料與 Whisper 模型改放 <code>data\</code>，金鑰改讀專案的 <code>.env</code>。
-            <strong>2.2.0-alpha（11/12，內部測試版）＝ v2 架構</strong>：四層可換的 adapter（來源、語音辨識：本機 Whisper／OpenAI／Gemini、分析用 AI：含 OpenAI 相容端點、輸出：10 種格式）；
+            <strong>2.2.0-alpha（11/12，內部測試版）＝ v2 架構；2.2.0-alpha.2（11/13）加上缺 ffmpeg／Deno 時一鍵下載</strong>：四層可換的 adapter（來源、語音辨識：本機 Whisper／OpenAI／Gemini、分析用 AI：含 OpenAI 相容端點、輸出：10 種格式）；
             分析結果存成 <code>analysis.&lt;方案&gt;.json</code>，換輸出不再花 token；多片合併（新聞快訊總結、上課筆記、電影解說等模式）；
             錯誤合約（壞掉時講清楚原因與下一步）、壞掉記帳（連續 3 次就不再自動重試）、<code>--check</code> 自我檢查。
             規劃與驗收在 <code>tools/video-notes/docs/handoffs/</code>。</dd>
-          <dt>來源</dt><dd><code>Python Projects\VideoToSimpleNotion</code>。開發線 <code>dev/video-notes</code>，tag <code>VideoNotes_v2.2.0-alpha</code>（前一個正式版 <code>VideoNotes_v2.1.0</code>）。</dd>
+          <dt>來源</dt><dd><code>Python Projects\VideoToSimpleNotion</code>。開發線 <code>dev/video-notes</code>，tag <code>VideoNotes_v2.2.0-alpha.2</code>（之前：<code>VideoNotes_v2.2.0-alpha</code>；前一個正式版 <code>VideoNotes_v2.1.0</code>）。</dd>
           <dt>資料</dt><dd><code>data\settings.json</code>、<code>prompts\</code>、<code>templates\</code>（自訂提示詞與網頁範本）、<code>health.json</code>（壞掉記帳）、<code>models\</code>（Whisper medium 1.5 GB，從 <code>~\.cache\huggingface</code> 搬來，離線找得到）、<code>legacy\extensions\</code>。筆記預設輸出到「下載\Video Notes」；舊專案的 42 個檔案（1.6 GB）在「下載\Video Notes\舊版 VideoToSimpleNotion」，搬前搬後檔案數與大小一致。</dd>
           <dt>AI</dt><dd>預設 Claude 訂閱（sonnet），可選 OpenAI／Gemini／Claude API／OpenAI 相容端點（Ollama 等；金鑰在 <code>.env</code>）。語音辨識預設本機 Whisper，可選 OpenAI／Gemini（會上傳音訊）。</dd>
-          <dt>驗證</dt><dd>11/12 發 2.2.0-alpha（release.ps1 <code>-NoSmoke</code>，從頭 build，107.0 MB）；295 個測試全過（離線，假的 AI／語音辨識／來源）。打包的 alpha exe 用範例分析跑 <code>--render --outputs all</code>，10 種輸出全部產生、網頁裡帶著 2.2.0-alpha；<code>--library</code>、<code>--check</code> 正常。
+          <dt>驗證</dt><dd>11/13 發 2.2.0-alpha.2（release.ps1 <code>-NoSmoke</code>，從頭 build，107.0 MB）；314 個測試全過（離線，假的 AI／語音辨識／來源）。打包的 alpha exe 用範例分析跑 <code>--render --outputs all</code>，10 種輸出全部產生、網頁裡帶著版本號；<code>--library</code>、<code>--check</code> 正常。
             <strong>還沒做</strong>：v2 還沒用真的影片＋真的 AI 跑過一次；網頁介面與 4 個網頁範本還沒有人在瀏覽器裡看過（這台電腦不開網路埠，GUI 的冒煙測試改用 CLI 驗證）；<code>.xmind</code> 還沒用真的 XMind 打開過。10/06 打包的 2.1 版實際跑完一支影片。</dd>
           <dt>注意</dt><dd>要 ffmpeg，以及 Node ≥ 22 或 Deno ≥ 2.3（yt-dlp 抓 YouTube 用）；缺的話 GUI 頂端有「一鍵下載」（或 <code>--install-deps</code>），從官方下載並核對 SHA-256，放 <code>data\bin\</code>，不做 installer、不把 ffmpeg 打包進 exe。Claude 訂閱每次最多等 900 秒。<code>--json</code> 的輸出在 v2 改成 <code>{"ok", "data"|"error"}</code> 信封格式。import commit 少了 3 個小腳手架檔案，見<a href="#old">舊專案去了哪裡</a>。</dd>
         </dl>
@@ -499,7 +499,7 @@ pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 1
     <p class="note">全部在 2026-10-27 的 master 上實際跑過。你說過不會自己再重跑，所以每一項都是跑出來的結果，不是推論。</p>
     <div class="list">
       <div class="row"><div class="id">V1</div><div class="body"><div class="name">每個工具都能打包並開起來 <span class="pill ok">15 / 15</span></div><div class="what"><code>build.ps1 -All</code>：自動準備環境 → 打包 → 把 exe 開 10 秒冒煙測試，全部 OK。補上依賴上限的 4 個工具之後又各 build 一次，也都 OK。發版時 8 個工具（7 個新版本＋Folder Cover 補 tag）也各自清掉快取從頭 build 一次，都 OK。</div></div></div>
-      <div class="row"><div class="id">V2</div><div class="body"><div class="name">每個工具的測試 <span class="pill ok">12 組全過</span></div><div class="what">每組都用工具自己的環境跑：libs 25、Video Notes 295（11/12 v2）、File Renamer 16、Video Downloader 10、Novel Reader 8、Better File Finder 7、Encrypter 7、Folder Cover 7、Super File Converter 5、HashMyFile 3、Random Icon Maker 2，共 385 個，加上 Git Helper Pro 的語言載入檢查。Advanced Excel Tool、Git Diff Statistics、Table Format Converter 沒有自動化測試。</div></div></div>
+      <div class="row"><div class="id">V2</div><div class="body"><div class="name">每個工具的測試 <span class="pill ok">12 組全過</span></div><div class="what">每組都用工具自己的環境跑：libs 25、Video Notes 314（11/13 v2 alpha.2）、File Renamer 16、Video Downloader 10、Novel Reader 8、Better File Finder 7、Encrypter 7、Folder Cover 7、Super File Converter 5、HashMyFile 3、Random Icon Maker 2，共 404 個，加上 Git Helper Pro 的語言載入檢查。Advanced Excel Tool、Git Diff Statistics、Table Format Converter 沒有自動化測試。</div></div></div>
       <div class="row"><div class="id">V3</div><div class="body"><div class="name">從原始碼執行 <span class="pill ok">15 / 15</span></div><div class="what"><code>run.ps1 --check-all</code>：每個工具用自己的環境、把進入點和所有 import 都載入一次，全部成功。</div></div></div>
       <div class="row"><div class="id">V4</div><div class="body"><div class="name">Claude 訂閱真的能用 <span class="pill ok">通過</span></div><div class="what">10/27 透過共用的 AI 層用 Claude 訂閱呼叫 haiku，6.7 秒回覆正常（用掉 1 次訂閱額度）。Better Prompt 用假的 Claude 回覆把畫面走一遍也通過。10/06 打包的 Video Notes 跑完一支影片。</div></div></div>
       <div class="row"><div class="id">V5</div><div class="body"><div class="name">舊資料搬家 <span class="pill ok">全部一致</span></div><div class="what">搬家腳本對每一項比對搬前搬後的檔案數與總大小，全部一致才算完成。Whisper 模型搬家後在離線狀態下找得到。</div></div></div>
@@ -522,7 +522,7 @@ pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 1
         <li>7 個工具發新版、Folder Cover 補 tag；4 個工具的依賴補上主版本上限。</li>
         <li>每個工具開自己的開發線；寫交接文件與問題交接報告書；push 前掃描機密；push 到 GitHub；刪掉已經沒用的 <code>feat/tool-migration</code>。</li>
       </ul></div></div></div>
-      <div class="row"><div class="date">11/12</div><div class="body"><div class="name">Video Notes v2：分析一次、輸出很多種、多片合併 <span class="pill ok">已併進 master</span></div><div class="what">照 <code>tools/video-notes/docs/handoffs/</code> 的計畫分四波做（第 0 波契約、第 1 波 5 個 agent、第 2 波 3 個 agent、第 3 波整合），一起收掉同資料夾的三張建議（錯誤合約、adapter 加固、外部助理介面）。HTML 範本由 Fable 設計。你選「直接發、標 alpha」：發 <code>2.2.0-alpha</code>（腳本因此支援預覽版號與 <code>release.ps1 -NoSmoke</code>）。同一天把另一個 session 留在 <code>dev/video-downloader</code> 的修正測過後收進 master。</div></div></div>
+      <div class="row"><div class="date">11/12</div><div class="body"><div class="name">Video Notes v2：分析一次、輸出很多種、多片合併 <span class="pill ok">已併進 master</span></div><div class="what">照 <code>tools/video-notes/docs/handoffs/</code> 的計畫分四波做（第 0 波契約、第 1 波 5 個 agent、第 2 波 3 個 agent、第 3 波整合），一起收掉同資料夾的三張建議（錯誤合約、adapter 加固、外部助理介面）。HTML 範本由 Fable 設計。你選「直接發、標 alpha」：發 <code>2.2.0-alpha</code>（腳本因此支援預覽版號與 <code>release.ps1 -NoSmoke</code>）；11/13 加上缺 ffmpeg／Deno 時一鍵下載（不做 installer），發 <code>2.2.0-alpha.2</code> 並 push。同一天把另一個 session 留在 <code>dev/video-downloader</code> 的修正測過後收進 master。</div></div></div>
     </div>
   </section>
 
