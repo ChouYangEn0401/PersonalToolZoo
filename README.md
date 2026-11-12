@@ -104,6 +104,8 @@ Advanced Excel Tool、Better Prompt、Video Notes 第一次建環境還需要 gi
 | 只改版本號 | `.\scripts\bump-version.ps1 hash patch`（`minor`／`major`／`1.2.3`） |
 | 發新版（改版號＋build＋commit＋tag） | `.\scripts\release.ps1 hash patch`（或雙擊 `release.bat`） |
 | 補打目前版本的 tag（版本不變、該版本還沒有 tag 時） | `.\scripts\release.ps1 <工具> keep` |
+| 發內部測試版（alpha） | `.\scripts\release.ps1 notes 2.2.0-alpha`（版本號加 `-alpha`，exe 檔名與 tag 都會帶著） |
+| 發版但不開 exe 冒煙測試 | `.\scripts\release.ps1 notes 2.2.0-alpha -NoSmoke`（web app 型工具一開就開本機網路埠；不能開埠的電腦用這個，改用工具的 CLI 驗證） |
 | 從原始碼執行一個工具 | 雙擊 `tools\hash-my-file\run.bat`，或 `.\scripts\run.ps1 hash [給工具的參數]` |
 | 檢查每個工具的環境與 import（不開程式） | `.\scripts\run.ps1 --check-all` |
 | 手動建／重建環境 | `.\scripts\setup-venv.ps1 hash`、整個重建加 `-Force`（平常 `run.bat` 與 build 會自動建好） |
@@ -134,6 +136,9 @@ Advanced Excel Tool、Better Prompt、Video Notes 第一次建環境還需要 gi
 
 沒有 `version_from` 或檔案裡沒有 `__version__`，build 會直接拒絕，不會產出沒有版本號的 exe。
 版本號格式用 `主.次.修`：修 bug 加 patch、加功能加 minor、不相容的大改加 major。
+**內部測試版**在後面加預覽標記（semver 的 pre-release，只能用英數字與點）：`2.2.0-alpha`、`2.2.0-beta.2`。
+exe 檔名變成 `<name>(v2.2.0-alpha).exe`、tag 是 `<tag_prefix>_v2.2.0-alpha`，一看就知道是測試版；
+測完要轉正式版時直接指定版本號（`release.ps1 notes 2.2.0`）——`patch`／`minor`／`major` 只看數字部分。
 
 ## 發布流程
 

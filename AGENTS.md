@@ -28,6 +28,8 @@
      （Encrypter + ttkbootstrap 2、Excel Tool + pandas 3，見 README）。
    - 打包工具鏈（pyinstaller 等）只放在根目錄 `requirements-dev.txt`。
 3. **版本號規則：** 唯一來源是 `tool.json` 的 `version_from` 指到的檔案裡的 `__version__ = "X.Y.Z"`。
+   - 內部測試版加預覽標記：`X.Y.Z-alpha`、`X.Y.Z-beta.2`（格式定義在 `_common.ps1` 的 `$VersionSyntax`）。
+     程式裡不要把版本號當成純數字解析（例如 `split(".")` 轉 int），會在預覽版壞掉。
    - exe 檔名由 `scripts/tool.spec` 讀它；視窗標題要 `import` 同一個 `__version__`。
    - **不要在任何地方手打版本號**（標題、README 以外的程式碼、檔名）。
    - 改版本用 `scripts/bump-version.ps1` 或 `scripts/release.ps1`。
@@ -129,6 +131,8 @@ README「歷史」列了還沒收的分支。收的時候照原本的四步，�
 - **web app 型的工具**（video-notes、video-downloader）：exe 一開就會開瀏覽器，冒煙測試也一樣。
   不想跳瀏覽器時先設 `$env:TOOLZOO_NO_BROWSER = 1`。冒煙測試只看 exe 有沒有活著；要確認伺服器真的有回應，
   打 `http://127.0.0.1:<port>/api/health`（video-notes 8766、video-downloader 8765）。
+  在不能開網路埠的電腦上，build／release 加 `-NoSmoke`，改用 exe 的 CLI 驗證打包結果
+  （video-notes：`--check --json`、`--library --json`、`--render <資料夾> --outputs all`，都不開埠）。
 - **yt-dlp 抓 YouTube 需要 JavaScript 執行環境**（deno／node／bun 其中一個），`libs/toolzoo/ytdlp.py` 會全部打開、有哪個用哪個。
 - **novel-reader 不要改回 pyttsx3**：2.99 在 Windows 上第二次 `runAndWait()` 就永遠卡住；現在直接呼叫 SAPI。
 - **PowerShell 的 `-match`／`-notmatch` 不分大小寫**：過濾輸出時 `'ok'` 也會濾掉結果表的 `OK` 行。
