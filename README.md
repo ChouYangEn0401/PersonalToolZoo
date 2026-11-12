@@ -15,12 +15,12 @@
 |---|---|---|---|---|
 | **Git Helper Pro** | Git 指令 GUI 助手：多專案分頁、危險指令攔截、rebase/merge/stash 引導、繁中／簡中／英三語切換 | v1.6.5 | `githelper` | [tools/git-helper-pro/](tools/git-helper-pro/) |
 | **Encrypter** | 檔案／文字加密 GUI，自訂 `.isd` 格式，支援多種演算法與 Mixture（多階段）加密模式 | v0.3.0 | `enc` | [tools/encrypter/](tools/encrypter/) |
-| **Table Format Converter** | 貼上 Tab 分隔或 Markdown 表格即時預覽，一鍵輸出 MD／Tab／CSV／XLSX | v1.0.0 | `table` | [tools/table-format-converter/](tools/table-format-converter/) |
+| **Table Format Converter** | 貼上 Tab 分隔或 Markdown 表格即時預覽，一鍵輸出 MD／Tab／CSV／XLSX | v1.0.1 | `table` | [tools/table-format-converter/](tools/table-format-converter/) |
 | **HashMyFile** | 拖放檔案或資料夾計算 MD5／SHA-1／SHA-256／CRC32，內容相同的檔案自動標色；貼上雜湊值即可驗證 | v0.2.0 | `hash` | [tools/hash-my-file/](tools/hash-my-file/) |
-| **Advanced Excel Tool** | 分頁式 Excel 工作台：核心整理（可疊加／undo）、多檔合併、diff 比較＋AB 審核 | v0.1.0 | `excel` | [tools/excel-tool/](tools/excel-tool/) |
+| **Advanced Excel Tool** | 分頁式 Excel 工作台：核心整理（可疊加／undo）、多檔合併、diff 比較＋AB 審核 | v0.1.1 | `excel` | [tools/excel-tool/](tools/excel-tool/) |
 | **Git Diff Statistics** | 指定兩個 commit／branch，統計各副檔名的檔案數與增刪行數 | v1.0.0 | `diff` | [tools/git-diff-stats/](tools/git-diff-stats/) |
 | **Video Notes** | 影片網址 → 下載 → 逐字稿（本機 Whisper 或雲端）→ AI 分析一次存成 analysis.json → Notion 筆記、樹狀圖（XMind…）、網頁範本；多支影片可合併成一份；本機網頁 GUI＋CLI（`--json`）＋HTTP 串接 | v2.2.0-alpha.2（內部測試版） | `notes` | [tools/video-notes/](tools/video-notes/) |
-| **Video Downloader** | yt-dlp 的本機網頁 GUI：約 1800 個網站與 m3u8 串流、畫質預設、播放清單、佇列與續傳、書籤小工具 | v2.1.0 | `downloader` | [tools/video-downloader/](tools/video-downloader/) |
+| **Video Downloader** | yt-dlp 的本機網頁 GUI：約 1800 個網站與 m3u8 串流、畫質預設、播放清單、佇列與續傳、書籤小工具 | v2.1.1 | `downloader` | [tools/video-downloader/](tools/video-downloader/) |
 | **Better Prompt** | 貼上文字選模式，交給 AI 改寫：整理、摘要、Prompt 優化等 24 種模式。預設用 Claude 訂閱（不需要金鑰），也可以選 OpenAI／Gemini／Claude API | v1.2.0 | `prompt` | [tools/better-prompt/](tools/better-prompt/) |
 | **Super File Converter** | 圖片／影片／PDF／表格轉換工作台，含「設好規則直接拖檔」的快速轉換分頁 | v1.1.0 | `fast` | [tools/fast-file-converter/](tools/fast-file-converter/) |
 | **Novel Reader** | 長文朗讀：Windows 內建語音或 Google 語音、可調語速、KTV 式字幕、記住讀到哪 | v2.1.0 | `reader` | [tools/novel-reader/](tools/novel-reader/) |
@@ -47,7 +47,7 @@ Video Notes 與 Video Downloader 是本機網頁程式：執行後會開瀏覽�
 ```
 選擇要「build」的工具：
   [1] encrypter                v0.3.0     tools\encrypter\.venv
-  [2] excel-tool               v0.1.0     tools\excel-tool\.venv
+  [2] excel-tool               v0.1.1     tools\excel-tool\.venv
   ...
   編號（可多選：1 3 或 1-3）、a = 全部、或打名稱；Enter 取消
 ```
@@ -104,6 +104,7 @@ Advanced Excel Tool、Better Prompt、Video Notes 第一次建環境還需要 gi
 | 只改版本號 | `.\scripts\bump-version.ps1 hash patch`（`minor`／`major`／`1.2.3`） |
 | 發新版（改版號＋build＋commit＋tag） | `.\scripts\release.ps1 hash patch`（或雙擊 `release.bat`） |
 | 補打目前版本的 tag（版本不變、該版本還沒有 tag 時） | `.\scripts\release.ps1 <工具> keep` |
+| 把 build 好的 exe 放上 GitHub Release | `gh release create <tag> "dist\<工具>\<exe>" --verify-tag --title "<名稱> v<版本>" --notes "…"`（tag 要先 push；alpha／0.x 加 `--prerelease`，其他加 `--latest=false`；已有 release 的 tag 不要覆蓋） |
 | 發內部測試版（alpha） | `.\scripts\release.ps1 notes 2.2.0-alpha`（版本號加 `-alpha`，exe 檔名與 tag 都會帶著） |
 | 發版但不開 exe 冒煙測試 | `.\scripts\release.ps1 notes 2.2.0-alpha -NoSmoke`（web app 型工具一開就開本機網路埠；不能開埠的電腦用這個，改用工具的 CLI 驗證） |
 | 從原始碼執行一個工具 | 雙擊 `tools\hash-my-file\run.bat`，或 `.\scripts\run.ps1 hash [給工具的參數]` |

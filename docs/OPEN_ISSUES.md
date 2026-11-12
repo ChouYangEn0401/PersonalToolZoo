@@ -3,7 +3,7 @@
 > 還沒處理、需要使用者決定、或之後要做的事。整體交接（每個工具的版本、用途、狀態）在 [HANDOFF.html](HANDOFF.html)。
 > 處理完一項就把它移到最下面的「已解決」，寫上日期與怎麼解決的。
 
-最後更新：2026-11-12
+最後更新：2026-11-13
 
 ## 要你決定
 
@@ -69,7 +69,11 @@
   | 多片合併 | 筆記庫勾兩支 → 合併成一份 |
   | 網頁介面與 4 個範本的畫面 | 上面兩步順便看；範例也可以直接開：用 `templates/samples/` 填進範本（做法見 `templates/README.md`） |
   | `.xmind` 能不能用 XMind 打開 | 有 XMind 的電腦開一次；打不開就改用 OPML（`tree-opml`） |
-- **Video Downloader 的 403 提示修正還沒發版**（11/12 併進 master，版本仍 2.1.0）：要用時跑 `release.ps1 video-downloader patch -NoSmoke`。
+- **Encrypter 還沒放上 GitHub Release**：現在 master 上是 0.3.0，但 `Encrypter_v0.3.0` 這個 tag 指的是搬進 hub 之前的舊 commit
+  （那個 release 的 exe 也是舊的）。另外有 session 正在 `dev/encrypter`（age、PGP、sealed）開發，所以 2026-11-13 沒動它。
+  那邊收完、merge 回 master 後：`release.ps1 encrypter patch -Yes`（或你要的版號），再照 README 的 `gh release create` 放 exe。
+- **GitHub 上有 4 個舊 release 是搬進 hub 之前的 exe**：`Table_Format_Converter_v1.0.0`（重複 tag）、`GitHelperPro_v1.5.0`、`HashMyFile_v0.1.0`、`Encrypter_v0.3.0`。
+  新的 release 都是 `<工具>_v<版本>` 這種 tag；舊的想清掉可以在 GitHub 上刪（我沒動）。
 
 - **Video Notes：OpenAI 語音辨識模型將停用**：OpenAI 文件寫 `whisper-1`、`gpt-4o-transcribe`、`gpt-4o-mini-transcribe` 於 2027-02-26 停用，
   改推 `gpt-transcribe`（2026-11-12 查到；回傳格式還沒查證）。目前預設 `gpt-4o-transcribe`，到時在設定的語音辨識模型改填新名稱，或改程式預設值。
@@ -104,4 +108,5 @@
 | 2026-10-27 | push 前要確認沒有機密 | 掃完所有分支與 tag 的歷史：沒有金鑰、`.env` 與 `data\` 沒被追蹤；之後 push 到 GitHub |
 | 2026-11-12 | Video Notes：內建語音辨識不夠好、只能一片一片整理、輸出只有文字筆記 | v2：可換的語音辨識（本機／OpenAI／Gemini）、分析存成 `analysis.json` 重複利用、10 種輸出、多片合併、錯誤合約與自我檢查。規劃與驗收在 `tools/video-notes/docs/handoffs/` |
 | 2026-11-12 | Q6 Video Notes v2 要不要發版 | 你選「直接發、標 alpha」：發 `2.2.0-alpha`（`release.ps1` 改成接受預覽版號、加 `-NoSmoke`）。實測後轉正式版列在「之後可以做」 |
+| 2026-11-13 | 工具沒有放上 GitHub Release、Video Downloader 403 修正沒發版 | 14 個工具重新 build（OK）並各建一個 Release 附 exe；Excel Tool 0.1.1、Table Format Converter 1.0.1、Video Downloader 2.1.1 是這次升的版。Encrypter 留到它的開發線收完（見上） |
 | 2026-11-12 | `dev/video-downloader` 上另一個 session 留下的修正沒收 | 測試 11 個全過、打包 OK 後 `--no-ff` 收進 master |
