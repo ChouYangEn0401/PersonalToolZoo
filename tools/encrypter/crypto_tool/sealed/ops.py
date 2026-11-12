@@ -1,10 +1,14 @@
-"""對檔案與資料夾做加密、解密、看資訊。CLI 與視窗程式都呼叫這裡。
+"""ISD2 預覽格式（已停用）：解密、看資訊。
+
+這個格式是 0.4.0 之前在開發線上做過、從沒發版的自有格式；0.4.0 起**只能解密，不能再產生**
+（命令列與視窗都沒有產生它的選項）。產生樣本的函式改名為 ``_encrypt_preview_for_tests``，
+只給測試做解密用的樣本。現行的加密見 workflow.py（age／OpenPGP）。
 
 原則：
 * 輸出先寫到目標旁邊的暫存檔，全部成功才改名成目標；中途失敗會把暫存檔刪掉，
   所以不會留下半個檔案，也不會留下沒通過驗證的明文。
 * 目標已存在就拒絕，除非呼叫端明確要求覆蓋；已存在且非空的資料夾永遠不覆蓋。
-* 資料夾先打包成 tar（一邊打包一邊加密，不落地成明文 tar）。
+* 資料夾內容是 tar；解開時只收一般檔案與資料夾，路徑檢查與 packing.py 共用。
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ import re
 import secrets
 import shutil
 import tarfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Callable
 
 from .container import (
@@ -23,13 +27,15 @@ from .container import (
     KeyMaterial, SealReader, SealWriter, parse_header,
 )
 from .errors import SealError
+from .packing import safe_member_path as _safe_member_path
+from .packing import walk as _walk
 
 Progress = Callable[[int, int], None]
 _COPY_BLOCK = 1024 * 1024
 _TAR_SUFFIX = ".tar"
 
 
-def default_encrypt_output(src: str | os.PathLike) -> Path:
+def _default_preview_output(src: str | os.PathLike) -> Path:
     p = Path(src)
     return p.with_name(p.name + EXTENSION)
 
@@ -129,37 +135,7 @@ def _run(tmp: Path, dst: Path, force: bool, work: Callable[[], None]) -> None:
         raise
 
 
-def _walk(root: Path):
-    """依固定順序走過資料夾。回傳 (項目清單, 被略過的連結數)。不跟著連結走。"""
-    items: list[tuple[Path, str]] = []
-    skipped = 0
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames.sort()
-        here = Path(dirpath)
-        keep = []
-        for name in dirnames:
-            child = here / name
-            if child.is_symlink() or _is_junction(child):
-                skipped += 1
-                continue
-            keep.append(name)
-            items.append((child, child.relative_to(root).as_posix()))
-        dirnames[:] = keep
-        for name in sorted(filenames):
-            child = here / name
-            if child.is_symlink() or not child.is_file():
-                skipped += 1
-                continue
-            items.append((child, child.relative_to(root).as_posix()))
-    return items, skipped
-
-
-def _is_junction(path: Path) -> bool:
-    check = getattr(os.path, "isjunction", None)  # Python 3.12+
-    return bool(check and check(path))
-
-
-def encrypt_path(
+def _encrypt_preview_for_tests(
     src: str | os.PathLike,
     dst: str | os.PathLike | None,
     material: KeyMaterial,
@@ -170,13 +146,17 @@ def encrypt_path(
     progress: Progress | None = None,
     **writer_options,
 ) -> dict:
+    """**只給測試用**：產生 ISD2 預覽格式（已停用）的樣本，用來測試「舊檔仍解得開」。
+
+    產品程式（命令列、視窗）不得呼叫；0.4.0 起只產生 age 與 OpenPGP。
+    """
     src_p = Path(src)
     if not src_p.exists():
         raise SealError("input_missing", "找不到要加密的檔案或資料夾。")
     is_dir = src_p.is_dir()
     if not is_dir and not src_p.is_file():
         raise SealError("bad_input", "只能加密一般的檔案或資料夾。")
-    dst_p = Path(dst) if dst else default_encrypt_output(src_p)
+    dst_p = Path(dst) if dst else _default_preview_output(src_p)
     src_abs, dst_abs = src_p.resolve(), dst_p.resolve()
     if dst_abs == src_abs:
         raise SealError("bad_input", "輸出位置不能跟輸入是同一個。")
@@ -241,23 +221,6 @@ def encrypt_path(
 
     _run(tmp, dst_p, force, work)
     return result
-
-
-_WINDOWS_BAD = re.compile(r'[<>:"|?*\x00-\x1f]')
-
-
-def _safe_member_path(root: Path, name: str) -> Path:
-    """封存裡的名稱只能是資料夾底下的相對路徑；其他一律拒絕。"""
-    pure = PurePosixPath(name)
-    parts = pure.parts
-    if (not name or "\\" in name or pure.is_absolute() or not parts
-            or any(part in ("..", ".") or _WINDOWS_BAD.search(part) for part in parts)):
-        raise SealError(
-            "unsafe_archive",
-            "封存裡有不安全的檔名（想寫到資料夾外面），已停止，沒有輸出任何內容。",
-            action="不要再開這個檔案；向提供檔案的人確認來源。",
-        )
-    return root.joinpath(*parts)
 
 
 def _extract(reader: SealReader, out_dir: Path, progress: Progress | None, total: int) -> int:

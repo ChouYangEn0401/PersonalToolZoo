@@ -231,10 +231,10 @@ class JobTests(LogicCase):
         text, info, problem = logic.inspect_sealed(str(legacy))
         self.assertEqual((text, problem, info["format"]), (T.SEALED_LEGACY, None, "isd-legacy"))
         keyfile = self.tmp / "old.env"
-        keys.generate_key_file(keyfile)
+        keys._generate_preview_key_for_tests(keyfile)
         src = self.tmp / "p.txt"
         src.write_bytes(b"preview")
-        ops.encrypt_path(src, self.tmp / "p.isd2", keys.load_key_file(keyfile))
+        ops._encrypt_preview_for_tests(src, self.tmp / "p.isd2", keys.load_key_file(keyfile))
         text, info, problem = logic.inspect_sealed(str(self.tmp / "p.isd2"))
         self.assertIn("ISD2 預覽格式（已停用）", text)
         back = logic.run_job_safely(logic.JobForm(action="decrypt", inputs=[str(self.tmp / "p.isd2")],
@@ -290,7 +290,7 @@ class KeyTabTests(LogicCase):
         listing.write_text(pub + "\n", encoding="utf-8")
         self.assertEqual(logic.check_key_file(str(listing)).kind, "info")
         old = self.tmp / "old.env"
-        keys.generate_key_file(old)
+        keys._generate_preview_key_for_tests(old)
         self.assertIn("ISD2", logic.check_key_file(str(old)).lines[0])
         self.assertEqual(logic.check_key_file(str(self.tmp / "missing")).code, "key_missing")
         self.assertEqual(logic.check_key_file("").kind, "warning")

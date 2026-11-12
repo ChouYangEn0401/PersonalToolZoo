@@ -21,7 +21,6 @@ from pathlib import Path, PurePosixPath
 from typing import Callable, Iterator
 
 from .errors import SealError
-from .ops import _is_junction, _walk
 
 Progress = Callable[[int, int], None]
 BLOCK = tarfile.BLOCKSIZE              # 512
@@ -29,6 +28,37 @@ RECORD = tarfile.RECORDSIZE            # 10240，tarfile 寫串流時也補到�
 _READ = 1024 * 1024
 _WINDOWS_BAD = re.compile(r'[<>:"|?*\x00-\x1f]')
 _RESERVED = re.compile(r"^(CON|PRN|AUX|NUL|COM[0-9¹²³]|LPT[0-9¹²³])(\..*)?$", re.IGNORECASE)
+
+
+def walk(root: Path):
+    """依固定順序走過資料夾。回傳 (項目清單, 被略過的連結數)。不跟著連結走。"""
+    items: list[tuple[Path, str]] = []
+    skipped = 0
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames.sort()
+        here = Path(dirpath)
+        keep = []
+        for name in dirnames:
+            child = here / name
+            if child.is_symlink() or is_junction(child):
+                skipped += 1
+                continue
+            keep.append(name)
+            items.append((child, child.relative_to(root).as_posix()))
+        dirnames[:] = keep
+        for name in sorted(filenames):
+            child = here / name
+            if child.is_symlink() or not child.is_file():
+                skipped += 1
+                continue
+            items.append((child, child.relative_to(root).as_posix()))
+    return items, skipped
+
+
+def is_junction(path: Path) -> bool:
+    check = getattr(os.path, "isjunction", None)  # Python 3.12+
+    return bool(check and check(path))
+
 
 
 @dataclass
@@ -53,7 +83,7 @@ def plan(inputs) -> Plan:
     if not paths:
         raise SealError("bad_input", "沒有指定要加密的檔案或資料夾。")
     for p in paths:
-        if p.is_symlink() or _is_junction(p):
+        if p.is_symlink() or is_junction(p):
             raise SealError("bad_input", "輸入是一個捷徑或連結；請直接選它指向的檔案或資料夾。")
         if not p.exists():
             raise SealError("input_missing", "找不到要加密的檔案或資料夾。")
@@ -67,7 +97,7 @@ def plan(inputs) -> Plan:
 
     result = Plan(paths)
     if len(paths) == 1:
-        items, skipped = _walk(paths[0])
+        items, skipped = walk(paths[0])
         result.items = items
         result.skipped_links = skipped
     else:
@@ -80,7 +110,7 @@ def plan(inputs) -> Plan:
             seen.add(top.casefold())
             result.items.append((p, top))
             if p.is_dir():
-                items, skipped = _walk(p)
+                items, skipped = walk(p)
                 result.items.extend((child, f"{top}/{rel}") for child, rel in items)
                 result.skipped_links += skipped
     for path, _name in result.items:

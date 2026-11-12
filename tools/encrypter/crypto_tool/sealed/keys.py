@@ -178,9 +178,12 @@ def key_id(raw: bytes) -> str:
     return hashlib.sha256(b"ISD2 key id\0" + raw).hexdigest()[:12]
 
 
-def generate_key_file(path: str | os.PathLike, *, fmt: str = "env",
-                      name: str = DEFAULT_KEY_NAME, force: bool = False) -> dict:
-    """產生一把新的隨機 32 bytes 金鑰並寫進檔案。回傳的資訊不含金鑰。"""
+def _generate_preview_key_for_tests(path: str | os.PathLike, *, fmt: str = "env",
+                                    name: str = DEFAULT_KEY_NAME, force: bool = False) -> dict:
+    """**只給測試用**：產生 ISD2 預覽格式（已停用）的金鑰檔樣本。回傳的資訊不含金鑰。
+
+    0.4.0 起不再產生這種金鑰（keygen 只產生 age 身分檔與 OpenPGP 金鑰對）；讀取（load_key_file）照舊支援。
+    """
     if fmt not in ("env", "raw"):
         raise SealError("bad_input", "金鑰檔格式只能是 env 或 raw。")
     if not _NAME_RE.match(name):

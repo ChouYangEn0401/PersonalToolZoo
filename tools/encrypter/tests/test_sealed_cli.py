@@ -433,12 +433,12 @@ class Isd2PreviewTests(CliCase):
 
     def make_isd2(self, material, name="old.isd2"):
         path = self.tmp / name
-        ops.encrypt_path(self.plain, path, material, scrypt_log_n=10)
+        ops._encrypt_preview_for_tests(self.plain, path, material, scrypt_log_n=10)
         return path
 
     def test_preview_files_still_decrypt(self):
         keyfile = self.tmp / "old.env"
-        keys.generate_key_file(keyfile)
+        keys._generate_preview_key_for_tests(keyfile)
         sealed = self.make_isd2(keys.load_key_file(keyfile))
         info = self.ok("inspect", sealed)
         self.assertEqual((info["format"], info["deprecated"]), ("isd2-preview", True))
@@ -462,6 +462,15 @@ class Isd2PreviewTests(CliCase):
         gen = parser._subparsers._group_actions[0].choices["keygen"]
         self.assertNotIn("--format", {o for a in gen._actions for o in a.option_strings})
         self.assertNotIn("isd2", workflow.MODES)
+        # 程式庫也沒有公開的產生函式：只剩給測試做樣本、名字寫明的那一個
+        import crypto_tool.sealed as sealed_pkg
+        for gone in ("encrypt_path", "generate_key_file", "default_encrypt_output"):
+            self.assertFalse(hasattr(sealed_pkg, gone), gone)
+            self.assertFalse(hasattr(ops, gone) or hasattr(keys, gone), gone)
+        # 加密的結果一定是 age 或 OpenPGP，不會是 ISD2
+        self.identity("alice")
+        self.ok("encrypt", self.plain, "-r", self.pub("alice"))
+        self.assertEqual(workflow.detect_format(self.tmp / "notes.txt.age"), "age")
 
 
 class SecretHandlingTests(CliCase):
@@ -563,7 +572,7 @@ class SubprocessTests(CliCase):
         # ISD2 預覽格式的舊檔：--key-env 只剩解密用
         key_hex = os.urandom(32).hex()
         old = self.tmp / "old.isd2"
-        ops.encrypt_path(self.plain, old, KeyMaterial(raw=bytes.fromhex(key_hex)))
+        ops._encrypt_preview_for_tests(self.plain, old, KeyMaterial(raw=bytes.fromhex(key_hex)))
         done = self.spawn(["-m", "crypto_tool", "decrypt", old, "-o", self.tmp / "o2.txt",
                            "--key-env", "CRYPTO_TOOL_TEST_KEY", "--json"], env={"CRYPTO_TOOL_TEST_KEY": key_hex})
         self.assertEqual(done.returncode, 0, done.stderr)

@@ -100,18 +100,18 @@ class KeyFileTests(Case):
 
     def test_keygen_roundtrip_and_no_clobber(self):
         path = self.tmp / "new.env"
-        info = keys.generate_key_file(path)
+        info = keys._generate_preview_key_for_tests(path)
         material = keys.load_key_file(path)
         self.assertEqual(len(material.raw), 32)
         self.assertEqual(info["key_id"], keys.key_id(material.raw))
         self.assertNotIn(material.raw.hex(), str(info))
         self.assertNotIn(base64.urlsafe_b64encode(material.raw).decode(), str(info))
-        self.assertEqual(self.code_of(keys.generate_key_file, path), "output_exists")
+        self.assertEqual(self.code_of(keys._generate_preview_key_for_tests, path), "output_exists")
         self.assertEqual(keys.load_key_file(path).raw, material.raw)  # 沒被動到
-        keys.generate_key_file(path, force=True)
+        keys._generate_preview_key_for_tests(path, force=True)
         self.assertNotEqual(keys.load_key_file(path).raw, material.raw)
         raw_path = self.tmp / "new.key"
-        keys.generate_key_file(raw_path, fmt="raw")
+        keys._generate_preview_key_for_tests(raw_path, fmt="raw")
         self.assertEqual(raw_path.stat().st_size, 32)
 
 
@@ -130,7 +130,7 @@ class FileTests(OpsCase):
         data = os.urandom(3000)
         src.write_bytes(data)
         seen = []
-        result = ops.encrypt_path(src, None, self.key, chunk_size=1024,
+        result = ops._encrypt_preview_for_tests(src, None, self.key, chunk_size=1024,
                                   progress=lambda d, t: seen.append((d, t)))
         sealed = self.tmp / "report.pdf.isd2"
         self.assertEqual(result["output"], str(sealed))
@@ -148,9 +148,9 @@ class FileTests(OpsCase):
         src.write_bytes(b"new content")
         dst = self.tmp / "a.txt.isd2"
         dst.write_bytes(b"precious")
-        self.assertEqual(self.code_of(ops.encrypt_path, src, dst, self.key), "output_exists")
+        self.assertEqual(self.code_of(ops._encrypt_preview_for_tests, src, dst, self.key), "output_exists")
         self.assertEqual(dst.read_bytes(), b"precious")
-        ops.encrypt_path(src, dst, self.key, force=True)
+        ops._encrypt_preview_for_tests(src, dst, self.key, force=True)
         plain = self.tmp / "out.txt"
         plain.write_bytes(b"precious")
         self.assertEqual(self.code_of(ops.decrypt_path, dst, plain, self.key), "output_exists")
@@ -162,7 +162,7 @@ class FileTests(OpsCase):
         src = self.tmp / "a.bin"
         src.write_bytes(os.urandom(5000))
         sealed = self.tmp / "a.bin.isd2"
-        ops.encrypt_path(src, sealed, self.key, chunk_size=1024)
+        ops._encrypt_preview_for_tests(src, sealed, self.key, chunk_size=1024)
         blob = bytearray(sealed.read_bytes())
         blob[-5] ^= 1  # 壞在最後一塊：前面幾塊都已經解出來了
         sealed.write_bytes(bytes(blob))
@@ -176,27 +176,27 @@ class FileTests(OpsCase):
 
     def test_input_and_output_problems(self):
         key = self.key
-        self.assertEqual(self.code_of(ops.encrypt_path, self.tmp / "nope", None, key),
+        self.assertEqual(self.code_of(ops._encrypt_preview_for_tests, self.tmp / "nope", None, key),
                          "input_missing")
         self.assertEqual(self.code_of(ops.decrypt_path, self.tmp / "nope.isd2", None, key),
                          "input_missing")
         src = self.tmp / "a.txt"
         src.write_bytes(b"x")
-        self.assertEqual(self.code_of(ops.encrypt_path, src, src, key), "bad_input")
+        self.assertEqual(self.code_of(ops._encrypt_preview_for_tests, src, src, key), "bad_input")
         self.assertEqual(
-            self.code_of(ops.encrypt_path, src, self.tmp / "no_dir" / "o.isd2", key),
+            self.code_of(ops._encrypt_preview_for_tests, src, self.tmp / "no_dir" / "o.isd2", key),
             "input_missing")
         self.assertEqual(self.code_of(ops.decrypt_path, src, self.tmp / "o", key),
                          "unsupported_format")
         odd = self.tmp / "sealed.bin"
-        ops.encrypt_path(src, odd, key)
+        ops._encrypt_preview_for_tests(src, odd, key)
         self.assertEqual(self.code_of(ops.decrypt_path, odd, None, key), "bad_input")  # 猜不出輸出檔名
 
     def test_passphrase_file_roundtrip(self):
         material = keys.passphrase_material("a long enough passphrase")
         src = self.tmp / "a.txt"
         src.write_bytes(b"hello")
-        result = ops.encrypt_path(src, None, material, **FAST)
+        result = ops._encrypt_preview_for_tests(src, None, material, **FAST)
         self.assertEqual(result["kdf"], "scrypt")
         out = self.tmp / "b.txt"
         ops.decrypt_path(self.tmp / "a.txt.isd2", out, material)
@@ -205,7 +205,7 @@ class FileTests(OpsCase):
     def test_info_needs_no_key_and_recognises_legacy(self):
         src = self.tmp / "a.txt"
         src.write_bytes(b"x" * 10)
-        ops.encrypt_path(src, None, self.key, cipher="chacha20-poly1305")
+        ops._encrypt_preview_for_tests(src, None, self.key, cipher="chacha20-poly1305")
         info = ops.info_path(self.tmp / "a.txt.isd2")
         self.assertEqual((info["format"], info["cipher"], info["kdf"], info["payload"]),
                          ("isd2", "chacha20-poly1305", "raw-key", "file"))
@@ -249,7 +249,7 @@ class FolderTests(OpsCase):
 
     def test_folder_roundtrip(self):
         key = self.key
-        result = ops.encrypt_path(self.src, None, key, chunk_size=512)
+        result = ops._encrypt_preview_for_tests(self.src, None, key, chunk_size=512)
         sealed = self.tmp / "project.isd2"
         self.assertEqual((result["payload"], result["files"]), ("folder", 4))
         self.assertEqual(ops.info_path(sealed)["payload"], "folder")
@@ -269,10 +269,10 @@ class FolderTests(OpsCase):
 
     def test_keep_tar_and_output_inside_source(self):
         key = self.key
-        self.assertEqual(self.code_of(ops.encrypt_path, self.src, self.src / "self.isd2", key),
+        self.assertEqual(self.code_of(ops._encrypt_preview_for_tests, self.src, self.src / "self.isd2", key),
                          "bad_input")
         sealed = self.tmp / "p.isd2"
-        ops.encrypt_path(self.src, sealed, key)
+        ops._encrypt_preview_for_tests(self.src, sealed, key)
         tar_out = self.tmp / "p.tar"
         result = ops.decrypt_path(sealed, tar_out, key, keep_tar=True)
         self.assertEqual(result["payload"], "tar")
@@ -283,7 +283,7 @@ class FolderTests(OpsCase):
 
     def test_truncated_archive_leaves_no_partial_folder(self):
         sealed = self.tmp / "p.isd2"
-        ops.encrypt_path(self.src, sealed, self.key, chunk_size=512)
+        ops._encrypt_preview_for_tests(self.src, sealed, self.key, chunk_size=512)
         blob = sealed.read_bytes()
         sealed.write_bytes(blob[: len(blob) - 600])
         before = self.names()
@@ -305,7 +305,7 @@ class FolderTests(OpsCase):
 
     def test_archive_paths_cannot_escape(self):
         for name in ("../escape.txt", "/abs.txt", "a/../../escape.txt", "C:/abs.txt",
-                     "a\\..\\b.txt"):
+                     "a\\..\\b.txt", "CON", "sub/nul.txt", "com1", "trailing.", "space "):
             with self.subTest(name=name):
                 sealed = self._sealed_tar(lambda tar: tar.addfile(*file_member(name)))
                 box = self.tmp / "box"
