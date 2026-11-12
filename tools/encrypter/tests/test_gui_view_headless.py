@@ -10,10 +10,12 @@ import os
 import sys
 import time
 import types
+import unittest
+from unittest import mock
 
-import pytest
+from _support import Case
 
-WIDGETS = []   # 每個假元件建立時記一筆 (種類, 參數)
+WIDGETS = []   # 每個假元件建立時記一筆
 
 
 class FakeVar:
@@ -100,9 +102,7 @@ def _widget_class(name):
     return type(name, (FakeWidget,), {})
 
 
-@pytest.fixture
-def gui(monkeypatch):
-    WIDGETS.clear()
+def fake_modules():
     tk = types.ModuleType("tkinter")
     tk.StringVar = tk.BooleanVar = tk.IntVar = FakeVar
     for name in ("Label", "Toplevel", "Canvas"):
@@ -120,167 +120,173 @@ def gui(monkeypatch):
     dnd = types.ModuleType("tkinterdnd2")
     dnd.DND_FILES = "DND_Files"
     dnd.TkinterDnD = types.SimpleNamespace(Tk=FakeRoot)
-    for name, module in (("tkinter", tk), ("tkinter.filedialog", dialogs),
-                         ("ttkbootstrap", ttk), ("tkinterdnd2", dnd)):
-        monkeypatch.setitem(sys.modules, name, module)
-    monkeypatch.delitem(sys.modules, "crypto_tool.gui.app", raising=False)
-    module = importlib.import_module("crypto_tool.gui.app")
-    yield types.SimpleNamespace(app_module=module, dialogs=dialogs)
-    sys.modules.pop("crypto_tool.gui.app", None)
+    return {"tkinter": tk, "tkinter.filedialog": dialogs, "ttkbootstrap": ttk, "tkinterdnd2": dnd}
 
 
 def drain(app, seconds=30.0):
     """代替 Tk 的事件迴圈：等背景工作把結果排進佇列，然後在這裡執行。"""
-    tab_busy = lambda: app.encrypt_tab.busy or app.decrypt_tab.busy
     deadline = time.time() + seconds
     while time.time() < deadline:
         while not app._queue.empty():
             func, args = app._queue.get_nowait()
             func(*args)
-        if not tab_busy():
+        if not (app.encrypt_tab.busy or app.decrypt_tab.busy):
             return
         time.sleep(0.01)
     raise AssertionError("background job did not finish")
 
 
-def texts_on_screen():
-    return [str(w.options.get("text", "")) for w in WIDGETS]
+class HeadlessViewTests(Case):
+    def setUp(self):
+        super().setUp()
+        WIDGETS.clear()
+        modules = fake_modules()
+        self.dialogs = modules["tkinter.filedialog"]
+        patcher = mock.patch.dict(sys.modules, modules)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        sys.modules.pop("crypto_tool.gui.app", None)
+        self.addCleanup(sys.modules.pop, "crypto_tool.gui.app", None)
+        self.app_module = importlib.import_module("crypto_tool.gui.app")
+        from crypto_tool.gui import logic, texts
+        self.logic, self.T = logic, texts
+
+    def title_of(self, box):
+        return box._title.options.get("text"), box._title.options.get("bootstyle")
+
+    def test_window_builds_with_four_tabs_and_no_mixture_options(self):
+        T = self.T
+        app = self.app_module.CryptoToolApp()
+        self.assertEqual(len([w for w in WIDGETS if w.kind == "Notebook"]), 1)
+        shown = " ".join(str(w.options.get("text", "")) for w in WIDGETS)
+        shown = shown.replace(T.ABOUT_LEGACY_TEXT, "")
+        for word in ("Mixture", "Layered", "Nested", "All-In-One", "XOR", "Base64", "PGP",
+                     "Iterations"):
+            self.assertNotIn(word, shown)
+        self.assertIn(T.DROP_HINT["encrypt"], shown)
+        self.assertIn(T.DROP_HINT["decrypt"], shown)
+        self.assertIn(T.KEYS_INTRO, shown)
+        # 進階設定預設收合
+        enc = app.encrypt_tab
+        self.assertFalse(enc.advanced_open or enc.advanced.packed)
+        enc._toggle_advanced()
+        self.assertTrue(enc.advanced.packed)
+        enc._toggle_advanced()
+        self.assertFalse(enc.advanced.packed)
+        self.assertTrue(app.root.after_calls, "queue polling must be scheduled")
+
+    def test_theme_toggle_repaints_drop_zone(self):
+        from crypto_tool.gui.theme import PALETTE, THEME_DARK, THEME_LIGHT
+        app = self.app_module.CryptoToolApp()
+        self.assertEqual(app.theme, THEME_LIGHT)
+        self.assertEqual(app.encrypt_tab.drop.options["bg"], PALETTE[THEME_LIGHT]["drop_bg"])
+        app.toggle_theme()
+        self.assertEqual(app.style.theme, THEME_DARK)
+        self.assertEqual(app.decrypt_tab.drop.options["bg"], PALETTE[THEME_DARK]["drop_bg"])
+        self.assertEqual(app.theme_button_var.get(), self.T.THEME_TO_LIGHT)
+        self.assertTrue(app.style.configured["TButton"]["font"])
+        app.toggle_theme()
+        self.assertEqual(app.theme, THEME_LIGHT)
+
+    def test_drop_encrypt_then_decrypt_through_the_view(self):
+        logic, T, tmp = self.logic, self.T, self.tmp
+        app = self.app_module.CryptoToolApp()
+        keyfile = tmp / "k.env"
+        app.keys_tab.new_path_var.set(str(keyfile))
+        app.keys_tab._create()
+        self.assertTrue(keyfile.is_file())
+        app.keys_tab.check_path_var.set(str(keyfile))
+        app.keys_tab._check()
+        self.assertEqual(self.title_of(app.keys_tab.check_result)[1], "success")
+
+        src = tmp / "photo.jpg"
+        src.write_bytes(os.urandom(50_000))
+        enc = app.encrypt_tab
+        enc._on_drop(types.SimpleNamespace(data=f"{src}|{tmp / 'ignored'}", action="copy"))
+        self.assertEqual(enc.input_var.get(), str(src))
+        self.assertEqual(enc.output_var.get(), str(src) + ".isd2")   # 自動填好輸出位置
+        self.assertIn(T.KIND_FILE, enc.input_info_var.get())
+
+        enc.go.invoke()                                              # 還沒給金鑰
+        self.assertEqual(self.title_of(enc.result)[0], T.PROBLEMS_TITLE)
+        self.assertFalse(enc.busy)
+
+        enc.key_mode_var.set(logic.KEY_FILE)
+        self.assertTrue(enc.keyfile_frame.packed and not enc.pass_frame.packed)
+        enc._on_keyfile_drop(types.SimpleNamespace(data=str(keyfile)))
+        enc.go.invoke()
+        self.assertEqual(enc.go.options["state"], "disabled")
+        drain(app)
+        self.assertEqual(self.title_of(enc.result), (T.SUCCESS_TITLE["encrypt"], "success"))
+        self.assertEqual((enc.progress_var.get(), enc.go.options["state"]), (100, "normal"))
+        self.assertEqual(app.status_var.get(), T.STATUS_DONE["encrypt"])
+
+        dec = app.decrypt_tab
+        self.dialogs.picked = str(src) + ".isd2"
+        dec._pick_file()
+        self.assertEqual(dec.key_mode_var.get(), logic.KEY_FILE)     # 依加密檔自動切到金鑰檔
+        self.assertEqual(dec.output_var.get(), str(src))
+        dec.keyfile_var.set(str(keyfile))
+        dec.go.invoke()
+        drain(app)
+        self.assertEqual(self.title_of(dec.result)[1], "warning")    # 原檔還在：不覆蓋
+        self.assertEqual(app.status_var.get(), T.STATUS_FAILED["decrypt"])
+        dec.output_var.set(str(tmp / "back.jpg"))
+        dec.go.invoke()
+        drain(app)
+        self.assertEqual(self.title_of(dec.result)[0], T.SUCCESS_TITLE["decrypt"])
+        self.assertEqual((tmp / "back.jpg").read_bytes(), src.read_bytes())
+
+    def test_user_edited_output_is_not_overwritten_by_suggestions(self):
+        tmp = self.tmp
+        dec = self.app_module.CryptoToolApp().decrypt_tab
+        dec.input_var.set(str(tmp / "folder.isd2"))
+        self.assertEqual(dec.output_var.get(), str(tmp / "folder"))
+        dec.keep_tar_var.set(True)
+        self.assertEqual(dec.output_var.get(), str(tmp / "folder.tar"))
+        dec.output_var.set(str(tmp / "mine.tar"))
+        dec.keep_tar_var.set(False)
+        self.assertEqual(dec.output_var.get(), str(tmp / "mine.tar"))
+
+    def test_legacy_file_offers_legacy_tool_and_missing_dependency_is_explained(self):
+        T = self.T
+        app = self.app_module.CryptoToolApp()
+        legacy = self.tmp / "old.isd"
+        legacy.write_text('CONTENT="""QUJD"""\nNOTE="""{}"""', encoding="utf-8")
+        dec = app.decrypt_tab
+        dec.input_var.set(str(legacy))
+        self.assertEqual(dec.input_info_var.get(), T.SEALED_LEGACY)
+        self.assertTrue(dec.legacy_button.packed)
+        dec.input_var.set("")
+        self.assertFalse(dec.legacy_button.packed)
+
+        # 舊分頁在這組假模組下 import 不起來：要看到一句人話，而不是當掉
+        app.open_legacy()
+        self.assertEqual(app.about_tab.legacy_result._body.options["text"], T.LEGACY_UNAVAILABLE)
+
+    def test_passphrase_fields_are_cleared_after_success(self):
+        logic, T = self.logic, self.T
+        real = logic.encrypt_path
+        self.patch(logic, "encrypt_path", lambda *a, **k: real(*a, scrypt_log_n=10, **k))
+        app = self.app_module.CryptoToolApp()
+        src = self.tmp / "a.txt"
+        src.write_bytes(b"hello")
+        enc = app.encrypt_tab
+        enc.input_var.set(str(src))
+        enc.pass_var.set("a passphrase for the view test")
+        self.assertEqual(enc.strength_var.get(), T.STRENGTH_LABELS[3])
+        enc.confirm_var.set("not the same")
+        enc.go.invoke()
+        self.assertIn(T.PROBLEM_MISMATCH, enc.result._body.options["text"])
+        enc.confirm_var.set("a passphrase for the view test")
+        enc.show_pass_var.set(True)
+        enc._toggle_show()
+        self.assertEqual(enc.pass_entry.options["show"], "")
+        enc.go.invoke()
+        drain(app)
+        self.assertEqual(self.title_of(enc.result)[1], "success")
+        self.assertEqual((enc.pass_var.get(), enc.confirm_var.get()), ("", ""))
 
 
-def test_window_builds_with_four_tabs_and_no_mixture_options(gui):
-    from crypto_tool.gui import texts as T
-    app = gui.app_module.CryptoToolApp()
-    labels = [args for w in WIDGETS if w.kind == "Notebook" for args in [w]]
-    assert len(labels) == 1
-    for tab in (app.encrypt_tab, app.decrypt_tab, app.keys_tab, app.about_tab):
-        assert tab.frame is not None
-    shown = " ".join(texts_on_screen())
-    for word in ("Mixture", "Layered", "Nested", "All-In-One", "XOR", "Base64", "PGP",
-                 "Iterations"):
-        assert word not in shown.replace(T.ABOUT_LEGACY_TEXT, "")
-    assert T.DROP_HINT["encrypt"] in shown and T.KEYS_INTRO in shown
-    # 進階設定預設收合
-    assert app.encrypt_tab.advanced_open is False and app.encrypt_tab.advanced.packed is False
-    app.encrypt_tab._toggle_advanced()
-    assert app.encrypt_tab.advanced.packed is True
-    app.encrypt_tab._toggle_advanced()
-    assert app.encrypt_tab.advanced.packed is False
-    assert app.root.after_calls, "queue polling must be scheduled"
-
-
-def test_theme_toggle_repaints_drop_zone(gui):
-    from crypto_tool.gui import texts as T
-    from crypto_tool.gui.theme import PALETTE, THEME_DARK, THEME_LIGHT
-    app = gui.app_module.CryptoToolApp()
-    assert app.theme == THEME_LIGHT
-    assert app.encrypt_tab.drop.options["bg"] == PALETTE[THEME_LIGHT]["drop_bg"]
-    app.toggle_theme()
-    assert app.style.theme == THEME_DARK
-    assert app.decrypt_tab.drop.options["bg"] == PALETTE[THEME_DARK]["drop_bg"]
-    assert app.theme_button_var.get() == T.THEME_TO_LIGHT
-    assert app.style.configured["TButton"]["font"]
-    app.toggle_theme()
-    assert app.theme == THEME_LIGHT
-
-
-def test_drop_encrypt_then_decrypt_through_the_view(gui, tmp_path):
-    from crypto_tool.gui import logic, texts as T
-    app = gui.app_module.CryptoToolApp()
-    keyfile = tmp_path / "k.env"
-    app.keys_tab.new_path_var.set(str(keyfile))
-    app.keys_tab._create()
-    assert keyfile.is_file()
-    app.keys_tab.check_path_var.set(str(keyfile))
-    app.keys_tab._check()
-
-    src = tmp_path / "photo.jpg"
-    src.write_bytes(os.urandom(50_000))
-    enc = app.encrypt_tab
-    enc._on_drop(types.SimpleNamespace(data=f"{src}|{tmp_path / 'ignored'}", action="copy"))
-    assert enc.input_var.get() == str(src)
-    assert enc.output_var.get() == str(src) + ".isd2"       # 自動填好輸出位置
-    assert T.KIND_FILE in enc.input_info_var.get()
-
-    enc.go.invoke()                                         # 還沒給金鑰
-    assert enc.result._title.options["text"] == T.PROBLEMS_TITLE and not enc.busy
-
-    enc.key_mode_var.set(logic.KEY_FILE)
-    assert enc.keyfile_frame.packed and not enc.pass_frame.packed
-    enc._on_keyfile_drop(types.SimpleNamespace(data=str(keyfile)))
-    enc.go.invoke()
-    assert enc.go.options["state"] == "disabled"
-    drain(app)
-    assert enc.result._title.options["text"] == T.SUCCESS_TITLE["encrypt"]
-    assert enc.result._title.options["bootstyle"] == "success"
-    assert enc.progress_var.get() == 100 and enc.go.options["state"] == "normal"
-    assert app.status_var.get() == T.STATUS_DONE["encrypt"]
-
-    dec = app.decrypt_tab
-    gui.dialogs.picked = str(src) + ".isd2"
-    dec._pick_file()
-    assert dec.key_mode_var.get() == logic.KEY_FILE         # 依加密檔自動切到金鑰檔
-    assert dec.output_var.get() == str(src)
-    dec.keyfile_var.set(str(keyfile))
-    dec.go.invoke()
-    drain(app)
-    assert dec.result._title.options["bootstyle"] == "warning"   # 原檔還在：不覆蓋
-    dec.output_var.set(str(tmp_path / "back.jpg"))
-    dec.go.invoke()
-    drain(app)
-    assert dec.result._title.options["text"] == T.SUCCESS_TITLE["decrypt"]
-    assert (tmp_path / "back.jpg").read_bytes() == src.read_bytes()
-
-
-def test_user_edited_output_is_not_overwritten_by_suggestions(gui, tmp_path):
-    app = gui.app_module.CryptoToolApp()
-    dec = app.decrypt_tab
-    dec.input_var.set(str(tmp_path / "folder.isd2"))
-    assert dec.output_var.get() == str(tmp_path / "folder")
-    dec.keep_tar_var.set(True)
-    assert dec.output_var.get() == str(tmp_path / "folder.tar")
-    dec.output_var.set(str(tmp_path / "mine.tar"))
-    dec.keep_tar_var.set(False)
-    assert dec.output_var.get() == str(tmp_path / "mine.tar")
-
-
-def test_legacy_file_offers_legacy_tool_and_missing_dependency_is_explained(gui, tmp_path):
-    from crypto_tool.gui import texts as T
-    app = gui.app_module.CryptoToolApp()
-    legacy = tmp_path / "old.isd"
-    legacy.write_text('CONTENT="""QUJD"""\nNOTE="""{}"""', encoding="utf-8")
-    dec = app.decrypt_tab
-    dec.input_var.set(str(legacy))
-    assert dec.input_info_var.get() == T.SEALED_LEGACY and dec.legacy_button.packed
-    dec.input_var.set("")
-    assert not dec.legacy_button.packed
-
-    # 舊分頁需要 pycryptodome（core/）；這個測試環境沒有的話，要看到人話而不是當掉
-    app.open_legacy()
-    try:
-        import Crypto  # noqa: F401
-    except ImportError:
-        assert app.about_tab.legacy_result._body.options["text"] == T.LEGACY_UNAVAILABLE
-
-
-def test_passphrase_fields_are_cleared_after_success(gui, tmp_path, monkeypatch):
-    from crypto_tool.gui import logic, texts as T
-    real = logic.encrypt_path
-    monkeypatch.setattr(logic, "encrypt_path", lambda *a, **k: real(*a, scrypt_log_n=10, **k))
-    app = gui.app_module.CryptoToolApp()
-    src = tmp_path / "a.txt"
-    src.write_bytes(b"hello")
-    enc = app.encrypt_tab
-    enc.input_var.set(str(src))
-    enc.pass_var.set("a passphrase for the view test")
-    assert enc.strength_var.get() == T.STRENGTH_LABELS[3]
-    enc.confirm_var.set("not the same")
-    enc.go.invoke()
-    assert T.PROBLEM_MISMATCH in enc.result._body.options["text"]
-    enc.confirm_var.set("a passphrase for the view test")
-    enc.show_pass_var.set(True)
-    enc._toggle_show()
-    assert enc.pass_entry.options["show"] == ""
-    enc.go.invoke()
-    drain(app)
-    assert enc.result._title.options["bootstyle"] == "success"
-    assert enc.pass_var.get() == "" and enc.confirm_var.get() == ""
+if __name__ == "__main__":
+    unittest.main()

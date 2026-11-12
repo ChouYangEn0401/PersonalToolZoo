@@ -4,207 +4,221 @@ import base64
 import io
 import os
 import tarfile
+import unittest
 
-import pytest
+from _support import FAST, Case
 
 from crypto_tool.sealed import keys, ops
-from crypto_tool.sealed.container import (
-    PAYLOAD_TAR, KeyMaterial, SealWriter,
-)
-from crypto_tool.sealed.errors import SealError
-
-FAST = {"scrypt_log_n": 10}
+from crypto_tool.sealed.container import PAYLOAD_TAR, KeyMaterial, SealWriter
 
 
-@pytest.fixture
-def key():
-    return KeyMaterial(raw=os.urandom(32))
+class KeyValueTests(Case):
+    def test_value_forms(self):
+        raw = os.urandom(32)
+        b64 = base64.urlsafe_b64encode(raw).decode()
+        std = base64.b64encode(raw).decode()
+        for text in (raw.hex(), raw.hex().upper(), "hex:" + raw.hex(), b64, b64.rstrip("="),
+                     std, "b64:" + b64, f"  {b64}\n"):
+            self.assertEqual(keys.parse_secret_value(text).raw, raw)
+        words = keys.parse_secret_value("just some words")
+        self.assertIsNone(words.raw)
+        self.assertEqual(words.passphrase, "just some words")
+
+    def test_bad_prefixed_values_are_errors_not_passphrases(self):
+        self.assertEqual(self.code_of(keys.parse_secret_value, "b64:tooshort"), "bad_key_format")
+        self.assertEqual(self.code_of(keys.parse_secret_value, "hex:abcd"), "bad_key_format")
+        self.assertEqual(self.code_of(keys.parse_secret_value, "   "), "key_missing")
+
+    def test_typed_passphrase_is_never_treated_as_raw_key(self):
+        hexish = "ab" * 32
+        material = keys.passphrase_material(hexish + "\r\n")
+        self.assertEqual(material.passphrase, hexish)
+        self.assertEqual(material.kdf_for_encrypt(), 1)  # scrypt
+
+    def test_key_env(self):
+        raw = os.urandom(32)
+        self.assertEqual(keys.load_key_env("K", {"K": raw.hex()}).raw, raw)
+        self.assertEqual(self.code_of(keys.load_key_env, "K", {}), "key_missing")
+        # 有人把金鑰本身塞進 --key-env：拒絕，而且錯誤訊息不能把它印回去
+        with self.assertRaises(keys.SealError) as caught:
+            keys.load_key_env("not a name! " + raw.hex(), {})
+        self.assertEqual(caught.exception.code, "bad_input")
+        self.assertNotIn(raw.hex(), str(caught.exception.to_dict()))
 
 
-def code_of(func, *args, **kwargs) -> str:
-    with pytest.raises(SealError) as caught:
-        func(*args, **kwargs)
-    return caught.value.code
+class KeyFileTests(Case):
+    def test_env_style_key_file(self):
+        raw = os.urandom(32)
+        path = self.tmp / ".decryption_code.env"
+        path.write_text(
+            "# comment\n\nOTHER=something else\n"
+            f'export CRYPTO_TOOL_KEY="hex:{raw.hex()}"\n', encoding="utf-8")
+        self.assertEqual(keys.load_key_file(path).raw, raw)
+        self.assertEqual(keys.load_key_file(path, "OTHER").passphrase, "something else")
+        self.assertEqual(self.code_of(keys.load_key_file, path, "NOPE"), "key_missing")
+
+    def test_env_file_with_one_name_or_ambiguous(self):
+        one = self.tmp / "one.env"
+        one.write_text("MY_CODE=open sesame please\n", encoding="utf-8")
+        self.assertEqual(keys.load_key_file(one).passphrase, "open sesame please")
+        many = self.tmp / "many.env"
+        many.write_text("A=one value\nB=two value\n", encoding="utf-8")
+        self.assertEqual(self.code_of(keys.load_key_file, many), "bad_key_format")
+
+    def test_raw_and_single_line_key_files(self):
+        raw = os.urandom(32)
+        binary = self.tmp / "key.bin"
+        binary.write_bytes(raw)
+        self.assertEqual(keys.load_key_file(binary).raw, raw)
+        line = self.tmp / "key.txt"
+        line.write_text(base64.b64encode(raw).decode() + "\n", encoding="utf-8")
+        self.assertEqual(keys.load_key_file(line).raw, raw)
+        bom = self.tmp / "bom.txt"
+        bom.write_text(raw.hex(), encoding="utf-8-sig")
+        self.assertEqual(keys.load_key_file(bom).raw, raw)
+
+    def test_padded_base64_line_is_not_mistaken_for_an_assignment(self):
+        # 全是英數字、結尾補 = 的 base64 看起來像「名稱=」
+        raw = bytes.fromhex("00" * 31 + "01")
+        text = base64.b64encode(raw).decode()
+        self.assertTrue(text.endswith("=") and text[:-1].isalnum())
+        path = self.tmp / "k.txt"
+        path.write_text(text + "\n", encoding="ascii")
+        self.assertEqual(keys.load_key_file(path).raw, raw)
+
+    def test_key_file_problems(self):
+        self.assertEqual(self.code_of(keys.load_key_file, self.tmp / "missing.env"), "key_missing")
+        empty = self.tmp / "empty.env"
+        empty.write_text("\n\n", encoding="utf-8")
+        self.assertEqual(self.code_of(keys.load_key_file, empty), "key_missing")
+        junk = self.tmp / "junk.bin"
+        junk.write_bytes(bytes([0xFF, 0xFE, 0x80]) * 20)
+        self.assertEqual(self.code_of(keys.load_key_file, junk), "bad_key_format")
+        big = self.tmp / "big.bin"
+        big.write_bytes(b"a" * (keys.MAX_KEY_FILE_BYTES + 1))
+        self.assertEqual(self.code_of(keys.load_key_file, big), "bad_key_format")
+
+    def test_keygen_roundtrip_and_no_clobber(self):
+        path = self.tmp / "new.env"
+        info = keys.generate_key_file(path)
+        material = keys.load_key_file(path)
+        self.assertEqual(len(material.raw), 32)
+        self.assertEqual(info["key_id"], keys.key_id(material.raw))
+        self.assertNotIn(material.raw.hex(), str(info))
+        self.assertNotIn(base64.urlsafe_b64encode(material.raw).decode(), str(info))
+        self.assertEqual(self.code_of(keys.generate_key_file, path), "output_exists")
+        self.assertEqual(keys.load_key_file(path).raw, material.raw)  # 沒被動到
+        keys.generate_key_file(path, force=True)
+        self.assertNotEqual(keys.load_key_file(path).raw, material.raw)
+        raw_path = self.tmp / "new.key"
+        keys.generate_key_file(raw_path, fmt="raw")
+        self.assertEqual(raw_path.stat().st_size, 32)
 
 
-# ── 金鑰值的解讀 ────────────────────────────────────────────────────────
+class OpsCase(Case):
+    def setUp(self):
+        super().setUp()
+        self.key = KeyMaterial(raw=os.urandom(32))
 
-def test_value_forms():
-    raw = os.urandom(32)
-    b64 = base64.urlsafe_b64encode(raw).decode()
-    std = base64.b64encode(raw).decode()
-    for text in (raw.hex(), raw.hex().upper(), "hex:" + raw.hex(), b64, b64.rstrip("="),
-                 std, "b64:" + b64, f"  {b64}\n"):
-        assert keys.parse_secret_value(text).raw == raw
-    words = keys.parse_secret_value("just some words")
-    assert words.raw is None and words.passphrase == "just some words"
+    def names(self):
+        return sorted(p.name for p in self.tmp.iterdir())
 
 
-def test_bad_prefixed_values_are_errors_not_passphrases():
-    assert code_of(keys.parse_secret_value, "b64:tooshort") == "bad_key_format"
-    assert code_of(keys.parse_secret_value, "hex:abcd") == "bad_key_format"
-    assert code_of(keys.parse_secret_value, "   ") == "key_missing"
+class FileTests(OpsCase):
+    def test_roundtrip_with_default_names(self):
+        src = self.tmp / "report.pdf"
+        data = os.urandom(3000)
+        src.write_bytes(data)
+        seen = []
+        result = ops.encrypt_path(src, None, self.key, chunk_size=1024,
+                                  progress=lambda d, t: seen.append((d, t)))
+        sealed = self.tmp / "report.pdf.isd2"
+        self.assertEqual(result["output"], str(sealed))
+        self.assertEqual(result["kdf"], "raw-key")
+        self.assertEqual(seen[-1], (3000, 3000))
+        self.assertEqual(src.read_bytes(), data)  # 原檔不動
+        src.unlink()
+        out = ops.decrypt_path(sealed, None, self.key)
+        self.assertEqual(out["output"], str(src))
+        self.assertEqual(src.read_bytes(), data)
+        self.assertEqual([n for n in self.names() if "partial" in n], [])
 
+    def test_existing_target_is_refused_unless_forced(self):
+        src = self.tmp / "a.txt"
+        src.write_bytes(b"new content")
+        dst = self.tmp / "a.txt.isd2"
+        dst.write_bytes(b"precious")
+        self.assertEqual(self.code_of(ops.encrypt_path, src, dst, self.key), "output_exists")
+        self.assertEqual(dst.read_bytes(), b"precious")
+        ops.encrypt_path(src, dst, self.key, force=True)
+        plain = self.tmp / "out.txt"
+        plain.write_bytes(b"precious")
+        self.assertEqual(self.code_of(ops.decrypt_path, dst, plain, self.key), "output_exists")
+        self.assertEqual(plain.read_bytes(), b"precious")
+        ops.decrypt_path(dst, plain, self.key, force=True)
+        self.assertEqual(plain.read_bytes(), b"new content")
 
-def test_typed_passphrase_is_never_treated_as_raw_key():
-    hexish = "ab" * 32
-    material = keys.passphrase_material(hexish + "\r\n")
-    assert material.passphrase == hexish
-    assert material.kdf_for_encrypt() == 1  # scrypt
+    def test_failed_decrypt_leaves_nothing_behind(self):
+        src = self.tmp / "a.bin"
+        src.write_bytes(os.urandom(5000))
+        sealed = self.tmp / "a.bin.isd2"
+        ops.encrypt_path(src, sealed, self.key, chunk_size=1024)
+        blob = bytearray(sealed.read_bytes())
+        blob[-5] ^= 1  # 壞在最後一塊：前面幾塊都已經解出來了
+        sealed.write_bytes(bytes(blob))
+        out = self.tmp / "out.bin"
+        before = self.names()
+        self.assertEqual(self.code_of(ops.decrypt_path, sealed, out, self.key), "corrupt")
+        self.assertEqual(self.names(), before)
+        other = KeyMaterial(raw=os.urandom(32))
+        self.assertEqual(self.code_of(ops.decrypt_path, sealed, out, other), "wrong_key")
+        self.assertFalse(out.exists())
 
+    def test_input_and_output_problems(self):
+        key = self.key
+        self.assertEqual(self.code_of(ops.encrypt_path, self.tmp / "nope", None, key),
+                         "input_missing")
+        self.assertEqual(self.code_of(ops.decrypt_path, self.tmp / "nope.isd2", None, key),
+                         "input_missing")
+        src = self.tmp / "a.txt"
+        src.write_bytes(b"x")
+        self.assertEqual(self.code_of(ops.encrypt_path, src, src, key), "bad_input")
+        self.assertEqual(
+            self.code_of(ops.encrypt_path, src, self.tmp / "no_dir" / "o.isd2", key),
+            "input_missing")
+        self.assertEqual(self.code_of(ops.decrypt_path, src, self.tmp / "o", key),
+                         "unsupported_format")
+        odd = self.tmp / "sealed.bin"
+        ops.encrypt_path(src, odd, key)
+        self.assertEqual(self.code_of(ops.decrypt_path, odd, None, key), "bad_input")  # 猜不出輸出檔名
 
-# ── 金鑰檔 ──────────────────────────────────────────────────────────────
+    def test_passphrase_file_roundtrip(self):
+        material = keys.passphrase_material("a long enough passphrase")
+        src = self.tmp / "a.txt"
+        src.write_bytes(b"hello")
+        result = ops.encrypt_path(src, None, material, **FAST)
+        self.assertEqual(result["kdf"], "scrypt")
+        out = self.tmp / "b.txt"
+        ops.decrypt_path(self.tmp / "a.txt.isd2", out, material)
+        self.assertEqual(out.read_bytes(), b"hello")
 
-def test_env_style_key_file(tmp_path):
-    raw = os.urandom(32)
-    path = tmp_path / ".decryption_code.env"
-    path.write_text(
-        "# comment\n\nOTHER=something else\n"
-        f'export CRYPTO_TOOL_KEY="hex:{raw.hex()}"\n', encoding="utf-8")
-    assert keys.load_key_file(path).raw == raw
-    assert keys.load_key_file(path, "OTHER").passphrase == "something else"
-    assert code_of(keys.load_key_file, path, "NOPE") == "key_missing"
+    def test_info_needs_no_key_and_recognises_legacy(self):
+        src = self.tmp / "a.txt"
+        src.write_bytes(b"x" * 10)
+        ops.encrypt_path(src, None, self.key, cipher="chacha20-poly1305")
+        info = ops.info_path(self.tmp / "a.txt.isd2")
+        self.assertEqual((info["format"], info["cipher"], info["kdf"], info["payload"]),
+                         ("isd2", "chacha20-poly1305", "raw-key", "file"))
+        legacy = self.tmp / "old.isd"
+        legacy.write_text(
+            'CONTENT="""QUJD"""\nNOTE="""{"algorithm": "AES-256-CBC", "mode": "layered",'
+            ' "password_hint": "do not show"}"""', encoding="utf-8")
+        old = ops.info_path(legacy)
+        self.assertEqual(old["format"], "isd-legacy")
+        self.assertEqual(old["legacy_mode"], "layered")
+        self.assertNotIn("do not show", str(old))
+        self.assertEqual(self.code_of(ops.info_path, src), "unsupported_format")
 
-
-def test_env_file_with_one_name_or_ambiguous(tmp_path):
-    one = tmp_path / "one.env"
-    one.write_text("MY_CODE=open sesame please\n", encoding="utf-8")
-    assert keys.load_key_file(one).passphrase == "open sesame please"
-    many = tmp_path / "many.env"
-    many.write_text("A=one value\nB=two value\n", encoding="utf-8")
-    assert code_of(keys.load_key_file, many) == "bad_key_format"
-
-
-def test_raw_and_single_line_key_files(tmp_path):
-    raw = os.urandom(32)
-    binary = tmp_path / "key.bin"
-    binary.write_bytes(raw)
-    assert keys.load_key_file(binary).raw == raw
-    line = tmp_path / "key.txt"
-    line.write_text(base64.b64encode(raw).decode() + "\n", encoding="utf-8")
-    assert keys.load_key_file(line).raw == raw
-    bom = tmp_path / "bom.txt"
-    bom.write_text(raw.hex(), encoding="utf-8-sig")
-    assert keys.load_key_file(bom).raw == raw
-
-
-def test_key_file_problems(tmp_path):
-    assert code_of(keys.load_key_file, tmp_path / "missing.env") == "key_missing"
-    empty = tmp_path / "empty.env"
-    empty.write_text("\n\n", encoding="utf-8")
-    assert code_of(keys.load_key_file, empty) == "key_missing"
-    junk = tmp_path / "junk.bin"
-    junk.write_bytes(bytes([0xFF, 0xFE, 0x80]) * 20)
-    assert code_of(keys.load_key_file, junk) == "bad_key_format"
-    big = tmp_path / "big.bin"
-    big.write_bytes(b"a" * (keys.MAX_KEY_FILE_BYTES + 1))
-    assert code_of(keys.load_key_file, big) == "bad_key_format"
-
-
-def test_key_env():
-    raw = os.urandom(32)
-    assert keys.load_key_env("K", {"K": raw.hex()}).raw == raw
-    assert code_of(keys.load_key_env, "K", {}) == "key_missing"
-    # 有人把金鑰本身塞進 --key-env：拒絕，而且錯誤訊息不能把它印回去
-    with pytest.raises(SealError) as caught:
-        keys.load_key_env("not a name! " + raw.hex(), {})
-    assert caught.value.code == "bad_input"
-    assert raw.hex() not in str(caught.value.to_dict())
-
-
-def test_keygen_roundtrip_and_no_clobber(tmp_path):
-    path = tmp_path / "new.env"
-    info = keys.generate_key_file(path)
-    material = keys.load_key_file(path)
-    assert len(material.raw) == 32
-    assert info["key_id"] == keys.key_id(material.raw)
-    assert material.raw.hex() not in str(info)
-    assert base64.urlsafe_b64encode(material.raw).decode() not in str(info)
-    assert code_of(keys.generate_key_file, path) == "output_exists"
-    assert keys.load_key_file(path).raw == material.raw  # 沒被動到
-    keys.generate_key_file(path, force=True)
-    assert keys.load_key_file(path).raw != material.raw
-    raw_path = tmp_path / "new.key"
-    keys.generate_key_file(raw_path, fmt="raw")
-    assert raw_path.stat().st_size == 32
-
-
-# ── 檔案 ────────────────────────────────────────────────────────────────
-
-def test_file_roundtrip_with_default_names(tmp_path, key):
-    src = tmp_path / "report.pdf"
-    data = os.urandom(3000)
-    src.write_bytes(data)
-    seen = []
-    result = ops.encrypt_path(src, None, key, chunk_size=1024,
-                              progress=lambda d, t: seen.append((d, t)))
-    sealed = tmp_path / "report.pdf.isd2"
-    assert result["output"] == str(sealed) and result["kdf"] == "raw-key"
-    assert seen[-1] == (3000, 3000)
-    assert src.read_bytes() == data  # 原檔不動
-    src.unlink()
-    out = ops.decrypt_path(sealed, None, key)
-    assert out["output"] == str(src) and src.read_bytes() == data
-    assert [p.name for p in tmp_path.iterdir() if "partial" in p.name] == []
-
-
-def test_existing_target_is_refused_unless_forced(tmp_path, key):
-    src = tmp_path / "a.txt"
-    src.write_bytes(b"new content")
-    dst = tmp_path / "a.txt.isd2"
-    dst.write_bytes(b"precious")
-    assert code_of(ops.encrypt_path, src, dst, key) == "output_exists"
-    assert dst.read_bytes() == b"precious"
-    ops.encrypt_path(src, dst, key, force=True)
-    plain = tmp_path / "out.txt"
-    plain.write_bytes(b"precious")
-    assert code_of(ops.decrypt_path, dst, plain, key) == "output_exists"
-    assert plain.read_bytes() == b"precious"
-    ops.decrypt_path(dst, plain, key, force=True)
-    assert plain.read_bytes() == b"new content"
-
-
-def test_failed_decrypt_leaves_nothing_behind(tmp_path, key):
-    src = tmp_path / "a.bin"
-    src.write_bytes(os.urandom(5000))
-    sealed = tmp_path / "a.bin.isd2"
-    ops.encrypt_path(src, sealed, key, chunk_size=1024)
-    blob = bytearray(sealed.read_bytes())
-    blob[-5] ^= 1  # 壞在最後一塊：前面幾塊都已經解出來了
-    sealed.write_bytes(bytes(blob))
-    out = tmp_path / "out.bin"
-    before = sorted(p.name for p in tmp_path.iterdir())
-    assert code_of(ops.decrypt_path, sealed, out, key) == "corrupt"
-    assert sorted(p.name for p in tmp_path.iterdir()) == before
-    assert code_of(ops.decrypt_path, sealed, out, KeyMaterial(raw=os.urandom(32))) == "wrong_key"
-    assert not out.exists()
-
-
-def test_input_and_output_problems(tmp_path, key):
-    assert code_of(ops.encrypt_path, tmp_path / "nope", None, key) == "input_missing"
-    assert code_of(ops.decrypt_path, tmp_path / "nope.isd2", None, key) == "input_missing"
-    src = tmp_path / "a.txt"
-    src.write_bytes(b"x")
-    assert code_of(ops.encrypt_path, src, src, key) == "bad_input"
-    assert code_of(ops.encrypt_path, src, tmp_path / "no_dir" / "o.isd2", key) == "input_missing"
-    assert code_of(ops.decrypt_path, src, tmp_path / "o", key) == "unsupported_format"
-    odd = tmp_path / "sealed.bin"
-    ops.encrypt_path(src, odd, key)
-    assert code_of(ops.decrypt_path, odd, None, key) == "bad_input"  # 檔名猜不出輸出
-
-
-def test_passphrase_file_roundtrip(tmp_path):
-    material = keys.passphrase_material("a long enough passphrase")
-    src = tmp_path / "a.txt"
-    src.write_bytes(b"hello")
-    result = ops.encrypt_path(src, None, material, **FAST)
-    assert result["kdf"] == "scrypt"
-    out = tmp_path / "b.txt"
-    ops.decrypt_path(tmp_path / "a.txt.isd2", out, material)
-    assert out.read_bytes() == b"hello"
-
-
-# ── 資料夾 ──────────────────────────────────────────────────────────────
 
 def make_tree(root):
     (root / "sub" / "deep").mkdir(parents=True)
@@ -220,115 +234,102 @@ def snapshot(root):
             for p in sorted(root.rglob("*"))}
 
 
-def test_folder_roundtrip(tmp_path, key):
-    src = tmp_path / "project"
-    src.mkdir()
-    make_tree(src)
-    result = ops.encrypt_path(src, None, key, chunk_size=512)
-    sealed = tmp_path / "project.isd2"
-    assert result["payload"] == "folder" and result["files"] == 4
-    assert ops.info_path(sealed)["payload"] == "folder"
-    out = tmp_path / "restored"
-    done = ops.decrypt_path(sealed, out, key)
-    assert done["files"] == 4 and snapshot(out) == snapshot(src)
-    # 預設輸出（去掉 .isd2）就是原本的資料夾，已存在且非空：拒絕，加 force 也一樣
-    assert code_of(ops.decrypt_path, sealed, None, key) == "output_exists"
-    assert code_of(ops.decrypt_path, sealed, None, key, force=True) == "output_exists"
-    # 空的資料夾可以直接解進去
-    blank = tmp_path / "blank"
-    blank.mkdir()
-    ops.decrypt_path(sealed, blank, key)
-    assert snapshot(blank) == snapshot(src)
-
-
-def test_folder_keep_tar_and_output_inside_source(tmp_path, key):
-    src = tmp_path / "project"
-    src.mkdir()
-    make_tree(src)
-    assert code_of(ops.encrypt_path, src, src / "self.isd2", key) == "bad_input"
-    sealed = tmp_path / "p.isd2"
-    ops.encrypt_path(src, sealed, key)
-    tar_out = tmp_path / "p.tar"
-    result = ops.decrypt_path(sealed, tar_out, key, keep_tar=True)
-    assert result["payload"] == "tar"
-    with tarfile.open(tar_out) as tar:
-        names = tar.getnames()
-        assert "sub/deep/中文 檔名.txt" in names
-        assert all(m.uname == "" and m.gname == "" for m in tar.getmembers())
-
-
-def test_truncated_folder_archive_leaves_no_partial_folder(tmp_path, key):
-    src = tmp_path / "project"
-    src.mkdir()
-    make_tree(src)
-    sealed = tmp_path / "p.isd2"
-    ops.encrypt_path(src, sealed, key, chunk_size=512)
-    blob = sealed.read_bytes()
-    sealed.write_bytes(blob[: len(blob) - 600])
-    out = tmp_path / "restored"
-    before = sorted(p.name for p in tmp_path.iterdir())
-    assert code_of(ops.decrypt_path, sealed, out, key) == "corrupt"
-    assert sorted(p.name for p in tmp_path.iterdir()) == before
-
-
-def _sealed_tar(path, key, build):
-    """用正確的金鑰封一個「內容有問題」的 tar：驗證會過，所以要靠解開時的檢查擋。"""
-    raw = io.BytesIO()
-    with tarfile.open(fileobj=raw, mode="w") as tar:
-        build(tar)
-    with open(path, "wb") as fh:
-        writer = SealWriter(fh, key, payload=PAYLOAD_TAR)
-        writer.write(raw.getvalue())
-        writer.close()
-
-
-def _file_member(name, data=b"evil"):
+def file_member(name, data=b"evil"):
     info = tarfile.TarInfo(name)
     info.size = len(data)
     return info, io.BytesIO(data)
 
 
-@pytest.mark.parametrize("name", ["../escape.txt", "/abs.txt", "a/../../escape.txt",
-                                  "C:/abs.txt", "a\\..\\b.txt"])
-def test_archive_paths_cannot_escape(tmp_path, key, name):
-    sealed = tmp_path / "bad.isd2"
-    _sealed_tar(sealed, key, lambda tar: tar.addfile(*_file_member(name)))
-    box = tmp_path / "box"
-    box.mkdir()
-    assert code_of(ops.decrypt_path, sealed, box / "out", key) == "unsafe_archive"
-    assert list(box.iterdir()) == []
-    assert not (tmp_path / "escape.txt").exists()
+class FolderTests(OpsCase):
+    def setUp(self):
+        super().setUp()
+        self.src = self.tmp / "project"
+        self.src.mkdir()
+        make_tree(self.src)
+
+    def test_folder_roundtrip(self):
+        key = self.key
+        result = ops.encrypt_path(self.src, None, key, chunk_size=512)
+        sealed = self.tmp / "project.isd2"
+        self.assertEqual((result["payload"], result["files"]), ("folder", 4))
+        self.assertEqual(ops.info_path(sealed)["payload"], "folder")
+        out = self.tmp / "restored"
+        done = ops.decrypt_path(sealed, out, key)
+        self.assertEqual(done["files"], 4)
+        self.assertEqual(snapshot(out), snapshot(self.src))
+        # 預設輸出（去掉 .isd2）就是原本的資料夾，已存在且非空：拒絕，加 force 也一樣
+        self.assertEqual(self.code_of(ops.decrypt_path, sealed, None, key), "output_exists")
+        self.assertEqual(self.code_of(ops.decrypt_path, sealed, None, key, force=True),
+                         "output_exists")
+        # 空的資料夾可以直接解進去
+        blank = self.tmp / "blank"
+        blank.mkdir()
+        ops.decrypt_path(sealed, blank, key)
+        self.assertEqual(snapshot(blank), snapshot(self.src))
+
+    def test_keep_tar_and_output_inside_source(self):
+        key = self.key
+        self.assertEqual(self.code_of(ops.encrypt_path, self.src, self.src / "self.isd2", key),
+                         "bad_input")
+        sealed = self.tmp / "p.isd2"
+        ops.encrypt_path(self.src, sealed, key)
+        tar_out = self.tmp / "p.tar"
+        result = ops.decrypt_path(sealed, tar_out, key, keep_tar=True)
+        self.assertEqual(result["payload"], "tar")
+        with tarfile.open(tar_out) as tar:
+            self.assertIn("sub/deep/中文 檔名.txt", tar.getnames())
+            # 封存裡不帶帳號名稱
+            self.assertTrue(all(m.uname == "" and m.gname == "" for m in tar.getmembers()))
+
+    def test_truncated_archive_leaves_no_partial_folder(self):
+        sealed = self.tmp / "p.isd2"
+        ops.encrypt_path(self.src, sealed, self.key, chunk_size=512)
+        blob = sealed.read_bytes()
+        sealed.write_bytes(blob[: len(blob) - 600])
+        before = self.names()
+        self.assertEqual(
+            self.code_of(ops.decrypt_path, sealed, self.tmp / "restored", self.key), "corrupt")
+        self.assertEqual(self.names(), before)
+
+    def _sealed_tar(self, build):
+        """用正確的金鑰封一個「內容有問題」的 tar：驗證會過，要靠解開時的檢查擋。"""
+        raw = io.BytesIO()
+        with tarfile.open(fileobj=raw, mode="w") as tar:
+            build(tar)
+        path = self.tmp / "bad.isd2"
+        with open(path, "wb") as fh:
+            writer = SealWriter(fh, self.key, payload=PAYLOAD_TAR)
+            writer.write(raw.getvalue())
+            writer.close()
+        return path
+
+    def test_archive_paths_cannot_escape(self):
+        for name in ("../escape.txt", "/abs.txt", "a/../../escape.txt", "C:/abs.txt",
+                     "a\\..\\b.txt"):
+            with self.subTest(name=name):
+                sealed = self._sealed_tar(lambda tar: tar.addfile(*file_member(name)))
+                box = self.tmp / "box"
+                box.mkdir(exist_ok=True)
+                self.assertEqual(
+                    self.code_of(ops.decrypt_path, sealed, box / "out", self.key),
+                    "unsafe_archive")
+                self.assertEqual(list(box.iterdir()), [])
+                self.assertFalse((self.tmp / "escape.txt").exists())
+
+    def test_archive_links_are_refused(self):
+        def build(tar):
+            tar.addfile(*file_member("ok.txt", b"fine"))
+            link = tarfile.TarInfo("link")
+            link.type = tarfile.SYMTYPE
+            link.linkname = "../../somewhere"
+            tar.addfile(link)
+        sealed = self._sealed_tar(build)
+        box = self.tmp / "box"
+        box.mkdir()
+        self.assertEqual(self.code_of(ops.decrypt_path, sealed, box / "out", self.key),
+                         "unsafe_archive")
+        self.assertEqual(list(box.iterdir()), [])
 
 
-def test_archive_links_are_refused(tmp_path, key):
-    def build(tar):
-        tar.addfile(*_file_member("ok.txt", b"fine"))
-        link = tarfile.TarInfo("link")
-        link.type = tarfile.SYMTYPE
-        link.linkname = "../../somewhere"
-        tar.addfile(link)
-    sealed = tmp_path / "bad.isd2"
-    _sealed_tar(sealed, key, build)
-    box = tmp_path / "box"
-    box.mkdir()
-    assert code_of(ops.decrypt_path, sealed, box / "out", key) == "unsafe_archive"
-    assert list(box.iterdir()) == []
-
-
-# ── info ────────────────────────────────────────────────────────────────
-
-def test_info_needs_no_key_and_recognises_legacy(tmp_path, key):
-    src = tmp_path / "a.txt"
-    src.write_bytes(b"x" * 10)
-    ops.encrypt_path(src, None, key, cipher="chacha20-poly1305")
-    info = ops.info_path(tmp_path / "a.txt.isd2")
-    assert (info["format"], info["cipher"], info["kdf"], info["payload"]) == (
-        "isd2", "chacha20-poly1305", "raw-key", "file")
-    legacy = tmp_path / "old.isd"
-    legacy.write_text(
-        'CONTENT="""QUJD"""\nNOTE="""{"algorithm": "AES-256-CBC", "mode": "layered",'
-        ' "password_hint": "do not show"}"""', encoding="utf-8")
-    old = ops.info_path(legacy)
-    assert old["format"] == "isd-legacy" and old["legacy_mode"] == "layered"
-    assert "do not show" not in str(old)
-    assert code_of(ops.info_path, src) == "unsupported_format"
+if __name__ == "__main__":
+    unittest.main()
