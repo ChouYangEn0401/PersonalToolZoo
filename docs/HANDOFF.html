@@ -291,7 +291,7 @@ pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 1
           <dt>AI</dt><dd>預設 Claude 訂閱（sonnet），可選 OpenAI／Gemini／Claude API／OpenAI 相容端點（Ollama 等；金鑰在 <code>.env</code>）。語音辨識預設本機 Whisper，可選 OpenAI／Gemini（會上傳音訊）。</dd>
           <dt>驗證</dt><dd>11/12 發 2.2.0-alpha（release.ps1 <code>-NoSmoke</code>，從頭 build，107.0 MB）；295 個測試全過（離線，假的 AI／語音辨識／來源）。打包的 alpha exe 用範例分析跑 <code>--render --outputs all</code>，10 種輸出全部產生、網頁裡帶著 2.2.0-alpha；<code>--library</code>、<code>--check</code> 正常。
             <strong>還沒做</strong>：v2 還沒用真的影片＋真的 AI 跑過一次；網頁介面與 4 個網頁範本還沒有人在瀏覽器裡看過（這台電腦不開網路埠，GUI 的冒煙測試改用 CLI 驗證）；<code>.xmind</code> 還沒用真的 XMind 打開過。10/06 打包的 2.1 版實際跑完一支影片。</dd>
-          <dt>注意</dt><dd>要 ffmpeg，以及 Node ≥ 22 或 Deno ≥ 2.3（yt-dlp 抓 YouTube 用）；缺的話 GUI 頂端有「一鍵下載」（或 <code>--install-deps</code>），從官方下載並核對 SHA-256，放 <code>databin</code>，不做 installer、不把 ffmpeg 打包進 exe。Claude 訂閱每次最多等 900 秒。<code>--json</code> 的輸出在 v2 改成 <code>{"ok", "data"|"error"}</code> 信封格式。import commit 少了 3 個小腳手架檔案，見<a href="#old">舊專案去了哪裡</a>。</dd>
+          <dt>注意</dt><dd>要 ffmpeg，以及 Node ≥ 22 或 Deno ≥ 2.3（yt-dlp 抓 YouTube 用）；缺的話 GUI 頂端有「一鍵下載」（或 <code>--install-deps</code>），從官方下載並核對 SHA-256，放 <code>data\bin\</code>，不做 installer、不把 ffmpeg 打包進 exe。Claude 訂閱每次最多等 900 秒。<code>--json</code> 的輸出在 v2 改成 <code>{"ok", "data"|"error"}</code> 信封格式。import commit 少了 3 個小腳手架檔案，見<a href="#old">舊專案去了哪裡</a>。</dd>
         </dl>
       </article>
 
