@@ -1,41 +1,84 @@
 // Video Notes 前端。
-// 左邊：表單 → /api/check（處理過的先問要不要重做）→ /api/jobs；每秒輪詢 /api/jobs 更新清單。
-// 右邊：檢視筆記（渲染後 / Markdown 原文 / 逐字稿）、複製到 Notion、用 Better Prompt 的模式二次加工。
+// 左邊：新增影片（模式、輸出形式、語音辨識）→ /api/check（處理過的先問要不要重做或直接補輸出）→ /api/jobs；每秒輪詢 /api/jobs。
+// 筆記庫：影片與「合併」分開，可多選 → 產生其他輸出（不花 token）／重新分析／合併成一份。
+// 右邊：檢視筆記（渲染後 / Markdown 原文 / 逐字稿）、開啟各種輸出、複製到 Notion、二次加工。
+//
+// 安全：來自資料（影片標題、筆記、錯誤訊息…）的文字一律用 textContent（h() 的字串子節點與 text 屬性）。
+// 唯一用 innerHTML 的是 renderMarkdown()：它先把全部內容跳脫，連結只放行 http(s)。
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const enc = encodeURIComponent;
 
-const STAGES = [["info", "資訊"], ["download", "下載"], ["audio", "音訊"], ["transcribe", "轉錄"], ["notes", "筆記"]];
+const STAGES_VIDEO = [["info", "資訊"], ["download", "下載"], ["audio", "音訊"], ["transcribe", "轉錄"], ["notes", "筆記"], ["outputs", "輸出"]];
+const STAGES_TASK = [["notes", "分析"], ["outputs", "輸出"]];
 const STAGE_TITLE = { running: "進行中", waiting: "排隊中", done: "完成", reused: "沿用既有檔案", failed: "失敗" };
 const STATUS_TEXT = { queued: "排隊中", running: "處理中", done: "完成", failed: "失敗", cancelled: "已取消" };
+const TYPE_TEXT = { reanalyze: "重新分析", combine: "合併" };
+const GROUP_TITLE = { notes: "筆記", tree: "樹狀圖", html: "網頁" };
+const COMPAT = "openai-compat";
 
 const state = {
   app: null,          // /api/state
   jobs: [],
   jobsSig: "",
-  library: [],
+  library: { videos: [], collections: [] },
+  checked: new Set(), // 筆記庫勾選的資料夾
   modifiers: new Set(),
+  preset: "",
+  outPicker: null,    // 新增影片表單的輸出多選
   selected: null,     // {type: "job", id} | {type: "lib", folder}
   view: "rendered",
-  current: null,      // 右側正在看的東西 {title, meta, url, folder, notes[], slug, text, live}
+  current: null,      // 右側正在看的東西
+  curSig: "",
 };
 
 // ---------------------------------------------------------------- helpers
+class ApiError extends Error {
+  constructor(message, extra = {}) { super(message); Object.assign(this, extra); }
+}
+
+// 錯誤合約：reason 一句人話；remedy.action 是「怎麼辦」
+function errText(e) {
+  if (!e) return "";
+  const how = e.remedy && e.remedy.action ? `（怎麼辦：${e.remedy.action}）` : "";
+  return `${e.reason || "發生錯誤"}${how}`;
+}
+
 async function api(path, options = {}) {
   // 自訂 header：伺服器只接受帶這個 header 的寫入請求（擋別的網站跨站呼叫本機 API）
   const headers = { "X-Video-Notes": "1" };
   if (options.body) headers["Content-Type"] = "application/json";
   const res = await fetch(path, { ...options, headers });
   if (!res.ok) {
-    let msg = res.statusText;
-    try { msg = (await res.json()).detail || msg; } catch { /* 不是 JSON */ }
-    throw new Error(msg);
+    let body = {};
+    try { body = await res.json(); } catch { /* 不是 JSON */ }
+    if (body.error) throw new ApiError(errText(body.error), { info: body.error, estimate: body.estimate, status: res.status });
+    const detail = typeof body.detail === "string" ? body.detail : (body.detail ? "資料格式不正確" : res.statusText);
+    throw new ApiError(detail, { status: res.status });
   }
   return (res.headers.get("content-type") || "").includes("json") ? res.json() : res.text();
 }
 const post = (path, data) => api(path, { method: "POST", body: JSON.stringify(data) });
 
-function esc(s) {
+// 建 DOM：字串子節點一律是文字（不會被當 HTML）
+function h(tag, props = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "text") el.textContent = v;
+    else if (k === "dataset") Object.assign(el.dataset, v);
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k in el && k !== "list") el[k] = v;
+    else el.setAttribute(k, v);
+  }
+  el.append(...kids.flat().filter(c => c != null && c !== false));
+  return el;
+}
+const labelled = (text, control) => h("label", {}, text, control);
+
+function esc(s) {   // 只給 renderMarkdown 用
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
@@ -45,13 +88,32 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 3200);
 }
 
 function fmtTime(ts) {
   const d = new Date(ts * 1000);
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
+
+// ---------------------------------------------------------------- 中文標籤
+const profileName = id => { const p = state.app.profiles.find(x => x.id === id); return p ? `${p.icon} ${p.name}` : id; };
+const modName = id => { const m = state.app.modifiers.find(x => x.id === id); return m ? `${m.icon} ${m.name}` : id; };
+// 分析方案代碼（news+brief、finance+focus-ab12cd）→ 人看得懂的名稱
+const slugLabel = slug => String(slug).split("+").map((part, i) =>
+  part.startsWith("focus-") ? "指定關注" : (i === 0 ? profileName(part) : modName(part))).join(" ＋ ");
+const rendererByName = n => state.app.renderers.find(r => r.name === n);
+const rendererLabel = n => rendererByName(n)?.label || n;
+// outputs/<slug>.<renderer>.<副檔名> → 輸出格式的中文名稱
+function outputInfo(file) {
+  const list = [...state.app.renderers].sort((a, b) => b.name.length - a.name.length);
+  for (const r of list) {
+    const i = file.indexOf(`.${r.name}.`);
+    if (i > 0) return { renderer: r.name, slug: file.slice(0, i), label: r.label };
+  }
+  return { renderer: "", slug: "", label: file };
+}
+const baseName = p => String(p).split(/[\\/]/).pop();
 
 // ---------------------------------------------------------------- markdown（Notion 會用到的子集）
 function inline(text) {
@@ -125,6 +187,7 @@ async function init() {
   state.app = await api("/api/state");
   $("#version").textContent = `v${state.app.version}`;
   renderEnv();
+  renderAlerts();
   fillForm();
   fillRefine();
   bindEvents();
@@ -133,43 +196,188 @@ async function init() {
   loadLibrary();
 }
 
+function chip(text, cls, title) { return h("span", { class: `chip ${cls || ""}`, title: title || "", text }); }
+
 function renderEnv() {
-  const { env, settings, providers } = state.app;
+  const { env, settings, providers, ytdlp } = state.app;
   const chips = [];
-  chips.push(`<span class="chip ${env.gpu ? "ok" : ""}" title="${esc(env.gpu_text)}">${env.gpu ? "GPU" : "CPU"} 語音辨識</span>`);
-  chips.push(`<span class="chip ${env.ffmpeg ? "ok" : "bad"}" title="${esc(env.ffmpeg || "找不到 ffmpeg")}">ffmpeg ${env.ffmpeg ? "✓" : "✗"}</span>`);
-  chips.push(`<span class="chip ${env.js_runtimes.length ? "ok" : "bad"}" title="yt-dlp ${esc(env.yt_dlp)}">YouTube JS ${env.js_runtimes.length ? "✓ " + env.js_runtimes[0] : "✗"}</span>`);
+  chips.push(chip(`${env.gpu ? "GPU" : "CPU"} 語音辨識`, env.gpu ? "ok" : "", env.gpu_text));
+  chips.push(chip(`ffmpeg ${env.ffmpeg ? "✓" : "✗"}`, env.ffmpeg ? "ok" : "bad", env.ffmpeg || "找不到 ffmpeg"));
+  chips.push(chip(`YouTube JS ${env.js_runtimes.length ? "✓ " + env.js_runtimes[0] : "✗"}`, env.js_runtimes.length ? "ok" : "bad", ""));
+  const days = ytdlp.days == null ? "" : `（${ytdlp.days} 天前）`;
+  chips.push(chip(`yt-dlp ${ytdlp.version}${days}`, ytdlp.level === "ok" ? "ok" : ytdlp.level === "warn" ? "warn" : "bad",
+    ytdlp.level === "ok" ? "下載套件夠新" : `已經很久沒更新，YouTube 可能抓不到。${ytdlp.action || ""}`));
   const ready = env.keys[settings.provider];   // 有金鑰；Claude 訂閱則是找得到 Claude Code
   const keyless = env.keyless.includes(settings.provider);
   const model = settings.model || state.app.default_models[settings.provider];
-  const missing = keyless ? "（找不到 Claude Code）" : "（未設定金鑰）";
-  chips.push(`<span class="chip ${ready ? "ok" : "bad"}" title="${esc(keyless ? env.claude_code : "")}">AI：${esc(providers[settings.provider])} ${esc(model)} ${ready ? "✓" : missing}</span>`);
-  $("#env-chips").innerHTML = chips.join("");
+  const missing = settings.provider === COMPAT ? "（還沒填端點網址）" : keyless ? "（找不到 Claude Code）" : "（未設定金鑰）";
+  chips.push(chip(`AI：${providers[settings.provider] || settings.provider} ${model || ""} ${ready ? "✓" : missing}`,
+    ready ? "ok" : "bad", keyless ? env.claude_code : ""));
+  $("#env-chips").replaceChildren(...chips);
   $("#out-hint").textContent = `輸出到：${state.app.output_root}`;
 }
 
+// 頂端警示條：被標成「壞掉」的依賴（中文原因＋怎麼辦）＋「重新檢查」
+function renderAlerts() {
+  const { degraded, ytdlp } = state.app;
+  const items = degraded.map(d => ({ title: `${d.label} 目前被標記為壞掉`, reason: d.reason, action: d.action }));
+  if (ytdlp.level !== "ok" && !degraded.some(d => d.source === "yt-dlp")) {
+    items.push({ title: `yt-dlp 已經 ${ytdlp.days} 天沒更新`, reason: "網站改版後可能抓不到影片。", action: ytdlp.action });
+  }
+  const bar = $("#alert-bar");
+  bar.hidden = !items.length;
+  bar.replaceChildren(
+    h("div", { class: "alert-list" }, items.map(it => h("div", { class: "alert-item" },
+      h("strong", { text: it.title }), h("span", { text: `　${it.reason}` }),
+      it.action ? h("div", { class: "small", text: `怎麼辦：${it.action}` }) : null))),
+    h("button", { type: "button", id: "btn-recheck", onclick: recheck, text: "重新檢查" }));
+}
+
+async function recheck() {
+  const btn = $("#btn-recheck");
+  btn.disabled = true;
+  try {
+    const r = await post("/api/health/recheck", {});
+    state.app.degraded = r.degraded;
+    state.app.ytdlp = r.ytdlp;
+    renderAlerts();
+    renderEnv();
+    const bad = r.checks.filter(c => c.level === "error").length;
+    toast(bad ? `重新檢查完成：還有 ${bad} 項有問題` : "重新檢查完成：都正常");
+  } catch (e) {
+    toast(`重新檢查失敗：${e.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------- 輸出形式／語音辨識／模式（共用元件）
+// 輸出形式多選，依分組；不能用的灰掉，tooltip 寫原因與怎麼辦。skipAlways：不列出「一定會產生」的 Markdown。
+function outputPicker({ checked = [], skipAlways = false, onchange } = {}) {
+  const boxes = new Map();
+  const root = h("div", { class: "out-groups" });
+  for (const g of ["notes", "tree", "html"]) {
+    const items = state.app.renderers.filter(r => r.group === g && !(skipAlways && r.always));
+    if (!items.length) continue;
+    const row = h("div", { class: "out-group" }, h("span", { class: "out-group-title", text: GROUP_TITLE[g] }));
+    for (const r of items) {
+      const cb = h("input", { type: "checkbox", checked: r.always || (checked.includes(r.name) && r.available),
+                              disabled: r.always || !r.available, onchange });
+      boxes.set(r.name, cb);
+      const tip = r.always ? "一定會產生" : !r.available ? `不能用：${r.reason}${r.action ? "。怎麼辦：" + r.action : ""}` : "";
+      row.append(h("label", { class: "check out-opt" + (r.available ? "" : " unavail"), title: tip }, cb, r.label));
+    }
+    root.append(row);
+  }
+  return {
+    node: root,
+    get: () => [...boxes].filter(([n, cb]) => cb.checked && !rendererByName(n).always).map(([n]) => n),
+    set(list) { boxes.forEach((cb, n) => { const r = rendererByName(n); if (!r.always) cb.checked = list.includes(n) && r.available; }); },
+  };
+}
+
+const sttLabel = x => x.label + (x.privacy === "cloud" ? "（雲端・會上傳音訊）" : "") + (x.available ? "" : `（不能用：${x.reason}）`);
+function fillSttSelect(select, current) {
+  select.replaceChildren(...state.app.stt_providers.map(x => h("option", {
+    value: x.name, disabled: !x.available,
+    title: x.available ? (x.cost_hint || "") : `${x.reason}${x.action ? "。怎麼辦：" + x.action : ""}`, text: sttLabel(x) })));
+  const ok = state.app.stt_providers.find(x => x.name === current && x.available);
+  select.value = ok ? current : "local";
+}
+function sttHintText(name) {
+  const x = state.app.stt_providers.find(s => s.name === name);
+  if (!x) return "";
+  if (x.privacy !== "cloud") return "在這台電腦上辨識，音訊不會離開電腦。";
+  const back = state.app.settings.stt_fallback_local ? "失敗時會退回本機辨識。" : "失敗時不會自動退回本機。";
+  return `⚠ 音訊會上傳到雲端服務辨識。${back}`;
+}
+
+// 模式欄位（對話框用）：常用組合、整理方式、加料、關注重點、輸出形式
+function modeFields({ outputs = [], onchange } = {}) {
+  const { profiles, modifiers, presets } = state.app;
+  const mods = new Set();
+  const preset = h("select", {}, h("option", { value: "", text: "（不使用常用組合）" }),
+    presets.map(p => h("option", { value: p.id, title: p.description, text: `${p.name}　${p.description}` })));
+  const profile = h("select", {}, h("option", { value: "auto", text: "🤖 自動判斷" }),
+    profiles.map(p => h("option", { value: p.id, title: p.description, text: `${p.icon} ${p.name}` })));
+  const modBox = h("div", { class: "toggles" });
+  const renderMods = () => modBox.replaceChildren(...modifiers.map(m => h("button", {
+    type: "button", class: "toggle" + (mods.has(m.id) ? " on" : ""), title: m.description, text: `${m.icon} ${m.name}`,
+    onclick: () => { mods.has(m.id) ? mods.delete(m.id) : mods.add(m.id); renderMods(); onchange?.(); } })));
+  const focus = h("input", { placeholder: "例如：AI 伺服器、對台積電的看法", oninput: () => onchange?.() });
+  const picker = outputPicker({ checked: outputs, skipAlways: true });
+  preset.onchange = () => {
+    const p = presets.find(x => x.id === preset.value);
+    if (p) {
+      profile.value = profiles.some(x => x.id === p.profile) ? p.profile : "auto";
+      mods.clear(); p.modifiers.forEach(m => mods.add(m));
+      focus.value = p.focus || "";
+      if (p.outputs?.length) picker.set(p.outputs);
+      renderMods();
+    }
+    onchange?.();
+  };
+  profile.onchange = () => onchange?.();
+  renderMods();
+  const node = h("div", { class: "mode-fields" },
+    labelled("模式（常用組合）", preset), labelled("整理方式", profile),
+    h("div", { class: "field" }, h("span", { class: "label", text: "加料（可以多選）" }), modBox),
+    labelled("特別想知道（選填）", focus),
+    h("div", { class: "field" }, h("span", { class: "label", text: "輸出形式（Markdown 筆記一定會產生）" }), picker.node));
+  return { node, get: () => ({ profile: profile.value, modifiers: [...mods], focus: focus.value.trim(), preset: preset.value, outputs: picker.get() }) };
+}
+
+// ---------------------------------------------------------------- 新增影片表單
 function fillForm() {
-  const { profiles, modifiers, presets, settings } = state.app;
-  $("#profile").innerHTML = `<option value="auto">🤖 自動判斷</option>`
-    + profiles.map(p => `<option value="${esc(p.id)}" title="${esc(p.description)}">${esc(p.icon)} ${esc(p.name)}</option>`).join("");
-  $("#profile").value = settings.profile in Object.fromEntries(profiles.map(p => [p.id, 1])) ? settings.profile : "auto";
-  $("#preset").innerHTML = `<option value="">（不使用）</option>`
-    + presets.map(p => `<option value="${esc(p.id)}" title="${esc(p.description)}">${esc(p.name)}</option>`).join("");
+  const { profiles, modifiers, settings } = state.app;
+  $("#profile").replaceChildren(h("option", { value: "auto", text: "🤖 自動判斷" }),
+    ...profiles.map(p => h("option", { value: p.id, title: p.description, text: `${p.icon} ${p.name}` })));
+  $("#profile").value = profiles.some(p => p.id === settings.profile) ? settings.profile : "auto";
   state.modifiers = new Set(settings.modifiers || []);
-  $("#modifiers").innerHTML = modifiers.map(m =>
-    `<button type="button" class="toggle" data-mod="${esc(m.id)}" title="${esc(m.description)}">${esc(m.icon)} ${esc(m.name)}</button>`).join("");
+  $("#modifiers").replaceChildren(...modifiers.map(m => h("button", {
+    type: "button", class: "toggle", dataset: { mod: m.id }, title: m.description, text: `${m.icon} ${m.name}` })));
   renderToggles();
+  renderPresets();
+  state.outPicker = outputPicker({ checked: settings.outputs || [] });
+  $("#outputs").replaceChildren(state.outPicker.node);
+  fillSttSelect($("#stt"), settings.stt_provider);
+  $("#stt-hint").textContent = sttHintText($("#stt").value);
   $("#opt-keep-video").checked = !!settings.keep_video;
+  $("#advanced").open = false;
 }
 
 function renderToggles() {
   $$("#modifiers .toggle").forEach(b => b.classList.toggle("on", state.modifiers.has(b.dataset.mod)));
 }
 
+function renderPresets() {
+  const card = (id, name, desc) => h("button", {
+    type: "button", class: "preset-card" + (state.preset === id ? " on" : ""), title: desc, onclick: () => choosePreset(id) },
+    h("strong", { text: name }), h("span", { class: "muted small", text: desc }));
+  $("#presets").replaceChildren(card("", "自己選", "不套用常用組合，自己決定整理方式與輸出"),
+    ...state.app.presets.map(p => card(p.id, p.name, p.description)));
+}
+
+function choosePreset(id) {
+  state.preset = id;
+  const p = state.app.presets.find(x => x.id === id);
+  if (p) {
+    $("#profile").value = state.app.profiles.some(x => x.id === p.profile) ? p.profile : "auto";
+    state.modifiers = new Set(p.modifiers);
+    $("#focus").value = p.focus || "";
+    if (p.outputs?.length) state.outPicker.set(p.outputs);     // 常用組合建議的輸出自動勾上
+    toast(`已套用「${p.name}」`);
+  } else {
+    $("#advanced").open = true;
+  }
+  renderPresets();
+  renderToggles();
+}
+
 function fillRefine() {
   const modes = state.app.text_modes;
-  $("#r-mode").innerHTML = Object.keys(modes).map(m => `<option>${esc(m)}</option>`).join("");
-  const fillSubs = () => { $("#r-sub").innerHTML = modes[$("#r-mode").value].map(s => `<option>${esc(s)}</option>`).join(""); };
+  $("#r-mode").replaceChildren(...Object.keys(modes).map(m => h("option", { text: m })));
+  const fillSubs = () => $("#r-sub").replaceChildren(...modes[$("#r-mode").value].map(s => h("option", { text: s })));
   $("#r-mode").onchange = fillSubs;
   $("#r-mode").value = Object.keys(modes).find(m => m.includes("摘要")) || Object.keys(modes)[0];
   fillSubs();
@@ -184,17 +392,27 @@ async function start(urlsOverride) {
     const checks = await post("/api/check", { urls });
     const existing = checks.filter(c => c.status);
     let redo = {};
+    let sendUrls = urls;
     if (existing.length) {
-      redo = await askRedo(existing);
-      if (redo === null) return;
+      const answer = await askRedo(existing);
+      if (answer === null) return;
+      redo = answer.redo;
+      if (answer.renderOnly.length) {
+        const made = await renderOnly(answer.renderOnly, answer.outputs);
+        sendUrls = urls.filter(u => !answer.renderOnly.some(r => r.url === u));
+        if (made && !sendUrls.length) { if (!urlsOverride) $("#urls").value = ""; return; }
+      }
     }
     const jobs = await post("/api/jobs", {
-      urls,
+      urls: sendUrls,
       profile: $("#profile").value,
       modifiers: [...state.modifiers],
       focus: $("#focus").value.trim(),
+      preset: state.preset,
       notes: !$("#opt-transcript-only").checked,
       keep_video: $("#opt-keep-video").checked,
+      outputs: state.outPicker.get(),
+      stt_provider: $("#stt").value,
       redo,
     });
     if (!urlsOverride) $("#urls").value = "";
@@ -209,31 +427,72 @@ async function start(urlsOverride) {
   }
 }
 
+// 處理過的網址：直接用現有分析補產生其他輸出（不花 token）
+async function renderOnly(list, outputs) {
+  if (!outputs.length) { toast("沒有選輸出格式，「直接產生其他輸出」的影片先略過"); return false; }
+  let made = 0;
+  const problems = [];
+  for (const r of list) {
+    try {
+      const res = await post("/api/render", { folder: r.folder, slug: r.slug, outputs });
+      made += Object.keys(res.outputs).length;
+      for (const [k, v] of Object.entries(res.errors)) problems.push(`${rendererLabel(k)}：${v}`);
+    } catch (e) { problems.push(e.message); }
+  }
+  toast(problems.length ? `產生了 ${made} 個輸出，有問題：${problems.join("；")}` : `已產生 ${made} 個輸出（沒有花 token），到筆記庫就看得到`);
+  loadLibrary();
+  return made > 0;
+}
+
 function askRedo(items) {
   return new Promise(resolve => {
-    const box = $("#redo-rows");
-    box.innerHTML = items.map(it => {
+    const picker = outputPicker({ skipAlways: true, checked: state.outPicker.get() });
+    $("#redo-outputs-box").replaceChildren(picker.node);
+    const outBox = $("#redo-outputs");
+    outBox.hidden = true;
+    const rows = items.map(it => {
       const s = it.status;
-      return `<div class="redo-row" data-url="${esc(it.url)}">
-        <div class="t">${esc(it.title || it.url)}</div>
-        <div class="muted small">已有：影音 ${s.media ? "✓" : "✗"}　逐字稿 ${s.transcript ? "✓" : "✗"}　筆記 ${s.notes.length ? esc(s.notes.join("、")) : "無"}</div>
-        <div class="opts">
-          ${s.media ? '<label class="check"><input type="checkbox" value="download"> 重新下載</label>' : ""}
-          ${s.transcript ? '<label class="check"><input type="checkbox" value="transcribe"> 重新轉錄</label>' : ""}
-          ${s.notes.length ? '<label class="check"><input type="checkbox" value="notes"> 重新整理筆記（同方案會覆蓋）</label>' : ""}
-        </div>
-      </div>`;
-    }).join("");
+      const analyses = it.analyses || [];
+      const checks = [];
+      const mk = (value, text) => h("label", { class: "check" }, h("input", { type: "checkbox", value, class: "redo-stage" }), text);
+      if (s.media) checks.push(mk("download", "重新下載"));
+      if (s.transcript) checks.push(mk("transcribe", "重新轉錄"));
+      if (s.notes.length || analyses.length) checks.push(mk("notes", "重新分析（同方案會覆蓋）"));
+      let reuse = null, reuseSel = null, reuseBox = null;
+      if (analyses.length) {
+        reuseBox = h("input", { type: "checkbox", class: "render-only" });
+        reuseSel = h("select", { hidden: analyses.length < 2 },
+          analyses.map(a => h("option", { value: a, text: slugLabel(a) })));
+        reuseBox.onchange = () => {
+          $$(".redo-stage", row).forEach(c => { c.disabled = reuseBox.checked; if (reuseBox.checked) c.checked = false; });
+          outBox.hidden = !$$(".render-only", $("#redo-rows")).some(c => c.checked);
+        };
+        reuse = h("div", { class: "reuse-row" },
+          h("label", { class: "check" }, reuseBox, "直接用現有分析產生其他輸出（不花 token）"), reuseSel);
+      }
+      const row = h("div", { class: "redo-row", dataset: { url: it.url, folder: it.folder } },
+        h("div", { class: "t", text: it.title || it.url }),
+        h("div", { class: "muted small", text: `已有：影音 ${s.media ? "✓" : "✗"}　逐字稿 ${s.transcript ? "✓" : "✗"}　筆記 ${s.notes.length ? s.notes.map(slugLabel).join("、") : "無"}` }),
+        analyses.length ? h("div", { class: "muted small", text: `已有分析：${analyses.map(slugLabel).join("、")}` }) : null,
+        h("div", { class: "opts" }, checks), reuse);
+      row._reuse = { box: reuseBox, sel: reuseSel };
+      return row;
+    });
+    $("#redo-rows").replaceChildren(...rows);
     const dlg = $("#dlg-redo");
     dlg.returnValue = "";
     dlg.onclose = () => {
       if (dlg.returnValue !== "ok") { resolve(null); return; }
-      const redo = {};
-      $$(".redo-row", box).forEach(row => {
-        const stages = $$("input:checked", row).map(i => i.value);
+      const redo = {}, renderOnlyList = [];
+      rows.forEach(row => {
+        if (row._reuse.box?.checked) {
+          renderOnlyList.push({ url: row.dataset.url, folder: row.dataset.folder, slug: row._reuse.sel.value });
+          return;
+        }
+        const stages = $$(".redo-stage:checked", row).map(i => i.value);
         if (stages.length) redo[row.dataset.url] = stages;
       });
-      resolve(redo);
+      resolve({ redo, renderOnly: renderOnlyList, outputs: picker.get() });
     };
     dlg.showModal();
   });
@@ -244,11 +503,42 @@ async function pollJobs() {
   let jobs;
   try { jobs = await api("/api/jobs"); } catch { return; }
   const sig = JSON.stringify(jobs);
-  const finishedNow = state.jobs.some(old => old.status === "running" && jobs.find(j => j.id === old.id && j.status !== "running"));
+  const finishedNow = state.jobs.some(old => ["running", "queued"].includes(old.status) && jobs.find(j => j.id === old.id && !["running", "queued"].includes(j.status)));
   state.jobs = jobs;
   if (sig !== state.jobsSig) { state.jobsSig = sig; renderJobs(); }
-  if (finishedNow) loadLibrary();
+  if (finishedNow) await loadLibrary();
   if (state.selected?.type === "job") refreshSelectedJob();
+}
+
+function jobError(j) {
+  if (j.error_info) return errText(j.error_info);
+  return j.error || "";
+}
+
+function jobRow(j) {
+  const live = j.status === "running";
+  const sel = state.selected?.type === "job" && state.selected.id === j.id ? " selected" : "";
+  const stages = (j.type === "video" ? STAGES_VIDEO : STAGES_TASK).map(([k, name]) =>
+    h("span", { class: `stage ${j.stages[k] || ""}`, title: STAGE_TITLE[j.stages[k]] || "尚未開始", text: name }));
+  let badge = null;
+  if (j.type !== "video") badge = h("span", { class: "badge", text: TYPE_TEXT[j.type] });
+  else if (j.kind) badge = h("span", { class: "badge", text: j.kind === "short" ? "短影音" : "影片" });
+  let detail = live ? j.detail : "";
+  if (live && j.streamed_chars > 0 && ["running", "waiting"].includes(j.stages.notes)) {
+    detail = `AI 分析中…（已收到 ${j.streamed_chars} 字）`;     // 串流的是 JSON 原文，人看不懂，只報字數
+  }
+  const outErrors = Object.entries(j.output_errors || {}).map(([k, v]) => `${rendererLabel(k)}：${v}`);
+  return h("div", { class: `job status-${j.status}${sel}`, dataset: { id: j.id } },
+    h("div", { class: "top" }, h("span", { class: "title", text: j.title || j.url }), badge,
+      h("span", { class: "badge", text: STATUS_TEXT[j.status] })),
+    h("div", { class: "stages" }, stages),
+    live ? h("div", { class: "bar" }, h("div", { style: `width:${Math.round((j.progress || 0) * 100)}%` })) : null,
+    detail ? h("div", { class: "detail", text: detail }) : null,
+    jobError(j) ? h("div", { class: "error", text: jobError(j) }) : null,
+    outErrors.length ? h("div", { class: "error", text: `這些輸出沒做成：${outErrors.join("；")}` }) : null,
+    h("div", { class: "row-actions" },
+      live || j.status === "queued" ? h("button", { dataset: { act: "cancel" }, text: "取消" }) : h("button", { dataset: { act: "remove" }, text: "移出清單" }),
+      j.folder ? h("button", { dataset: { act: "open" }, text: "資料夾" }) : null));
 }
 
 function renderJobs() {
@@ -256,27 +546,10 @@ function renderJobs() {
   const active = state.jobs.filter(j => j.status === "queued" || j.status === "running").length;
   $("#job-count").textContent = active ? `(${active})` : "";
   if (!state.jobs.length) {
-    box.innerHTML = '<div class="empty-list">還沒有工作。貼上網址按「開始處理」。</div>';
+    box.replaceChildren(h("div", { class: "empty-list", text: "還沒有工作。貼上網址按「開始處理」。" }));
     return;
   }
-  box.innerHTML = state.jobs.map(j => {
-    const sel = state.selected?.type === "job" && state.selected.id === j.id ? " selected" : "";
-    const live = j.status === "running";
-    const stages = STAGES.map(([k, name]) =>
-      `<span class="stage ${j.stages[k] || ""}" title="${STAGE_TITLE[j.stages[k]] || "尚未開始"}">${name}</span>`).join("");
-    const kind = j.kind ? `<span class="badge">${j.kind === "short" ? "短影音" : "影片"}</span>` : "";
-    return `<div class="job status-${j.status}${sel}" data-id="${j.id}">
-      <div class="top"><span class="title">${esc(j.title || j.url)}</span>${kind}<span class="badge">${STATUS_TEXT[j.status]}</span></div>
-      <div class="stages">${stages}</div>
-      ${live ? `<div class="bar"><div style="width:${Math.round((j.progress || 0) * 100)}%"></div></div>` : ""}
-      ${live && j.detail ? `<div class="detail">${esc(j.detail)}</div>` : ""}
-      ${j.error ? `<div class="error">${esc(j.error)}</div>` : ""}
-      <div class="row-actions">
-        ${live || j.status === "queued" ? '<button data-act="cancel">取消</button>' : '<button data-act="remove">移出清單</button>'}
-        ${j.folder ? '<button data-act="open">資料夾</button>' : ""}
-      </div>
-    </div>`;
-  }).join("");
+  box.replaceChildren(...state.jobs.map(jobRow));
 }
 
 async function onJobClick(ev) {
@@ -285,46 +558,280 @@ async function onJobClick(ev) {
   const id = card.dataset.id;
   const act = ev.target.closest("[data-act]")?.dataset.act;
   const job = state.jobs.find(j => j.id === id);
-  if (act === "cancel") { await post(`/api/jobs/${id}/cancel`, {}); toast("已取消（已產生的檔案會保留）"); return pollJobs(); }
-  if (act === "remove") {
-    await api(`/api/jobs/${id}`, { method: "DELETE" });
-    if (state.selected?.id === id) clearViewer();
-    return pollJobs();
-  }
-  if (act === "open" && job?.folder) { await post("/api/open", { path: job.folder }); return; }
+  try {
+    if (act === "cancel") { await post(`/api/jobs/${id}/cancel`, {}); toast("已取消（已產生的檔案會保留）"); return pollJobs(); }
+    if (act === "remove") {
+      await api(`/api/jobs/${id}`, { method: "DELETE" });
+      if (state.selected?.id === id) clearViewer();
+      return pollJobs();
+    }
+    if (act === "open" && job?.folder) { await post("/api/open", { path: job.folder }); return; }
+  } catch (e) { toast(e.message); return; }
   select({ type: "job", id });
 }
 
 // ---------------------------------------------------------------- 筆記庫
+const allEntries = () => [...state.library.videos, ...state.library.collections];
+const entryByFolder = folder => allEntries().find(x => x.folder === folder);
+
 async function loadLibrary() {
-  try { state.library = await api("/api/library"); } catch { return; }
-  const box = $("#library");
-  if (!state.library.length) {
-    box.innerHTML = `<div class="empty-list">輸出資料夾裡還沒有處理過的影片。<br>${esc(state.app.output_root)}</div>`;
-    return;
-  }
-  box.innerHTML = state.library.map(it => {
-    const sel = state.selected?.type === "lib" && state.selected.folder === it.folder ? " selected" : "";
-    const notes = it.notes.length ? it.notes.map(n => `<span class="badge">${esc(n)}</span>`).join(" ") : '<span class="badge">只有逐字稿</span>';
-    return `<div class="job${sel}" data-folder="${esc(it.folder)}">
-      <div class="top"><span class="title">${esc(it.title)}</span><span class="badge">${it.kind === "short" ? "短影音" : "影片"}</span></div>
-      <div class="detail">${notes}　<span class="muted">${fmtTime(it.updated)}</span></div>
-    </div>`;
-  }).join("");
+  try {
+    const lib = await api("/api/library");
+    state.library = { videos: lib.videos || [], collections: lib.collections || [] };
+  } catch { return; }
+  const known = new Set(allEntries().map(x => x.folder));
+  state.checked.forEach(f => { if (!known.has(f)) state.checked.delete(f); });
+  renderLibrary();
+  if (state.current) renderOutputsBar();
+}
+
+function emptyNote(text) { return h("div", { class: "empty-list", text }); }
+
+function libRow(it) {
+  const sel = state.selected?.type === "lib" && state.selected.folder === it.folder ? " selected" : "";
+  const cb = h("input", { type: "checkbox", class: "pick", checked: state.checked.has(it.folder), title: "勾選（可以多選）",
+    onclick: e => e.stopPropagation(),
+    onchange: e => { e.target.checked ? state.checked.add(it.folder) : state.checked.delete(it.folder); renderLibActions(); } });
+  const kind = it.type === "collection" ? `合併 ${it.members?.length || ""}`.trim() + (it.members?.length ? " 支" : "")
+    : it.kind === "short" ? "短影音" : "影片";
+  const analyses = it.analyses.length
+    ? h("div", { class: "detail wrap" }, h("span", { class: "muted", text: "已有分析：" }),
+      it.analyses.map(a => h("span", { class: "badge", title: a.summary || "", text: slugLabel(a.slug) })))
+    : h("div", { class: "detail" }, h("span", { class: "badge", text: it.notes.length ? "只有 Markdown 筆記（舊版）" : "只有逐字稿" }));
+  const outs = it.outputs.length
+    ? h("div", { class: "detail wrap" }, h("span", { class: "muted", text: "輸出：" }),
+      it.outputs.map(f => { const info = outputInfo(f); return h("button", {
+        type: "button", class: "badge link", title: info.slug ? `${slugLabel(info.slug)}（點一下開啟）` : "點一下開啟", text: info.label,
+        onclick: e => { e.stopPropagation(); openOutput(it.folder, f); } }); }))
+    : null;
+  return h("div", { class: `job lib-row${sel}`, dataset: { folder: it.folder } },
+    h("div", { class: "top" }, cb, h("span", { class: "title", text: it.title }), h("span", { class: "badge", text: kind })),
+    analyses, outs, h("div", { class: "detail muted", text: fmtTime(it.updated) }));
+}
+
+function renderLibrary() {
+  const { videos, collections } = state.library;
+  $("#lib-videos").replaceChildren(...(videos.length ? videos.map(libRow)
+    : [emptyNote(`輸出資料夾裡還沒有處理過的影片。${state.app.output_root}`)]));
+  $("#lib-collections").replaceChildren(...(collections.length ? collections.map(libRow)
+    : [emptyNote("還沒有合併過。勾選兩支以上的影片，按「合併成一份」。")]));
+  renderLibActions();
+}
+
+function renderLibActions() {
+  const bar = $("#lib-actions");
+  const sel = [...state.checked].map(entryByFolder).filter(Boolean);
+  bar.hidden = !sel.length;
+  if (!sel.length) return;
+  const videos = sel.filter(x => x.type === "video");
+  const cols = sel.filter(x => x.type === "collection");
+  bar.replaceChildren(
+    h("span", { class: "muted small", text: `已勾選 ${sel.length} 項` }),
+    h("button", { type: "button", title: "用已經分析好的結果產生其他格式，不花 token", onclick: () => openRenderDialog(sel), text: "🧩 產生其他輸出" }),
+    videos.length ? h("button", { type: "button", title: "沿用逐字稿，用新的模式重新分析（會花 token）", onclick: () => openReanalyzeDialog(videos), text: "🔁 重新分析" }) : null,
+    h("button", { type: "button", disabled: videos.length < 2, title: videos.length < 2 ? "要勾選至少兩支影片" : "把這幾支影片整理成一份",
+      onclick: () => openCombineDialog(videos), text: "🗂 合併成一份" }),
+    sel.length === 1 && cols.length === 1 ? h("button", { type: "button", onclick: () => openRecombineDialog(cols[0]), text: "🔀 換模式再合併" }) : null,
+    h("button", { type: "button", class: "ghost", onclick: () => { state.checked.clear(); renderLibrary(); }, text: "取消勾選" }));
 }
 
 function onLibraryClick(ev) {
-  const card = ev.target.closest(".job");
+  const card = ev.target.closest(".lib-row");
   if (card) select({ type: "lib", folder: card.dataset.folder });
+}
+
+// ---------------------------------------------------------------- 對話框（產生輸出／重新分析／合併）
+function openAct({ title, body, okText = "確定", onOk }) {
+  const dlg = $("#dlg-act");
+  const ok = $("#act-ok"), msg = $("#act-msg");
+  $("#act-title").textContent = title;
+  $("#act-body").replaceChildren(body);
+  const handle = {
+    setOkText: t => { ok.textContent = t; },
+    setMsg: (t, kind = "bad") => { msg.hidden = !t; msg.textContent = t; msg.className = `act-msg ${kind}`; },
+  };
+  handle.setOkText(okText);
+  handle.setMsg("");
+  ok.disabled = false;
+  $("#act-form").onsubmit = async ev => {
+    ev.preventDefault();
+    ok.disabled = true;
+    try { if ((await onOk(handle)) !== false) dlg.close(); }
+    catch (e) { handle.setMsg(e.message); }
+    finally { ok.disabled = false; }
+  };
+  $("#act-cancel").onclick = () => dlg.close();
+  dlg.showModal();
+  return handle;
+}
+
+function openRenderDialog(items, preferSlug = "") {
+  const usable = items.filter(i => i.analyses.length);
+  if (!usable.length) { toast("選的項目還沒有分析結果，請先「重新分析」"); return; }
+  const picker = outputPicker({ skipAlways: true, checked: state.app.settings.outputs || [] });
+  const rows = usable.map(it => {
+    const sel = h("select", { hidden: it.analyses.length < 2 }, it.analyses.map(a => h("option", { value: a.slug, text: slugLabel(a.slug) })));
+    sel.value = it.analyses.some(a => a.slug === preferSlug) ? preferSlug : it.analyses[it.analyses.length - 1].slug;
+    return { it, sel, node: h("div", { class: "act-row" }, h("div", { class: "t", text: it.title }),
+      it.analyses.length < 2 ? h("div", { class: "muted small", text: `分析：${slugLabel(it.analyses[0].slug)}` }) : sel) };
+  });
+  const body = h("div", {},
+    h("p", { class: "muted small", text: "用已經分析好的結果直接產生，不會呼叫 AI，也不花 token。" }),
+    rows.map(r => r.node),
+    h("div", { class: "field" }, h("span", { class: "label", text: "要產生哪些輸出" }), picker.node));
+  openAct({ title: "產生其他輸出", body, okText: "產生", onOk: async handle => {
+    const outputs = picker.get();
+    if (!outputs.length) { handle.setMsg("請至少選一種輸出格式"); return false; }
+    let made = 0;
+    const problems = [];
+    for (const r of rows) {
+      try {
+        const res = await post("/api/render", { folder: r.it.folder, slug: r.sel.value, outputs });
+        made += Object.keys(res.outputs).length;
+        for (const [k, v] of Object.entries(res.errors)) problems.push(`${r.it.title} 的${rendererLabel(k)}：${v}`);
+      } catch (e) { problems.push(`${r.it.title}：${e.message}`); }
+    }
+    await loadLibrary();
+    if (problems.length && !made) { handle.setMsg(problems.join("\n")); return false; }
+    toast(problems.length ? `產生了 ${made} 個輸出；有 ${problems.length} 個沒成功：${problems.join("；")}` : `已產生 ${made} 個輸出（沒有花 token）`);
+    return true;
+  } });
+}
+
+function openReanalyzeDialog(items) {
+  const usable = items.filter(i => i.transcript);
+  const skipped = items.length - usable.length;
+  if (!usable.length) { toast("這些項目沒有逐字稿，沒辦法重新分析；請重新丟網址完整處理一次"); return; }
+  const fields = modeFields({ outputs: state.app.settings.outputs || [] });
+  const body = h("div", {},
+    h("p", { class: "muted small", text: `沿用逐字稿，用新的模式重新分析 ${usable.length} 支影片（不重新下載、不重新辨識）。這會呼叫 AI，要花 token；每支各開一個工作。` }),
+    skipped ? h("p", { class: "small", text: `有 ${skipped} 項沒有逐字稿，會略過。` }) : null,
+    fields.node);
+  openAct({ title: "換模式重新分析", body, okText: "開始重新分析", onOk: async handle => {
+    const mode = fields.get();
+    const problems = [];
+    let first = null;
+    for (const it of usable) {
+      try {
+        const job = await post("/api/reanalyze", { folder: it.folder, ...mode });
+        first = first || job;
+      } catch (e) { problems.push(`${it.title}：${e.message}`); }
+    }
+    if (problems.length && !first) { handle.setMsg(problems.join("\n")); return false; }
+    if (problems.length) toast(`有 ${problems.length} 支沒能開始：${problems.join("；")}`);
+    switchTab("jobs");
+    pollJobs();
+    if (first) select({ type: "job", id: first.id });
+    return true;
+  } });
+}
+
+function openRecombineDialog(col) {
+  const fields = modeFields({ outputs: state.app.settings.outputs || [] });
+  const body = h("div", {},
+    h("p", { class: "muted small", text: `用原本的 ${col.members?.length || ""} 支影片，換一個模式再合併一次（會呼叫 AI）。` }), fields.node);
+  openAct({ title: "換模式再合併", body, okText: "開始合併", onOk: async () => {
+    const job = await post("/api/recombine", { folder: col.folder, ...fields.get() });
+    switchTab("jobs");
+    pollJobs();
+    select({ type: "job", id: job.id });
+    return true;
+  } });
+}
+
+function openCombineDialog(items) {
+  const title = h("input", { placeholder: "合併後的標題（選填）" });
+  const box = h("div", { class: "estimate", text: "計算中…" });
+  let lastEstimate = null, timer = 0, seq = 0;
+  const folders = items.map(i => i.folder);
+  let handle;
+  const refresh = async () => {
+    const mine = ++seq;
+    box.className = "estimate";
+    box.textContent = "計算中…";
+    try {
+      const est = await post("/api/combine/estimate", { folders, ...fields.get() });
+      if (mine !== seq) return;
+      lastEstimate = est;
+      box.replaceChildren(h("div", { text: `${est.text}。` }),
+        est.missing?.length ? h("div", { class: "small bad", text: `有 ${est.missing.length} 支讀不到分析結果，會略過：${est.missing.join("、")}` }) : null,
+        est.needs_confirm ? h("div", { class: "small warn", text: "內容比較多，要花不少 token，開始前會再請你確認一次。" }) : null);
+      handle?.setOkText(est.needs_confirm ? "確認並開始合併" : "開始合併");
+    } catch (e) {
+      if (mine !== seq) return;
+      lastEstimate = null;
+      box.textContent = `現在算不出預估：${e.message}`;
+    }
+  };
+  const fields = modeFields({ outputs: state.app.settings.outputs || [], onchange: () => { clearTimeout(timer); timer = setTimeout(refresh, 400); } });
+  const body = h("div", {},
+    h("p", { class: "muted small", text: `把 ${items.length} 支影片已經分析好的結果整理成一份（不會重新讀逐字稿，比較省）。每支影片原本的筆記都會保留。` }),
+    items.map(i => h("div", { class: "small", text: `・${i.title}` })),
+    labelled("合併後的標題", title), fields.node,
+    h("div", { class: "field" }, h("span", { class: "label", text: "預估" }), box));
+  handle = openAct({ title: "合併成一份", body, okText: "開始合併", onOk: async hd => {
+    try {
+      const job = await post("/api/combine", { folders, title: title.value.trim(), ...fields.get(),
+        confirmed: !!lastEstimate?.needs_confirm });     // 預估已經顯示在畫面上，按下去就是確認
+      state.checked.clear();
+      switchTab("jobs");
+      pollJobs();
+      select({ type: "job", id: job.id });
+      return true;
+    } catch (e) {
+      if (e.status === 409 && e.info?.code === "needs_confirm") {
+        lastEstimate = e.estimate;
+        hd.setOkText("確認並開始合併");
+        hd.setMsg(`${e.estimate?.text || "內容比較多"}。確定的話再按一次。`, "warn");
+        return false;
+      }
+      throw e;
+    }
+  } });
+  refresh();
+}
+
+// ---------------------------------------------------------------- 開啟輸出
+async function openOutput(folder, name) {
+  const url = `/api/output?folder=${enc(folder)}&name=${enc(name)}`;
+  const ext = name.split(".").pop().toLowerCase();
+  if (ext === "html" || ext === "htm") { window.open(url, "_blank", "noopener"); return; }
+  if (["md", "mmd", "txt"].includes(ext)) {            // 文字類：顯示在右側，可以複製
+    try {
+      const text = await api(url);
+      const info = outputInfo(name);
+      const base = state.current?.folder === folder ? state.current : { title: entryByFolder(folder)?.title || name, folder, url: "" };
+      state.selected = { type: "lib", folder };         // 停止被工作輪詢蓋掉
+      state.view = ext === "md" ? "rendered" : "markdown";
+      showCurrent({ ...base, meta: `輸出：${info.label}`, text, live: false, notes: base.notes || [], slug: "", shownOutput: name });
+    } catch (e) { toast(e.message); }
+    return;
+  }
+  const a = h("a", { href: url, download: name });      // 其他格式（XMind、OPML、FreeMind）：下載
+  document.body.append(a);
+  a.click();
+  a.remove();
+  toast("已開始下載，可以用 XMind 等軟體開啟");
+}
+
+function renderOutputsBar() {
+  const cur = state.current;
+  const bar = $("#v-outputs");
+  const entry = cur && entryByFolder(cur.folder);
+  const files = entry ? entry.outputs : [];
+  bar.hidden = !files.length;
+  bar.replaceChildren(h("span", { class: "muted small", text: "其他輸出：" }),
+    ...files.map(f => { const info = outputInfo(f); return h("button", {
+      type: "button", class: "badge link", title: info.slug ? slugLabel(info.slug) : "", text: info.label, onclick: () => openOutput(cur.folder, f) }); }));
 }
 
 // ---------------------------------------------------------------- 右側檢視
 function select(sel) {
   state.selected = sel;
-  state.view = state.view || "rendered";
   $$(".job").forEach(el => el.classList.toggle("selected",
     (sel.type === "job" && el.dataset.id === sel.id) || (sel.type === "lib" && el.dataset.folder === sel.folder)));
   $("#r-out").textContent = "";
+  state.curSig = "";
   if (sel.type === "job") refreshSelectedJob(true);
   else openLibraryItem(sel.folder);
 }
@@ -341,47 +848,44 @@ async function refreshSelectedJob(first = false) {
   let j;
   try { j = await api(`/api/jobs/${id}`); } catch { return; }
   if (state.selected?.type !== "job" || state.selected.id !== id) return;
-  const live = j.status === "running" && j.stages.notes !== "reused";
-  const slug = j.notes_file ? j.notes_file.split(/[\\/]/).pop().replace(/^notes\./, "").replace(/\.md$/, "") : "";
-  const prev = state.current;
-  const notes = prev?.folder === j.folder && prev.notes?.length ? prev.notes : (slug ? [slug] : []);
-  const text = j.notes || (j.status === "running" ? "（還在處理中，筆記產生時會即時顯示在這裡）"
-    : j.error ? `處理失敗：${j.error}` : j.stages.notes ? "" : "（這個工作沒有產生筆記：只做了逐字稿）");
-  showCurrent({ title: j.title || j.url, url: j.url, folder: j.folder, meta: metaFor(j), notes, slug, text, live });
-  if ((first || j.status !== "running") && j.folder && !prev?.notesLoaded) refreshNoteList();
+  const live = j.status === "running";
+  const slug = j.notes_file ? baseName(j.notes_file).replace(/^notes\./, "").replace(/\.md$/, "") : "";
+  const entry = j.folder ? entryByFolder(j.folder) : null;
+  const notes = entry?.notes?.length ? entry.notes : (slug ? [slug] : []);
+  let text = j.notes;
+  if (!text) {
+    if (live) text = j.streamed_chars > 0 ? `AI 分析中…（已收到 ${j.streamed_chars} 字）` : "（還在處理中，AI 分析完成後筆記會顯示在這裡）";
+    else if (jobError(j)) text = `處理失敗：${jobError(j)}`;
+    else if (j.status === "cancelled") text = "（已取消）";
+    else text = j.type === "video" ? "（這個工作沒有產生筆記：只做了逐字稿）" : "";
+  }
+  const sig = JSON.stringify([j.title, j.status, text, notes, entry?.outputs]);
+  if (!first && sig === state.curSig) return;
+  state.curSig = sig;
+  showCurrent({ title: j.title || j.url, url: j.type === "video" ? j.url : "", folder: j.folder, meta: metaFor(j), notes, slug, text, live,
+    type: j.type === "combine" ? "collection" : "video" });
 }
 
 function metaFor(j) {
   const plan = j.plan || {};
   const parts = [STATUS_TEXT[j.status]];
-  if (j.kind) parts.push(j.kind === "short" ? "短影音" : "影片");
-  if (plan.profile) parts.push(`方案：${plan.profile}${plan.modifiers?.length ? " + " + plan.modifiers.join(" + ") : ""}`);
+  if (j.type !== "video") parts.push(TYPE_TEXT[j.type]);
+  else if (j.kind) parts.push(j.kind === "short" ? "短影音" : "影片");
+  if (plan.profile) parts.push(`方案：${plan.profile === "auto" ? "自動判斷" : slugLabel([plan.profile, ...(plan.modifiers || [])].join("+"))}`);
   if (plan.focus) parts.push(`關注：${plan.focus}`);
   return parts.join(" · ");
 }
 
-async function refreshNoteList() {
-  const cur = state.current;
-  if (!cur?.url) return;
-  try {
-    const [info] = await post("/api/check", { urls: [cur.url] });
-    if (state.current !== cur || !info?.status) return;
-    cur.notes = info.status.notes;
-    cur.notesLoaded = true;
-    renderNoteSelect();
-  } catch { /* 清單只是附加資訊 */ }
-}
-
 async function openLibraryItem(folder) {
-  const it = state.library.find(x => x.folder === folder);
+  const it = entryByFolder(folder);
   if (!it) return;
   const slug = it.notes[0] || "";
-  let text = "（這支影片還沒有筆記，可以按「換方案重做」產生）";
+  let text = "（這裡還沒有筆記，可以按「換模式重新分析」產生）";
   if (slug) {
-    try { text = await api(`/api/note?folder=${encodeURIComponent(folder)}&slug=${encodeURIComponent(slug)}`); } catch (e) { text = e.message; }
+    try { text = await api(`/api/note?folder=${enc(folder)}&slug=${enc(slug)}`); } catch (e) { text = e.message; }
   }
-  showCurrent({ title: it.title, url: it.url, folder, meta: `${it.kind === "short" ? "短影音" : "影片"} · ${fmtTime(it.updated)}`,
-    notes: it.notes, slug, text, live: false, notesLoaded: true });
+  const kind = it.type === "collection" ? "合併" : (it.kind === "short" ? "短影音" : "影片");
+  showCurrent({ title: it.title, url: it.url, folder, meta: `${kind} · ${fmtTime(it.updated)}`, notes: it.notes, slug, text, live: false, type: it.type });
 }
 
 function showCurrent(cur) {
@@ -390,7 +894,13 @@ function showCurrent(cur) {
   $("#viewer-body").hidden = false;
   $("#v-title").textContent = cur.title;
   $("#v-meta").textContent = cur.meta;
+  const isCol = cur.type === "collection";
+  $("#v-redo").textContent = isCol ? "🔀 換模式再合併" : "🔁 換模式重新分析";
+  $("#v-redo").title = isCol ? "用原本的影片換一個模式再合併一次（會花 token）" : "沿用逐字稿，換一個模式重新分析（會花 token）";
+  $('#view-tabs [data-view="transcript"]').hidden = isCol;
+  if (isCol && state.view === "transcript") state.view = "rendered";
   renderNoteSelect();
+  renderOutputsBar();
   renderView();
 }
 
@@ -398,7 +908,7 @@ function renderNoteSelect() {
   const cur = state.current;
   const sel = $("#v-note-select");
   sel.hidden = !cur.notes || cur.notes.length < 2;
-  sel.innerHTML = (cur.notes || []).map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+  sel.replaceChildren(...(cur.notes || []).map(n => h("option", { value: n, text: slugLabel(n) })));
   if (cur.slug) sel.value = cur.slug;
 }
 
@@ -406,36 +916,43 @@ async function renderView() {
   const cur = state.current;
   const box = $("#v-content");
   $$("#view-tabs button").forEach(b => b.classList.toggle("active", b.dataset.view === state.view));
+  const plain = text => { box.className = ""; box.replaceChildren(h("pre", { class: "plain", text })); return box.firstChild; };
   if (state.view === "transcript") {
-    box.className = "";
-    box.innerHTML = '<pre class="plain">讀取中…</pre>';
+    plain("讀取中…");
     try {
-      const text = await api(`/api/transcript?folder=${encodeURIComponent(cur.folder)}`);
-      if (state.current === cur && state.view === "transcript") box.innerHTML = `<pre class="plain">${esc(text)}</pre>`;
-    } catch (e) {
-      box.innerHTML = `<pre class="plain">${esc(e.message)}</pre>`;
-    }
+      const text = await api(`/api/transcript?folder=${enc(cur.folder)}`);
+      if (state.current === cur && state.view === "transcript") plain(text);
+    } catch (e) { plain(e.message); }
     return;
   }
   if (state.view === "markdown") {
-    box.className = "";
-    box.innerHTML = `<pre class="plain${cur.live ? " streaming" : ""}">${esc(cur.text)}</pre>`;
+    plain(cur.text).classList.toggle("streaming", !!cur.live);
     return;
   }
   box.className = "markdown" + (cur.live ? " streaming" : "");
-  box.innerHTML = renderMarkdown(cur.text || "");
+  box.innerHTML = renderMarkdown(cur.text || "");      // renderMarkdown 先跳脫全部內容
 }
 
 async function onNoteSelect() {
   const cur = state.current;
   const slug = $("#v-note-select").value;
   try {
-    cur.text = await api(`/api/note?folder=${encodeURIComponent(cur.folder)}&slug=${encodeURIComponent(slug)}`);
+    cur.text = await api(`/api/note?folder=${enc(cur.folder)}&slug=${enc(slug)}`);
     cur.slug = slug;
     cur.live = false;
+    cur.shownOutput = "";
     if (state.selected?.type === "job") state.selected = { type: "lib", folder: cur.folder };  // 停止被輪詢覆蓋
     renderView();
   } catch (e) { toast(e.message); }
+}
+
+async function withEntry(fn) {
+  const cur = state.current;
+  if (!cur?.folder) return;
+  let entry = entryByFolder(cur.folder);
+  if (!entry) { await loadLibrary(); entry = entryByFolder(cur.folder); }
+  if (!entry) { toast("筆記庫裡還找不到這個項目，等處理完再試"); return; }
+  fn(entry);
 }
 
 async function copyText(text, what) {
@@ -484,6 +1001,8 @@ async function runRefine() {
 }
 
 // ---------------------------------------------------------------- 設定
+let settingsOutputs = null;
+
 function openSettings() {
   const { settings, output_choices, providers, whisper_models, env } = state.app;
   $$('input[name="output"]').forEach(r => { r.checked = r.value === settings.output; });
@@ -491,42 +1010,58 @@ function openSettings() {
   $("#out-data").textContent = output_choices.data;
   $("#s-output-custom").value = settings.output_custom || "";
   $("#s-keep-video").checked = !!settings.keep_video;
-  $("#s-provider").innerHTML = Object.entries(providers).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  settingsOutputs = outputPicker({ checked: settings.outputs || [], skipAlways: true });
+  $("#s-outputs").replaceChildren(settingsOutputs.node);
+  $("#s-provider").replaceChildren(...Object.entries(providers).map(([k, v]) => h("option", { value: k, text: v })));
   $("#s-provider").value = settings.provider;
   $("#s-model").value = settings.model || "";
-  updateModelHints();
-  $("#s-whisper").innerHTML = whisper_models.map(m => `<option>${m}</option>`).join("");
+  $("#s-compat").value = settings.compat_base_url || "";
+  updateProviderUi();
+  fillSttSelect($("#s-stt"), settings.stt_provider);
+  $("#s-stt-hint").textContent = sttHintText($("#s-stt").value);
+  $("#s-stt-fallback").checked = !!settings.stt_fallback_local;
+  $("#s-whisper").replaceChildren(...whisper_models.map(m => h("option", { text: m })));
   $("#s-whisper").value = settings.whisper_model;
   $("#s-device").value = settings.whisper_device;
   $("#s-language").value = settings.language;
   $("#s-traditional").checked = !!settings.traditional;
+  $("#s-combine-tokens").value = settings.combine_confirm_tokens;
   $("#s-parallel").value = settings.parallel_jobs;
+  $("#s-dl-parallel").value = settings.max_parallel_downloads;
+  const gap = settings.sleep_between_videos || [5, 10];
+  $("#s-sleep-min").value = gap[0];
+  $("#s-sleep-max").value = gap[gap.length - 1];
   $("#s-long").value = settings.long_transcript_chars;
   $("#s-cookies").value = settings.cookies_from_browser || "";
   $("#s-notify").value = settings.notify_url || "";
   $("#s-prompts-dir").textContent = env.user_prompts;
   $("#s-key").value = "";
-  updateKeyStatus();
   const dlg = $("#dlg-settings");
   dlg.returnValue = "";
   dlg.onclose = () => { if (dlg.returnValue === "ok") saveSettings(); };
   dlg.showModal();
 }
 
-function updateModelHints() {
+function updateProviderUi() {
   const p = $("#s-provider").value;
   const hints = { "claude-sub": ["sonnet", "haiku", "opus"],
     openai: ["gpt-5.1", "gpt-4.1", "gpt-4.1-mini"], gemini: ["gemini-2.5-flash", "gemini-2.5-pro"],
     anthropic: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"] }[p] || [];
-  $("#model-hints").innerHTML = hints.map(h => `<option value="${h}">`).join("");
-  $("#s-model").placeholder = `空白 = ${state.app.default_models[p]}`;
+  $("#model-hints").replaceChildren(...hints.map(x => h("option", { value: x })));
+  $("#s-model").placeholder = p === COMPAT ? "模型名稱，例如 llama3.1" : `空白 = ${state.app.default_models[p]}`;
+  $("#s-compat-row").hidden = p !== COMPAT;                // 只有選相容端點才需要填網址
+  updateKeyStatus();
 }
 
 function updateKeyStatus() {
   const p = $("#s-provider").value;
   const { env, providers } = state.app;
   const keyless = env.keyless.includes(p);
-  $(".key-row").style.display = keyless ? "none" : "";   // Claude 訂閱用 Claude Code 登入的帳號，沒有金鑰可貼
+  $(".key-row").style.display = keyless ? "none" : "";   // Claude 訂閱／相容端點沒有金鑰可貼
+  if (p === COMPAT) {
+    $("#s-key-status").textContent = "如果這個服務需要金鑰，寫在專案 .env 的 OPENAI_COMPAT_API_KEY（本機的 Ollama 不用）。";
+    return;
+  }
   if (keyless) {
     $("#s-key-status").textContent = env.keys[p]
       ? "✓ 用電腦上 Claude Code 登入的帳號，不需要金鑰（會用掉訂閱額度）"
@@ -550,28 +1085,42 @@ async function saveKey() {
 }
 
 async function saveSettings() {
+  const num = (sel, fallback) => { const v = parseFloat($(sel).value); return Number.isFinite(v) ? v : fallback; };
   const data = {
     output: $('input[name="output"]:checked')?.value || "downloads",
     output_custom: $("#s-output-custom").value.trim(),
     keep_video: $("#s-keep-video").checked,
+    outputs: settingsOutputs.get(),
     provider: $("#s-provider").value,
     model: $("#s-model").value.trim(),
+    compat_base_url: $("#s-compat").value.trim(),
+    stt_provider: $("#s-stt").value,
+    stt_fallback_local: $("#s-stt-fallback").checked,
     whisper_model: $("#s-whisper").value,
     whisper_device: $("#s-device").value,
     language: $("#s-language").value.trim() || "auto",
     traditional: $("#s-traditional").checked,
-    parallel_jobs: Math.max(1, parseInt($("#s-parallel").value, 10) || 3),
-    long_transcript_chars: Math.max(5000, parseInt($("#s-long").value, 10) || 60000),
+    combine_confirm_tokens: Math.max(1000, Math.round(num("#s-combine-tokens", 60000))),
+    parallel_jobs: Math.max(1, Math.round(num("#s-parallel", 3))),
+    max_parallel_downloads: Math.max(1, Math.round(num("#s-dl-parallel", 2))),
+    sleep_between_videos: [Math.max(0, num("#s-sleep-min", 5)), Math.max(0, num("#s-sleep-max", 10))],
+    long_transcript_chars: Math.max(5000, Math.round(num("#s-long", 60000))),
     cookies_from_browser: $("#s-cookies").value,
     notify_url: $("#s-notify").value.trim(),
   };
   if (data.output === "custom" && !data.output_custom) { toast("選了「自選」就要填資料夾路徑"); return; }
-  const parallelChanged = data.parallel_jobs !== state.app.settings.parallel_jobs;
+  if (data.provider === COMPAT && !data.compat_base_url) { toast("選了相容端點，就要填端點網址"); return; }
+  const old = state.app.settings;
+  const restart = data.parallel_jobs !== old.parallel_jobs || data.max_parallel_downloads !== old.max_parallel_downloads;
   try {
-    state.app = await api("/api/settings", { method: "PUT", body: JSON.stringify(data) });
+    const fresh = await api("/api/settings", { method: "PUT", body: JSON.stringify(data) });
+    state.app = fresh;
     renderEnv();
+    renderAlerts();
+    fillSttSelect($("#stt"), fresh.settings.stt_provider);
+    $("#stt-hint").textContent = sttHintText($("#stt").value);
     loadLibrary();
-    toast(parallelChanged ? "已儲存（同時處理數量重新開啟後生效）" : "已儲存");
+    toast(restart ? "已儲存（同時處理／下載的數量重新開啟後生效）" : "已儲存");
   } catch (e) { toast(`儲存失敗：${e.message}`); }
 }
 
@@ -592,15 +1141,7 @@ function bindEvents() {
     state.modifiers.has(b.dataset.mod) ? state.modifiers.delete(b.dataset.mod) : state.modifiers.add(b.dataset.mod);
     renderToggles();
   };
-  $("#preset").onchange = () => {
-    const p = state.app.presets.find(x => x.id === $("#preset").value);
-    if (!p) return;
-    $("#profile").value = p.profile;
-    state.modifiers = new Set(p.modifiers);
-    if (p.focus) $("#focus").value = p.focus;
-    renderToggles();
-    toast(`已套用「${p.name}」`);
-  };
+  $("#stt").onchange = () => { $("#stt-hint").textContent = sttHintText($("#stt").value); };
   $("#left-tabs").onclick = e => { const b = e.target.closest("button"); if (b) switchTab(b.dataset.tab); };
   $("#jobs").onclick = onJobClick;
   $("#library").onclick = onLibraryClick;
@@ -608,14 +1149,16 @@ function bindEvents() {
   $("#v-note-select").onchange = onNoteSelect;
   $("#v-copy").onclick = () => copyText(state.current?.live ? "" : state.current?.text, " Markdown，可以直接貼進 Notion");
   $("#v-open").onclick = () => state.current?.folder && post("/api/open", { path: state.current.folder }).catch(e => toast(e.message));
-  $("#v-redo").onclick = () => state.current?.url && start([state.current.url]);
+  $("#v-render").onclick = () => withEntry(entry => openRenderDialog([entry], state.current.slug));
+  $("#v-redo").onclick = () => withEntry(entry => entry.type === "collection" ? openRecombineDialog(entry) : openReanalyzeDialog([entry]));
   $("#r-run").onclick = runRefine;
   $("#r-copy").onclick = () => copyText($("#r-out").textContent, "加工結果");
   $("#btn-settings").onclick = openSettings;
-  $("#s-provider").onchange = () => { updateModelHints(); updateKeyStatus(); };
+  $("#s-provider").onchange = updateProviderUi;
+  $("#s-stt").onchange = () => { $("#s-stt-hint").textContent = sttHintText($("#s-stt").value); };
   $("#s-key-save").onclick = saveKey;
 }
 
 init().catch(err => {
-  document.body.innerHTML = `<div class="empty">無法連到 Video Notes 伺服器：${esc(err.message)}<br>請確認程式還開著，然後重新整理。</div>`;
+  document.body.replaceChildren(h("div", { class: "empty" }, `無法連到 Video Notes 伺服器：${err.message}`, h("br"), "請確認程式還開著，然後重新整理。"));
 });

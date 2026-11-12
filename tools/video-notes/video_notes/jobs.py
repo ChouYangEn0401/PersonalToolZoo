@@ -13,7 +13,9 @@ import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from typing import Callable
 
+from video_notes.errors import ToolError
 from video_notes.pipeline import STAGES, JobOptions, Pipeline
 from video_notes.transcribe import Cancelled
 
@@ -23,6 +25,9 @@ class Job:
     id: str
     url: str
     options: JobOptions
+    type: str = "video"             # video（完整處理）/ reanalyze（沿用逐字稿重新分析）/ combine（多片合併）
+    runner: Callable | None = field(default=None, repr=False)   # (emit, cancel) → 結果 dict；None = 跑 pipeline.run
+    pipeline: Pipeline | None = field(default=None, repr=False)  # 這個工作專用的 pipeline（例如這次換了語音辨識服務）
     status: str = "queued"          # queued / running / done / failed / cancelled
     stage: str = ""
     stages: dict[str, str] = field(default_factory=lambda: {s: "" for s in STAGES})
@@ -31,10 +36,12 @@ class Job:
     title: str = ""
     folder: str = ""
     kind: str = ""
-    notes: str = ""                 # 串流中的筆記內容；完成後是最終版本
+    notes: str = ""                 # 完成後的 Markdown 筆記（串流中的是 JSON 原文，不存，只算字數）
+    streamed_chars: int = 0         # AI 分析已經收到幾個字（給畫面顯示進度）
     result: dict = field(default_factory=dict)
     log: list[str] = field(default_factory=list)
     error: str = ""
+    error_info: dict | None = None  # ToolError.to_dict()：畫面顯示原因與「怎麼辦」
     created: float = field(default_factory=time.time)
     finished: float = 0.0
     cancel: threading.Event = field(default_factory=threading.Event)
@@ -42,7 +49,7 @@ class Job:
 
     def snapshot(self, with_notes: bool = True) -> dict:
         return {
-            "id": self.id, "url": self.url, "status": self.status, "stage": self.stage,
+            "id": self.id, "type": self.type, "url": self.url, "status": self.status, "stage": self.stage,
             "stages": dict(self.stages), "progress": round(self.progress, 3), "detail": self.detail,
             "title": self.title, "folder": self.folder, "kind": self.kind,
             "profile": self.result.get("profile", self.options.plan.profile),
@@ -50,6 +57,10 @@ class Job:
                      "focus": self.options.plan.focus},
             "notes": self.notes if with_notes else "",
             "notes_file": self.result.get("notes_file", ""),
+            "streamed_chars": self.streamed_chars,
+            "outputs": self.result.get("outputs", {}),
+            "output_errors": self.result.get("output_errors", {}),
+            "error_info": self.error_info,
             "files": self.result.get("files", {}),
             "log": list(self.log[-30:]), "error": self.error,
             "created": self.created, "finished": self.finished,
@@ -64,8 +75,18 @@ class JobManager:
         self._lock = threading.Lock()
         self._on_update = on_update   # CLI 用來印進度；GUI 不需要（它用輪詢）
 
-    def submit(self, url: str, options: JobOptions) -> Job:
-        job = Job(uuid.uuid4().hex[:10], url.strip(), options)
+    def submit(self, url: str, options: JobOptions, pipeline: Pipeline | None = None) -> Job:
+        """pipeline：只給這一個工作用的 pipeline（例如這次換了語音辨識服務，不改存檔設定）。"""
+        job = Job(uuid.uuid4().hex[:10], url.strip(), options, pipeline=pipeline)
+        return self._start(job)
+
+    def submit_task(self, type_: str, label: str, options: JobOptions, runner: Callable, *, title: str = "",
+                    folder: str = "") -> Job:
+        """背景工作（重新分析、多片合併）：runner(emit, cancel) 回傳結果 dict；進度事件與影片工作相同。"""
+        job = Job(uuid.uuid4().hex[:10], label, options, type=type_, runner=runner, title=title, folder=folder)
+        return self._start(job)
+
+    def _start(self, job: Job) -> Job:
         with self._lock:
             self._jobs[job.id] = job
         job.future = self._pool.submit(self._run, job)
@@ -122,11 +143,11 @@ class JobManager:
                 if data["stage"] == "info" and data["state"] == "done":
                     job.title, job.folder, job.kind = data.get("title", ""), data.get("folder", ""), data.get("kind", "")
                 if data["stage"] == "notes" and data["state"] == "waiting":
-                    job.notes = ""
+                    job.notes, job.streamed_chars = "", 0
             elif name == "progress":
                 job.progress, job.detail = data["value"], data.get("detail", "")
             elif name == "token":
-                job.notes += data["text"]
+                job.streamed_chars += len(data["text"])   # 串流的是 JSON 原文，人看不懂，只算字數
             elif name == "log":
                 job.log.append(data["message"])
         if self._on_update:
@@ -138,16 +159,24 @@ class JobManager:
             return
         job.status = "running"
         try:
-            result = self.pipeline.run(job.url, job.options, lambda n, d: self._emit(job, n, d), job.cancel)
+            emit = lambda n, d: self._emit(job, n, d)  # noqa: E731
+            if job.runner:
+                result = job.runner(emit, job.cancel)
+            else:
+                result = (job.pipeline or self.pipeline).run(job.url, job.options, emit, job.cancel)
             with self._lock:
                 job.result = result
                 job.notes = result.get("notes", job.notes)
+                job.folder = result.get("folder") or job.folder
+                job.title = result.get("title") or job.title
                 job.status = "done"
         except Cancelled:
             job.status = "cancelled"
         except Exception as exc:  # noqa: BLE001 — 任何錯誤都要顯示給使用者，不能讓執行緒默默死掉
             job.status = "failed"
             job.error = f"{exc}"
+            if isinstance(exc, ToolError):
+                job.error_info = exc.to_dict()
             job.log.append(traceback.format_exc(limit=3))
         finally:
             job.finished = time.time()
