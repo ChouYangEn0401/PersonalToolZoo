@@ -634,14 +634,20 @@ def decrypt_all_layers(src, output=None, keyring: Keyring | None = None, *, forc
             stop(path, depth, fmt, reason, err)
             return
         made = Path(res["output"])
-        _remove(path)                  # 這是我們自己解出來的中間檔，原始輸入不會被動到
-        if replace_in_place:
-            os.replace(made, path)
-            made = path
-        elif res["payload"] == "folder" and _strip_tar(made) != made:
-            nicer = _free_name(_strip_tar(made))   # 「L2.tar.age」解開後叫「L2」
-            os.replace(made, nicer)
-            made = nicer
+        try:
+            _remove(path)              # 這是我們自己解出來的中間檔，原始輸入不會被動到
+            if replace_in_place:
+                os.replace(made, path)
+                made = path
+            elif res["payload"] == "folder" and _strip_tar(made) != made:
+                nicer = _free_name(_strip_tar(made))   # 「L2.tar.age」解開後叫「L2」
+                os.replace(made, nicer)
+                made = nicer
+        except OSError as exc:
+            stop(made if made.exists() else path, depth, fmt, "error",
+                 SealError("io_error", "解開後整理檔名失敗（檔案可能正被別的程式使用）。",
+                           detail=type(exc).__name__))
+            return
         layers.append({"depth": depth, "path": rel(made), "format": fmt, "payload": res["payload"]})
         peel(made, depth + 1)
 

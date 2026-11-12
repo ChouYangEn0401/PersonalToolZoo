@@ -305,9 +305,17 @@ def build_keyring(form: JobForm) -> workflow.Keyring:
         fmt = workflow.detect_format(form.input_path) if form.input_path else None
     except SealError:
         pass
-    if fmt == workflow.FMT_ISD2:
-        if files:
-            ring.isd2_material = load_key_file(files[0])
+    if fmt == workflow.FMT_ISD2:   # 舊的預覽格式：用清單裡第一個「不是 age 身分檔、不是 OpenPGP 金鑰」的檔
+        for f in files:
+            try:
+                if workflow.classify_key_file(f) != "age" or b"AGE-SECRET-KEY-" in f.read_bytes()[:1 << 16].upper():
+                    continue
+                if agefmt.is_encrypted_identity_file(f.read_bytes()[:2048]):
+                    continue
+            except OSError:
+                continue
+            ring.isd2_material = load_key_file(f)
+            break
         return ring
 
     def ask(_path):
