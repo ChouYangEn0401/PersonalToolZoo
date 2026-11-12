@@ -1,6 +1,6 @@
 # Video Notes：錯誤合約、yt-dlp 維護與批次節流（建議修改，搭配 v2 計畫一起做）
 
-- **狀態：待處理**（只有建議，尚未動工；做完請逐項勾選驗收，把狀態改「已修」並寫 merge commit）
+- **狀態：已修**（2026-11-12，`dev/video-notes` 併進 master；merge commit 與驗收結果見檔尾「收尾紀錄」）
 - 建立：2026-11-12 ｜ 範圍：`tools/video-notes/`（先只改這個工具；共用的 `libs/toolzoo/ytdlp.py` 先不動，見選項表）
 - 開發線：`dev/video-notes`，開工前 `git merge master`
 - **寫給接手的 agent**：這張跟旁邊的 `20261112-182622-v2-analysis-adapters-plan.md` 是同一個開發週期。
@@ -75,14 +75,14 @@ v2 的多片處理：影片與影片之間預設停 5–10 秒（設定欄位 `d
 
 ## 驗收（逐項勾選）
 
-- [ ] 用假的 `yt_dlp` 丟出各種上游錯誤，單元測試證明都被轉成對應 `code`＋`reason`＋`remedy`，沒有裸例外跑到畫面上。
-- [ ] 所有外部呼叫點（下載、ffmpeg、STT、AI、Notion）都有明確 try／except；`grep` 不到 `except Exception: pass` 這類吞例外。
-- [ ] `--check`（及 `--json`）在缺 ffmpeg／缺 JS 執行環境／yt-dlp 太舊三種情境（用假環境）下輸出正確。
-- [ ] 同一代碼連續失敗 3 次後標 `degraded`、不再自動重試；重新檢查或版本改變後解除（假時鐘／假依賴測試）。
-- [ ] 訊息與 `health.json` 不含金鑰、完整路徑（加一個測試用假金鑰字串確認不會出現）。
-- [ ] 成功路徑行為與輸出完全不變（既有測試全過）。
-- [ ] 批次下載在影片之間套用 sleep 設定（檢查傳給 yt-dlp 的選項）。
-- [ ] README 的「交接」段落與 `docs/HANDOFF.html` 補上：錯誤代碼表、`--check` 用法、yt-dlp 升級指令、exe 版要重新 build。
+- [x] 用假的 `yt_dlp` 丟出各種上游錯誤，單元測試證明都被轉成對應 `code`＋`reason`＋`remedy`，沒有裸例外跑到畫面上。
+- [x] 所有外部呼叫點（下載、ffmpeg、STT、AI、Notion）都有明確 try／except；`grep` 不到 `except Exception: pass` 這類吞例外。
+- [x] `--check`（及 `--json`）在缺 ffmpeg／缺 JS 執行環境／yt-dlp 太舊三種情境（用假環境）下輸出正確。
+- [x] 同一代碼連續失敗 3 次後標 `degraded`、不再自動重試；重新檢查或版本改變後解除（假時鐘／假依賴測試）。
+- [x] 訊息與 `health.json` 不含金鑰、完整路徑（加一個測試用假金鑰字串確認不會出現）。
+- [x] 成功路徑行為與輸出完全不變（既有測試全過）。
+- [x] 批次下載在影片之間套用 sleep 設定（檢查傳給 yt-dlp 的選項）。
+- [x] README 的「交接」段落與 `docs/HANDOFF.html` 補上：錯誤代碼表、`--check` 用法、yt-dlp 升級指令、exe 版要重新 build。
 
 ## 不要做的事
 
@@ -97,3 +97,11 @@ v2 的多片處理：影片與影片之間預設停 5–10 秒（設定欄位 `d
 - yt-dlp Extractors（YouTube 的速率限制、cookie 風險、建議的間隔）：https://github.com/yt-dlp/yt-dlp/wiki/Extractors
 - yt-dlp PO Token Guide：https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
 - yt-dlp Releases：https://github.com/yt-dlp/yt-dlp/releases
+
+## 收尾紀錄（2026-11-12）
+
+隨 v2 一起做完（選項 A，只改 tools/video-notes/）。主要 commit：79c207e（errors.py 契約）、abcc53b（media 錯誤對照、source_ytdlp、health、doctor、notify）、b31fb04（`--check`／`--recheck`、pipeline 接 health）、96e79df（GUI 的 yt-dlp 天數與警示條）。merge commit 見 v2 計畫那張的收尾紀錄。
+
+- 驗收第 2 項：下載、ffmpeg、STT、AI、HTTP 通知都有明確 try/except 並轉成錯誤合約；剩下的 `except …: pass` 只有讀設定檔／範本資料夾／JSON 解析的區域退路，不是外部呼叫。這個工具沒有 Notion 呼叫（Notion 由 socket 模式的接收端負責）。
+- 設計 5「JS_RUNTIMES 移除 Bun」：在 `libs/toolzoo/ytdlp.py`，這次沒動（要重 build 6 個工具），列在 docs/OPEN_ISSUES.md「之後可以做」；`doctor` 已經不把 Bun 算成可用的 JS 執行環境，README 也改寫成 Node ≥ 22 或 Deno ≥ 2.3。
+- 選項 B（搬進 libs 給 Video Downloader 共用）沒做，同樣列在 OPEN_ISSUES。

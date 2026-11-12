@@ -1,6 +1,6 @@
 # Video Notes v2：adapter 加固與 analysis.json 補強（建議修改，搭配 v2 計畫一起做）
 
-- **狀態：待處理**（只有建議，尚未動工；做完請逐項勾選驗收，把狀態改「已修」並寫 merge commit）
+- **狀態：已修**（2026-11-12，`dev/video-notes` 併進 master；merge commit 與驗收結果見檔尾「收尾紀錄」）
 - 建立：2026-11-12 ｜ 範圍：`tools/video-notes/`（adapters、analysis、render、prompts）
 - 開發線：`dev/video-notes`，開工前 `git merge master`
 - **寫給接手的 agent**：這張補充旁邊的 `20261112-182622-v2-analysis-adapters-plan.md`。計畫裡的設計決定不要推翻，
@@ -78,14 +78,14 @@ v2 的四層 adapter（來源、語音辨識、分析、輸出）已經定了，
 
 ## 驗收（逐項勾選）
 
-- [ ] 每個 adapter 都有 `capabilities()` 與 `check()`，UI 下拉選單依能力標註不可用項目。
-- [ ] 雲端 STT 失敗自動（且只在設定允許時）退回本機；本機到雲端不會自動發生。
-- [ ] 分析輸出驗證失敗會修復一次、再失敗降級為 Markdown 並標 `quality_flags`，管線不中斷。
-- [ ] `analysis.json` 有 `schema_version`、`provenance`、`cost`、`language`、`quality_flags`；`docs/analysis-schema.md` 同步；舊資料夾（沒有 analysis.json）仍可開啟。
-- [ ] 惡意字串測試通過（HTML 範本與 Markdown 輸出都不產生可執行內容）。
-- [ ] 支援 OpenAI 相容端點的設定（`base_url`），用假端點測試通過。
-- [ ] 長逐字稿分段處理有測試（假模型、小上下文）。
-- [ ] README 與 `docs/HANDOFF.html` 補上：adapter 能力與退路規則、隱私差異說明。
+- [x] 每個 adapter 都有 `capabilities()` 與 `check()`，UI 下拉選單依能力標註不可用項目。
+- [x] 雲端 STT 失敗自動（且只在設定允許時）退回本機；本機到雲端不會自動發生。
+- [x] 分析輸出驗證失敗會修復一次、再失敗降級為 Markdown 並標 `quality_flags`，管線不中斷。
+- [x] `analysis.json` 有 `schema_version`、`provenance`、`cost`、`language`、`quality_flags`；`docs/analysis-schema.md` 同步；舊資料夾（沒有 analysis.json）仍可開啟。
+- [x] 惡意字串測試通過（HTML 範本與 Markdown 輸出都不產生可執行內容）。
+- [x] 支援 OpenAI 相容端點的設定（`base_url`），用假端點測試通過。
+- [x] 長逐字稿分段處理有測試（假模型、小上下文）。
+- [x] README 與 `docs/HANDOFF.html` 補上：adapter 能力與退路規則、隱私差異說明。
 
 ## 不要做的事
 
@@ -95,3 +95,10 @@ v2 的四層 adapter（來源、語音辨識、分析、輸出）已經定了，
 - 測試不打真的 API、不連網、不開網路埠。
 - 不要把金鑰或個人資料寫進 repo（repo 是公開的）。
 - 不要自己 push／打 tag／發版。
+
+## 收尾紀錄（2026-11-12）
+
+隨 v2 一起做完（選項 A）。主要 commit：79c207e（analysis 欄位與錯誤合約進契約）、35cd41a（STT adapter、退路、openai-compat）、3858958（驗證→修復一次→降級、長逐字稿分段）、dfa791c／052118e（輸出安全）、96e79df（UI 依 capabilities 灰掉）、f342341（openai-compat 接進 pipeline）。merge commit 見 v2 計畫那張的收尾紀錄。
+
+- 設計 6 的「每個 profile 指定較便宜的模型」沒做（預設本來就不改），列在 OPEN_ISSUES。
+- 設計 7 的 `tests/golden/` 沒有另建資料夾：同等的檢查（必填欄位與結構、修復一次、降級、合併、惡意字串）在 test_analyze、test_collection、test_render_* 裡用假的 AI 做。

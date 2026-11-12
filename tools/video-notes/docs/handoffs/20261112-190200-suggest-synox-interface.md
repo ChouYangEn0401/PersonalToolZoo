@@ -1,6 +1,6 @@
 # Video Notes：預留給外部 AI 助理核心（SYNOX）呼叫的介面（建議，本期只留介面）
 
-- **狀態：待處理（低優先，本期只留介面；不做完整整合）**
+- **狀態：已修（本期範圍：1～3 與草稿 4）**（2026-11-12；merge commit 與驗收結果見檔尾「收尾紀錄」）
 - 建立：2026-11-12 ｜ 範圍：`tools/video-notes/video_notes/cli.py`、`docs/`；不新增對外部專案的相依
 - 開發線：`dev/video-notes`，開工前 `git merge master`
 - **寫給接手的 agent**：這張是三張 `suggest-*` 裡最輕的一張。做 v2 的時候順手把介面留好即可，
@@ -60,12 +60,12 @@ Video Notes 以後可能被它呼叫（例如「幫我把這支影片整理成�
 
 ## 驗收（逐項勾選）
 
-- [ ] 主要子指令支援 `--json`，成功與失敗的輸出格式有單元測試；失敗輸出就是錯誤合約。
-- [ ] 退出碼符合上表，並寫進 README。
-- [ ] `--check --json`、`status --json`、`list --json` 只讀、不連網，有測試。
-- [ ] 預設輸出位置可用 `--out` 或環境變數覆寫；程式碼中沒有本機絕對路徑（`grep` 檢查）。
-- [ ] `docs/synox-pack-draft.json` 存在，且程式不讀取它；repo 內沒有出現外部專案的路徑或私人資訊。
-- [ ] 既有 CLI 與網頁行為不變，既有測試全過。
+- [x] 主要子指令支援 `--json`，成功與失敗的輸出格式有單元測試；失敗輸出就是錯誤合約。
+- [x] 退出碼符合上表，並寫進 README。
+- [x] `--check --json`、`status --json`、`list --json` 只讀、不連網，有測試。
+- [x] 預設輸出位置可用 `--out` 或環境變數覆寫；程式碼中沒有本機絕對路徑（`grep` 檢查）。
+- [x] `docs/synox-pack-draft.json` 存在，且程式不讀取它；repo 內沒有出現外部專案的路徑或私人資訊。
+- [x] 既有 CLI 與網頁行為不變，既有測試全過。
 
 ## 不要做的事
 
@@ -73,3 +73,10 @@ Video Notes 以後可能被它呼叫（例如「幫我把這支影片整理成�
 - 不要把金鑰、本機路徑、個人資料寫進 repo（repo 是公開的）。
 - 測試不連網、不開網路埠。
 - 不要自己 push／打 tag／發版。
+
+## 收尾紀錄（2026-11-12）
+
+選項 A 做完。commit：b31fb04（`--json` 信封、退出碼、`--check`／`--status`／`--library`、`VIDEO_NOTES_OUT`、docs/synox-pack-draft.json）。merge commit 見 v2 計畫那張的收尾紀錄。
+
+- 「`status --json`、`list --json`」做成旗標 `--status --json`、`--library --json`（舊的 `--list` 已經是「列出整理方式」，不能再用 list）。草稿檔與 README 都照這個寫法。
+- `--json` 的輸出格式因此改成信封（`{"ok", "data"|"error"}`），README 有註明；找不到 ffmpeg 的退出碼由 2 變 3（環境問題）。

@@ -1,6 +1,6 @@
 # Video Notes v2：分析暫存 + 可換的 adapter + 多片合併 + 多種輸出
 
-- **狀態：待處理**（只有規劃，尚未動工；修完請在這裡寫 merge commit）
+- **狀態：已修**（2026-11-12，`dev/video-notes` 併進 master；merge commit 與驗收結果見檔尾「收尾紀錄」）
 - 建立：2026-11-12 ｜ 範圍：`tools/video-notes/`（必要時 `libs/toolzoo/`）
 - 開發線：`dev/video-notes`（remote 有；本機沒有就 `git switch -c dev/video-notes origin/dev/video-notes`），開工前 `git merge master`
 - 下一個 session 只要使用者說 **continue**：讀完這張，從「## 執行計畫」的第 0 波開始，照做。
@@ -128,3 +128,32 @@ Video Notes 現在是「一條流程跑到底就丟掉」：語音辨識只有�
 | 雲端 STT 預設服務 | OpenAI `gpt-4o-transcribe`；Gemini 當第二個 |
 | 合併前是否先顯示 token 預估 | 是，超過門檻才要使用者確認 |
 | 範本放哪 | `tools/video-notes/templates/`，使用者可在 `data/templates/` 覆蓋（同 prompts 的規則） |
+
+## 收尾紀錄（2026-11-12）
+
+照上面的四波做完，並把同資料夾三張 `suggest-*` 一起收掉。merge commit：見 master 上 `Merge dev/video-notes: Video Notes v2 …`（下一個 commit 會把雜湊補在這裡）。
+
+| 波 | 做了什麼 | commit（dev/video-notes） |
+|---|---|---|
+| 0 | 契約：errors.py、analysis.py（schema v1）、adapters 的 Protocol 與登記表、collection 簽名、naming、config、docs/analysis-schema.md；library.py | 79c207e、56294a4、c941a5e |
+| 1 | 錯誤合約落實＋health＋doctor（S）、語音辨識 adapter＋openai-compat（A）、樹狀圖與 HTML 輸出（D）、Fable 的 4 個範本（C）、analyze＋Markdown 輸出＋pipeline（B） | abcc53b、35cd41a、dfa791c、052118e、3858958 |
+| 2 | 多片合併＋新模式（F）、CLI 機器可讀介面＋health 接線（G）、網頁介面（H） | ea42afa、b31fb04、96e79df |
+| 3 | openai-compat 接線修正、README／docstring、打包驗證抓到的動態 import 問題 | f342341、a3095fb、4f307da |
+
+### 驗收對照
+
+- [x] 同一支影片處理一次後，不呼叫 AI 就能輸出 Markdown、樹狀圖（5 種＋網頁版）、3 種 HTML 範本——打包的 exe 用範例分析跑 `--render --outputs all`，10 種全部產生。
+- [x] 2 支以上可合併成一份，各支原本的筆記不受影響（test_collection）。
+- [x] STT 可切本機／雲端；沒金鑰或雲端失敗時清楚報錯或（設定允許時）退回本機，本機路徑不受影響（test_stt）。
+- [x] 舊資料夾（只有 notes、沒有 analysis.json）照常開啟，只要 Markdown 時直接沿用（test_pipeline）。
+- [x] 測試全過（295 項）、`git status` 乾淨。
+- [~] `build.ps1 video-notes` 的冒煙測試：**改用 `-NoSmoke` 打包 ＋ exe 的 CLI 驗證**（`--check --json`、`--library --json`、`--render`）。
+  原因：預設冒煙測試會把 GUI 伺服器開在本機網路埠，擁有者的全域規則是這台電腦不開網路埠。GUI 要擁有者自己開一次確認。
+
+### 沒做或改了做法的地方
+
+- **還沒用真的影片＋真的 AI 跑過**，網頁畫面與範本也還沒在瀏覽器裡看過——寫進 docs/OPEN_ISSUES.md 的 Q6（建議實測後再發 2.2.0）。
+- **沒有發版**：版本號仍是 2.1.0（擁有者沒要求發版）。
+- `tree-xmind` 沒用真的 XMind 打開過；Mermaid 的跳脫寫法、Gemini 的 mp3 輸入沒實測（docs/tree-formats.md、OPEN_ISSUES）。
+- HTML 範本：程式把 analysis 直接填進範本（AI 不另外為範本產生內容），因為 analysis 本身就是 AI 整理好的乾淨資料；這樣換範本完全不花 token。
+- 本檔原本寫「主 session 不派 agent 做第 0 波」——照做；第 2 波原計畫的「G 輸出」併進第 1 波的 D（HTML 填範本不需要 AI），第 2 波改成 F 合併、G CLI、H 網頁。
