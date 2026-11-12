@@ -14,18 +14,13 @@
 
 from __future__ import annotations
 
-import importlib
 from dataclasses import dataclass
 from typing import Any, Callable, Generic, TypeVar
 
 T = TypeVar("T")
 
-
-def import_builtin(modules: tuple[str, ...]) -> None:
-    """import video_notes.adapters.<名稱>（模組在 import 時自己註冊；重複呼叫沒有副作用）。"""
-    for name in modules:
-        importlib.import_module(f"video_notes.adapters.{name}")
-
+# 內建實作由各層的 load_builtin() 用「明確的 import」載入，不要改成 importlib 動態載入：
+# PyInstaller 看不到動態 import，打包的 exe 會缺模組。
 
 @dataclass
 class Entry(Generic[T]):

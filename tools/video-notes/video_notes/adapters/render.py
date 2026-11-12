@@ -54,14 +54,11 @@ class Renderer(Protocol):
 
 REGISTRY: Registry[Renderer] = Registry("輸出格式")
 
-BUILTIN_MODULES = ("render_markdown", "render_tree", "render_html")
-
-
 def load_builtin() -> None:
-    """import 內建實作（各自在 import 時註冊）。"""
-    from video_notes.adapters import import_builtin
-
-    import_builtin(BUILTIN_MODULES)
+    """import 內建實作（各自在 import 時註冊；重複呼叫沒有副作用）。
+    一定要寫成明確的 import：用 importlib 動態載入的話 PyInstaller 看不到，打包的 exe 會缺模組（2026-11 踩過）。
+    新增輸出格式時在這裡加一行。"""
+    from video_notes.adapters import render_html, render_markdown, render_tree  # noqa: F401
 
 
 def get(name: str) -> Renderer:

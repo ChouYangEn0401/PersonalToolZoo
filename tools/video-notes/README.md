@@ -337,8 +337,8 @@ DLL 不齊時自動改用 CPU（int8，比較慢）。設定頁標題列會顯�
 | 打包額外內容 | `include`: `prompts`、`socket`、`templates`、`video_notes/web/static`；`collect_all`: `yt_dlp_ejs`、`faster_whisper`（VAD 模型）、`opencc`（字典）；uvicorn 的 hiddenimports |
 | 測試 | `.\tools\video-notes\.venv\Scripts\python.exe -m unittest discover -s tools\video-notes\tests -v`（離線；假的 LLM／STT／來源，不打 API、不開網路埠） |
 | v2 架構（2026-11） | 核心資產 `analysis.<slug>.json`（`analysis.py`、[docs/analysis-schema.md](docs/analysis-schema.md)，改 schema 兩邊一起改並加 `SCHEMA_VERSION`）。四層 adapter 在 `video_notes/adapters/`：`source.py`（`source_ytdlp`）、`stt.py`（`stt_local`／`stt_openai`／`stt_gemini`＋`stt_chunk` 切段；`build_stt` 負責退路）、`llm.py`（`openai-compat`、`capabilities_for`）、`render.py`（`render_markdown`／`render_tree`／`render_html`）。每個 adapter 有 `capabilities()` 與不連網的 `check()`，失敗一律丟 `errors.ToolError`。分析在 `analyze.py`（驗證→修復一次→降級）、合併在 `collection.py`、筆記庫在 `library.py`、自我檢查 `doctor.py`、壞掉記帳 `health.py` |
-| 加新輸出格式 | 在 `adapters/` 新增模組並 `REGISTRY.register(...)`，把模組名加進 `render.BUILTIN_MODULES`；只讀 analysis、不呼叫 AI；所有文字當不可信資料跳脫 |
-| 加新語音辨識服務 | 新增 `adapters/stt_<name>.py` 實作 `SttAdapter` 並註冊，加進 `stt.load_builtin()`；雲端要自己切段（`stt_chunk`）並把錯誤轉成錯誤合約 |
+| 加新輸出格式 | 在 `adapters/` 新增模組並 `REGISTRY.register(...)`，在 `render.load_builtin()` 加一行**明確的** import（用 importlib 動態載入的話打包的 exe 會缺模組）；只讀 analysis、不呼叫 AI；所有文字當不可信資料跳脫 |
+| 加新語音辨識服務 | 新增 `adapters/stt_<name>.py` 實作 `SttAdapter` 並註冊，在 `stt.load_builtin()` 加明確的 import；雲端要自己切段（`stt_chunk`）並把錯誤轉成錯誤合約 |
 | Release tag | `VideoNotes_vX.Y.Z` |
 
 ### 注意事項

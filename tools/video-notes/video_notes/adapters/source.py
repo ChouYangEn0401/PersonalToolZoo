@@ -37,13 +37,9 @@ class SourceAdapter(Protocol):
 REGISTRY: Registry[SourceAdapter] = Registry("影片來源")
 
 
-BUILTIN_MODULES = ("source_ytdlp",)   # 通用的 yt-dlp 放最後（專用來源加在前面）
-
-
 def load_builtin() -> None:
-    from video_notes.adapters import import_builtin
-
-    import_builtin(BUILTIN_MODULES)
+    """明確 import（PyInstaller 才看得到）。通用的 yt-dlp 註冊時 order 最大、排最後；專用來源加在這裡。"""
+    from video_notes.adapters import source_ytdlp  # noqa: F401
 
 
 def for_url(url: str, settings) -> SourceAdapter:

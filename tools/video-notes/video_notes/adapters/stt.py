@@ -51,9 +51,8 @@ REGISTRY: Registry[SttAdapter] = Registry("語音辨識服務")
 
 def load_builtin() -> None:
     """import 內建實作（各自註冊）。沒裝某家 SDK 不影響其他家：SDK 只在 transcribe() 裡才 import。"""
-    from video_notes.adapters import import_builtin
-
-    import_builtin(("stt_local", "stt_openai", "stt_gemini"))   # local 一定要第一個
+    # 明確 import（PyInstaller 才看得到）；順序由各自註冊的 order 決定（local 是 0）
+    from video_notes.adapters import stt_gemini, stt_local, stt_openai  # noqa: F401
 
 
 class FallbackStt:
