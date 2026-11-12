@@ -626,7 +626,7 @@ def create_app() -> FastAPI:
 
     @app.post("/api/deps/install")
     def deps_install(req: DepsRequest):
-        """使用者在「環境」按「一鍵下載」：背景從官方下載、核對 SHA-256、放到 data\\bin\\。"""
+        """使用者在 GUI 頂端的提醒按「一鍵下載」：背景從官方下載、核對 SHA-256、放到 data\\bin\\。"""
         if req.name not in deps_mod.COMPONENTS:
             raise tool_error("bad_input", f"不認得的元件：{req.name}")
         with hub.lock:
