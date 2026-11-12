@@ -1,0 +1,5 @@
+name = "新聞快訊總結"
+description = "好幾支新聞合成一份：依事件去重歸類，各家說法對照（單支用新聞快訊＋極簡）"
+profile = "news"
+modifiers = ["brief"]
+outputs = ["html-sheet"]

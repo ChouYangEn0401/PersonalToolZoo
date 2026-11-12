@@ -1,0 +1,5 @@
+name = "電影解說"
+description = "娛樂快看＋金句：劇情連貫地講完，留下印象深刻的台詞（好幾集／好幾支會合成一條故事線）"
+profile = "quick"
+modifiers = ["quotes"]
+outputs = ["html-longform"]

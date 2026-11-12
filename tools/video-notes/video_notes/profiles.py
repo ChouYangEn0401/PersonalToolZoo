@@ -61,6 +61,18 @@ class Preset:
     profile: str = AUTO
     modifiers: tuple[str, ...] = ()
     focus: str = ""
+    outputs: tuple[str, ...] = ()   # 這個模式建議的輸出（adapters/render.py 的名稱）；UI 用來預選，空 = 沒有建議
+
+
+@dataclass(frozen=True)
+class CombineMode:
+    """多片合併時「怎麼整理」的指示（prompts/combine/<profile>.toml；id 與 profile 同名，general 是預設）。"""
+
+    id: str
+    name: str
+    goal: str = ""
+    rules: tuple[str, ...] = ()
+    structure: str = ""        # 建議的 sections 結構（AI 可以依內容微調）
 
 
 @dataclass(frozen=True)
@@ -108,6 +120,7 @@ class PromptLibrary:
         self.profiles: dict[str, Profile] = {}
         self.modifiers: dict[str, Modifier] = {}
         self.presets: dict[str, Preset] = {}
+        self.combine_modes: dict[str, CombineMode] = {}
         for root in roots:
             self._load(root)
         if FALLBACK_PROFILE not in self.profiles:
@@ -132,10 +145,21 @@ class PromptLibrary:
             if (d := _load_toml(path)) is not None:
                 self.presets[path.stem] = Preset(
                     path.stem, d.get("name", path.stem), d.get("description", ""),
-                    d.get("profile", AUTO), _tuple(d.get("modifiers")), d.get("focus", ""),
+                    d.get("profile", AUTO), _tuple(d.get("modifiers")), d.get("focus", ""), _tuple(d.get("outputs")),
+                )
+        for path in sorted((root / "combine").glob("*.toml")):
+            if (d := _load_toml(path)) is not None:
+                self.combine_modes[path.stem] = CombineMode(
+                    path.stem, d.get("name", path.stem), d.get("goal", "").strip(), _tuple(d.get("rules")),
+                    d.get("structure", "").strip(),
                 )
 
     # ---- 查詢 ----
+    def combine_mode(self, profile_id: str) -> CombineMode:
+        """合併用的整理指示：找不到該類型的就用 general，連 general 都沒有就用空白指示。"""
+        return (self.combine_modes.get(profile_id) or self.combine_modes.get(FALLBACK_PROFILE)
+                or CombineMode(FALLBACK_PROFILE, "通用"))
+
     def sorted_profiles(self) -> list[Profile]:
         return sorted(self.profiles.values(), key=lambda p: (p.order, p.id))
 
