@@ -1,0 +1,20 @@
+{
+  "_note": "草稿：供日後整合外部助理核心時取用。不發佈、不被本工具的程式讀取；欄位名稱以將來助理核心的文件為準。",
+  "name": "video-notes",
+  "version": "0.0.0-draft",
+  "stage": "alpha",
+  "kind": "cli",
+  "requires": { "sdk": ">=0.2,<0.3" },
+  "capabilities": ["network"],
+  "commands": [
+    { "name": "notes_run", "summary": "把一支影片整理成筆記", "args": ["url", "profile?"], "danger": false,
+      "cli": "VideoNotes <url> [-p <profile>] --json" },
+    { "name": "notes_status", "summary": "查看工作進度與依賴健康", "args": [], "danger": false,
+      "cli": "VideoNotes --status --json" },
+    { "name": "notes_list", "summary": "列出筆記庫", "args": [], "danger": false,
+      "cli": "VideoNotes --library --json" }
+  ],
+  "output": { "format": "json", "success": { "ok": true, "data": "..." }, "failure": { "ok": false, "error": "ToolError" } },
+  "exit_codes": { "0": "成功", "1": "其他", "2": "輸入有問題", "3": "依賴或環境問題", "4": "暫時性，可重試" },
+  "health": { "check": "--check --json" }
+}

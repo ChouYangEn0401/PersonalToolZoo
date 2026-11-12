@@ -1,6 +1,7 @@
 name = "行動清單"
 icon = "✅"
 order = 20
+field = "actions"            # v2：內容寫進 analysis 的這個欄位（不寫進 sections）
 description = "列出看完可以實際去做的事"
 sections = """
 ## 行動清單

@@ -5,7 +5,7 @@
   "version_from": "version.py",
   "tag_prefix": "VideoNotes",
   "pathex": ["../../libs"],
-  "include": ["prompts", "socket", "video_notes/web/static"],
+  "include": ["prompts", "socket", "templates", "video_notes/web/static"],
   "collect_all": ["yt_dlp_ejs", "faster_whisper", "opencc"],
   "hiddenimports": [
     "uvicorn.logging",

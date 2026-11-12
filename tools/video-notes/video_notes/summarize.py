@@ -21,7 +21,7 @@ from toolzoo.ai import LLM
 from toolzoo.ai.prompts import strip_outer_fence, wrap
 
 from video_notes.naming import KIND_SHORT
-from video_notes.profiles import AUTO, Plan, PromptLibrary
+from video_notes.profiles import AUTO, Composed, Plan, PromptLibrary
 from video_notes.transcribe import Cancelled, Transcript, clock
 
 NOTES_TEMPERATURE = 0.3      # 整理筆記要忠實，不要太有創意
@@ -93,14 +93,15 @@ def split_chunks(paragraphs: list[str], limit: int = CHUNK_CHARS) -> list[str]:
 
 class NoteWriter:
     def __init__(self, llm: LLM, library: PromptLibrary, *, lock: threading.Lock | None = None,
-                 long_chars: int = 60000):
+                 long_chars: int = 60000, chunk_chars: int = CHUNK_CHARS):
         self.llm = llm
         self.library = library
         self.lock = lock or threading.Lock()
         self.long_chars = long_chars
+        self.chunk_chars = chunk_chars
 
     # ---- LLM 呼叫（全部經過同一把鎖） ----
-    def _ask(self, system: str, user: str, *, temperature: float, on_token: Token | None,
+    def ask(self, system: str, user: str, *, temperature: float, on_token: Token | None,
              cancel: threading.Event | None) -> str:
         final: dict = {}
         parts: list[str] = []
@@ -118,13 +119,29 @@ class NoteWriter:
                  cancel: threading.Event | None = None) -> tuple[str, str]:
         excerpt = transcript.plain_text()[:3000]
         user = ctx.block() + "\n\n" + wrap(excerpt, "transcript_excerpt")
-        answer = self._ask(self.library.classifier_system(), user, temperature=0, on_token=None, cancel=cancel)
+        answer = self.ask(self.library.classifier_system(), user, temperature=0, on_token=None, cancel=cancel)
         return self.library.parse_classification(answer)
 
-    # ---- 寫筆記 ----
-    def write(self, plan: Plan, profile_id: str, transcript: Transcript, ctx: VideoContext, *,
-              on_status: Status | None = None, on_token: Token | None = None,
-              cancel: threading.Event | None = None) -> str:
+    # ---- 分段（長逐字稿）：每段先出條列筆記，再交給呼叫端合併 ----
+    def map_chunks(self, composed: Composed, focus: str, paragraphs: list[str], ctx: VideoContext, *,
+                   on_status: Status | None = None, cancel: threading.Event | None = None) -> str:
+        """回傳各段條列筆記（用 <part> 包起來）；之後由最後一次呼叫合併成筆記或 analysis JSON。"""
+        status = on_status or (lambda _msg: None)
+        chunks = split_chunks(paragraphs, self.chunk_chars)
+        partial: list[str] = []
+        for i, chunk in enumerate(chunks, start=1):
+            status(f"長影片分段整理 {i}/{len(chunks)}…")
+            system = self.library.compose_chunk(composed, focus, i, len(chunks))
+            user = ctx.block(with_description=False) + "\n\n" + wrap(chunk, "transcript", part=f"{i}/{len(chunks)}")
+            partial.append(self.ask(system, user, temperature=NOTES_TEMPERATURE, on_token=None, cancel=cancel))
+        status("合併各段筆記…")
+        return "\n\n".join(wrap(p, "part", index=str(i)) for i, p in enumerate(partial, start=1))
+
+    # ---- 寫筆記（舊的 Markdown 寫法；v2 只在 analysis 兩次都不合格時降級使用） ----
+    def write_body(self, plan: Plan, profile_id: str, transcript: Transcript, ctx: VideoContext, *,
+                   on_status: Status | None = None, on_token: Token | None = None,
+                   cancel: threading.Event | None = None) -> tuple[str, Composed]:
+        """只回傳筆記本文（不含標頭）和用到的 Composed。"""
         status = on_status or (lambda _msg: None)
         composed = self.library.compose(profile_id, plan.modifiers, plan.focus, short=ctx.kind == KIND_SHORT)
         if composed.needs_timestamps:
@@ -136,23 +153,21 @@ class NoteWriter:
         if len(full) <= self.long_chars:
             status("AI 整理筆記中…")
             user = ctx.block() + "\n\n" + wrap(full, "transcript")
-            body = self._ask(composed.system, user, temperature=NOTES_TEMPERATURE, on_token=on_token, cancel=cancel)
+            body = self.ask(composed.system, user, temperature=NOTES_TEMPERATURE, on_token=on_token, cancel=cancel)
         else:
-            chunks = split_chunks(paragraphs)
-            partial: list[str] = []
-            for i, chunk in enumerate(chunks, start=1):
-                status(f"長影片分段整理 {i}/{len(chunks)}…")
-                system = self.library.compose_chunk(composed, plan.focus, i, len(chunks))
-                user = ctx.block(with_description=False) + "\n\n" + wrap(chunk, "transcript", part=f"{i}/{len(chunks)}")
-                partial.append(self._ask(system, user, temperature=NOTES_TEMPERATURE, on_token=None, cancel=cancel))
-            status("合併各段筆記…")
-            merged = "\n\n".join(wrap(p, "part", index=str(i)) for i, p in enumerate(partial, start=1))
+            merged = self.map_chunks(composed, plan.focus, paragraphs, ctx, on_status=on_status, cancel=cancel)
             user = (ctx.block() + "\n\n以下是這支影片依時間順序分段整理的筆記，請依照指示合併成一份完整筆記，"
                     "刪除重複、把相關內容歸在一起：\n\n" + wrap(merged, "partial_notes"))
-            body = self._ask(composed.system, user, temperature=NOTES_TEMPERATURE, on_token=on_token, cancel=cancel)
+            body = self.ask(composed.system, user, temperature=NOTES_TEMPERATURE, on_token=on_token, cancel=cancel)
+        return clean_body(body), composed
 
+    def write(self, plan: Plan, profile_id: str, transcript: Transcript, ctx: VideoContext, *,
+              on_status: Status | None = None, on_token: Token | None = None,
+              cancel: threading.Event | None = None) -> str:
+        body, composed = self.write_body(plan, profile_id, transcript, ctx, on_status=on_status,
+                                         on_token=on_token, cancel=cancel)
         return self.header(ctx, composed.profile.icon, composed.profile.name,
-                           [m.name for m in composed.modifiers], plan.focus) + clean_body(body)
+                           [m.name for m in composed.modifiers], plan.focus) + body
 
     @staticmethod
     def header(ctx: VideoContext, icon: str, profile_name: str, modifier_names: list[str], focus: str) -> str:

@@ -1,0 +1,247 @@
+{
+  "analysis": {
+    "schema_version": 1,
+    "kind": "video",
+    "title": "pandas 資料分析入門：從讀檔到做出第一張報表（完整課程）",
+    "mode": {"profile": "knowledge", "modifiers": ["timeline", "terms", "actions", "quotes"], "focus": "初學者要能照著做"},
+    "language": "zh",
+    "summary": "用一份零售訂單資料，照著「讀檔 → 檢查 → 清理 → 彙總 → 輸出」五個步驟，就能用 pandas 做出第一張可以交差的報表。",
+    "overview": "這堂課以一份約五萬筆的零售訂單 CSV 為例，從安裝環境開始，一路示範讀檔、檢查資料品質、處理缺漏與重複、分組彙總，到輸出 Excel 報表。\n講師反覆強調的觀念是「先看資料再動手」：每做一步就用 shape、info、describe 確認結果，不要一口氣寫完才發現數字不對。\n最後一段整理了初學者最常踩的五個坑，以及下一步可以學什麼。",
+    "sections": [
+      {
+        "title": "準備環境與資料",
+        "summary": "裝好 Python 與 pandas，認識課程用的訂單資料長什麼樣子。",
+        "points": ["課程用 Python 3.11 與 pandas 2.x", "建議每個專案開一個虛擬環境，套件版本寫進 requirements.txt"],
+        "start": 95,
+        "children": [
+          {
+            "title": "安裝與確認版本",
+            "summary": "",
+            "points": ["建立虛擬環境後安裝 pandas 與 openpyxl", "用 pd.__version__ 確認版本，2.x 與 1.x 有些行為不同"],
+            "start": 140,
+            "children": []
+          },
+          {
+            "title": "認識範例資料",
+            "summary": "一筆訂單一列，共 9 個欄位。",
+            "points": ["欄位：訂單編號、日期、門市、商品類別、品名、數量、單價、折扣、會員編號", "日期欄有兩種寫法混在一起，是後面清理的重點", "會員編號有缺漏，代表非會員消費"],
+            "start": 388,
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "讀檔與第一眼檢查",
+        "summary": "讀進來之後先別急著算，花五分鐘把資料看一遍。",
+        "points": [],
+        "start": 705,
+        "children": [
+          {
+            "title": "read_csv 的常用參數",
+            "summary": "",
+            "points": ["encoding：中文檔案常見 utf-8-sig 或 cp950", "dtype：把編號類欄位指定成字串，避免開頭的 0 被吃掉", "parse_dates：讀檔時就把日期欄轉成日期型別"],
+            "start": 742,
+            "children": [
+              {
+                "title": "編碼錯誤怎麼判斷",
+                "summary": "看到 UnicodeDecodeError 或一堆問號，幾乎都是編碼沒選對。",
+                "points": ["先試 utf-8-sig，不行再試 cp950", "不要用 errors='ignore' 硬讀，資料會默默少字"],
+                "start": 861,
+                "children": []
+              }
+            ]
+          },
+          {
+            "title": "檢查三件套：shape、info、describe",
+            "summary": "分別回答「有多大」「每欄是什麼型別、缺多少」「數字的範圍合不合理」。",
+            "points": ["shape 確認列數跟來源系統對得上", "info 看每欄的非空值數量與型別", "describe 找出不合理的極端值，例如數量是負數"],
+            "start": 1010,
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "清理資料",
+        "summary": "這一段佔全課最多時間，因為實務上八成的力氣都花在這裡。",
+        "points": ["每做一步清理就記錄「刪了幾筆、為什麼」，報表才說得清楚"],
+        "start": 1580,
+        "children": [
+          {
+            "title": "缺漏值",
+            "summary": "先分清楚「真的沒有」和「漏填」，處理方式不同。",
+            "points": ["isna().sum() 看每欄缺多少", "會員編號缺漏是正常情況，補成「非會員」", "單價缺漏的 37 筆回來源系統查，不要自己猜平均值填進去"],
+            "start": 1622,
+            "children": [
+              {
+                "title": "什麼時候可以補值",
+                "summary": "",
+                "points": ["有明確的業務意義才補，例如折扣缺漏代表沒有折扣，補 0", "補值之後另外加一欄標記，方便事後追查"],
+                "start": 1790,
+                "children": [
+                  {
+                    "title": "不該補的情況",
+                    "summary": "",
+                    "points": ["金額、數量這類會直接影響總計的欄位", "缺漏比例超過三成的欄位，先回頭問資料來源"],
+                    "start": 1865,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "title": "重複資料",
+            "summary": "",
+            "points": ["duplicated() 先看有哪些，不要直接 drop_duplicates()", "同一張訂單多個品項不算重複，要用「訂單編號＋品名」一起判斷"],
+            "start": 2040,
+            "children": []
+          },
+          {
+            "title": "型別與格式",
+            "summary": "",
+            "points": ["日期兩種寫法用 to_datetime 搭配 format='mixed' 統一", "門市名稱前後有空白，用 str.strip() 去掉", "新增「金額」欄：數量 × 單價 ×（1 − 折扣）"],
+            "start": 2315,
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "彙總與分析",
+        "summary": "資料乾淨之後，分組彙總其實只要幾行。",
+        "points": [],
+        "start": 3120,
+        "children": [
+          {
+            "title": "groupby 的想法：拆開、計算、合併",
+            "summary": "",
+            "points": ["先想清楚「依什麼分組」「算什麼」", "agg 可以一次算多個指標：總金額、訂單數、平均客單價", "結果用 reset_index() 變回一般表格比較好接著用"],
+            "start": 3165,
+            "children": []
+          },
+          {
+            "title": "樞紐分析表 pivot_table",
+            "summary": "跟 Excel 的樞紐分析是同一個概念。",
+            "points": ["列放門市、欄放月份、值放金額", "margins=True 加上總計", "fill_value=0 把沒有交易的格子補 0"],
+            "start": 3642,
+            "children": []
+          },
+          {
+            "title": "依時間看趨勢",
+            "summary": "",
+            "points": ["用 dt.to_period('M') 取出月份再分組", "比較會員與非會員的月營收，會員占比從 41% 升到 53%"],
+            "start": 4010,
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "輸出報表與常見的坑",
+        "summary": "把結果交出去，並避開初學者最常犯的錯。",
+        "points": [],
+        "start": 4490,
+        "children": [
+          {
+            "title": "輸出 Excel",
+            "summary": "",
+            "points": ["to_excel 搭配 ExcelWriter 可以一個檔案寫多張工作表", "index=False 避免多出一欄流水號", "金額欄的千分位在 Excel 端設定格式，不要先轉成文字"],
+            "start": 4525,
+            "children": []
+          },
+          {
+            "title": "五個常見的坑",
+            "summary": "",
+            "points": ["看到 SettingWithCopyWarning 就忽略：改用 loc 或先 copy()", "用迴圈逐列處理：能用整欄運算就不要用 iterrows", "編號欄被讀成數字，開頭的 0 不見", "合併兩張表之後沒檢查列數，資料被默默放大", "清理步驟沒留紀錄，三個月後自己也看不懂"],
+            "start": 4880,
+            "children": []
+          },
+          {
+            "title": "下一步學什麼",
+            "summary": "",
+            "points": ["merge：把多張表接起來", "matplotlib 或 plotly：把彙總結果畫成圖", "把整個流程寫成函式，下個月換一份檔案就能重跑"],
+            "start": 5310,
+            "children": []
+          }
+        ]
+      }
+    ],
+    "key_points": [
+      "固定流程：讀檔 → 檢查 → 清理 → 彙總 → 輸出，每一步都確認結果再往下",
+      "讀檔時就指定編碼、型別與日期欄，可以省掉後面一半的清理",
+      "缺漏值先分清楚「真的沒有」還是「漏填」，金額類欄位不要自己猜著補",
+      "判斷重複要用有業務意義的欄位組合，不要整列比對後直接刪",
+      "groupby 的核心是「拆開、計算、合併」，先想好分組依據與指標",
+      "清理的每一步都留下「刪了幾筆、為什麼」的紀錄"
+    ],
+    "timeline": [
+      {"time": 0, "label": "課程介紹與學習目標", "detail": ""},
+      {"time": 95, "label": "準備環境", "detail": "虛擬環境、安裝 pandas"},
+      {"time": 388, "label": "認識範例訂單資料", "detail": ""},
+      {"time": 705, "label": "讀檔與常用參數", "detail": ""},
+      {"time": 1010, "label": "檢查三件套", "detail": "shape、info、describe"},
+      {"time": 1580, "label": "清理：缺漏值", "detail": ""},
+      {"time": 2040, "label": "清理：重複資料", "detail": ""},
+      {"time": 2315, "label": "清理：型別與格式", "detail": ""},
+      {"time": 3120, "label": "groupby 分組彙總", "detail": ""},
+      {"time": 3642, "label": "樞紐分析表", "detail": ""},
+      {"time": 4010, "label": "依月份看趨勢", "detail": ""},
+      {"time": 4490, "label": "輸出 Excel 報表", "detail": ""},
+      {"time": 4880, "label": "五個常見的坑", "detail": ""},
+      {"time": 5310, "label": "下一步與問答", "detail": ""}
+    ],
+    "terms": [
+      {"term": "DataFrame", "definition": "pandas 的表格資料結構，有列也有欄，可以想成一張 Excel 工作表。"},
+      {"term": "Series", "definition": "DataFrame 裡的單一欄，帶有索引的一維資料。"},
+      {"term": "缺漏值（NaN）", "definition": "資料中沒有值的格子；pandas 用 NaN 或 NaT 表示。"},
+      {"term": "groupby", "definition": "依某些欄位把資料分組，再對每一組做計算的操作。"},
+      {"term": "樞紐分析表", "definition": "把資料依列、欄兩個方向分組彙總成交叉表。"},
+      {"term": "SettingWithCopyWarning", "definition": "pandas 提醒你可能正在修改一份「切片的副本」，改動不一定會寫回原本的資料。"}
+    ],
+    "actions": [
+      "建立虛擬環境，安裝 pandas 與 openpyxl，確認版本是 2.x",
+      "找一份自己工作上的 CSV，照「讀檔 → 檢查三件套」走一遍",
+      "列出每個欄位的缺漏數量，逐欄決定要補、要刪還是回頭查",
+      "用 groupby 做出一張「依門市、依月份」的彙總表",
+      "把清理步驟寫成一個函式，並在每一步印出剩下幾筆"
+    ],
+    "quotes": [
+      {"text": "先看資料再動手，五分鐘的檢查可以省掉五小時的除錯。", "speaker": "講師", "time": 1032},
+      {"text": "清理資料沒有標準答案，但一定要有紀錄。", "speaker": "講師", "time": 1604},
+      {"text": "如果你發現自己在寫迴圈，先停下來想想有沒有整欄運算的寫法。", "speaker": "講師", "time": 4925}
+    ],
+    "perspectives": [],
+    "caveats": [
+      "課程以 pandas 2.x 示範，1.x 的 to_datetime 沒有 format='mixed'",
+      "範例資料約五萬筆；資料量到數百萬筆時，讀檔方式與記憶體用量要另外考慮",
+      "會員占比的數字來自範例資料，不代表實際零售業的情況"
+    ],
+    "tags": ["pandas", "Python", "資料分析", "資料清理", "groupby", "Excel 報表", "入門課程"],
+    "layout_hint": {"template": "tabs", "tree_depth": 3},
+    "sources": [
+      {
+        "id": "youtube:SAMPLEcourse1",
+        "url": "https://youtu.be/SAMPLEcourse1",
+        "title": "pandas 資料分析入門：從讀檔到做出第一張報表（完整課程）",
+        "channel": "範例資料教室",
+        "duration": 5520,
+        "date": "2026-09-18",
+        "folder": "pandas 資料分析入門 [video-SAMPLEcourse1]"
+      }
+    ],
+    "members": [],
+    "provenance": {
+      "source_hash": "c40a91e2b7d85f16",
+      "stt": {"adapter": "local", "model": "medium"},
+      "analyzer": {"provider": "claude-sub", "model": "sonnet"},
+      "prompt_version": "knowledge+timeline+terms+actions+quotes@1",
+      "created_at": "2026-11-12T19:41:07"
+    },
+    "cost": {"input_tokens": 61200, "output_tokens": 4800, "estimated": true, "audio_seconds": 5520},
+    "quality_flags": ["estimated_cost"]
+  },
+  "meta": {
+    "profile_name": "📚 知識課程",
+    "modifier_names": ["⏱ 時間軸", "📖 名詞解釋", "✅ 行動清單", "💬 金句"],
+    "tool_version": "2.1.0",
+    "generated_at": "2026-11-12T20:00:00"
+  }
+}

@@ -70,6 +70,10 @@ class Settings:
     # Whisper 的語言。auto = 先判斷語言再辨識；強制 zh 會把英文影片硬翻成（錯的）中文
     language: str = "auto"
     traditional: bool = True          # 中文逐字稿轉成繁體（台灣用語）
+    # 語音辨識服務（adapters/stt.py）："local" = 本機 Whisper（預設、底線）；其他是雲端，會上傳音訊
+    stt_provider: str = "local"
+    stt_model: str = ""               # 雲端服務的模型；空白 = 該服務的預設
+    stt_fallback_local: bool = True   # 雲端失敗時退回本機 Whisper（反方向絕不自動發生）
 
     # AI 整理
     provider: str = DEFAULT_PROVIDER  # Claude 訂閱（電腦上的 Claude Code），不需要金鑰；存過設定的照存檔
@@ -77,12 +81,22 @@ class Settings:
     profile: str = "auto"
     modifiers: list[str] = field(default_factory=list)
     long_transcript_chars: int = 60000  # 逐字稿超過這個長度就分段整理再合併
+    chunk_chars: int = 0              # 分段時每段多大；0 = 依模型的上下文長度自動決定
+    # provider = "openai-compat" 時用的端點（Ollama、LM Studio、其他 OpenAI 相容服務）；金鑰在 .env 的 OPENAI_COMPAT_API_KEY
+    compat_base_url: str = ""
+    # 分析完自動多產生哪些輸出（adapters/render.py 的名稱，例如 "tree-md"、"html-longform"）；markdown 一律會產生
+    outputs: list[str] = field(default_factory=list)
+    # 多片合併前估計 token 超過這個數字就先問使用者
+    combine_confirm_tokens: int = 60000
 
     # 同時處理幾支影片（下載可以並行；轉錄一次一支、AI 一次一個請求，避免搶 GPU 與被限流）
     parallel_jobs: int = 3
 
     # 下載
     cookies_from_browser: str = ""    # 例如 "chrome"、"edge"：需要登入才看得到的影片用
+    max_parallel_downloads: int = 2   # 同時下載幾支（YouTube 抓太兇會被當機器人）
+    # 批次下載時影片與影片之間停幾秒（交給 yt-dlp 的 sleep_interval / max_sleep_interval，不自己 sleep）
+    sleep_between_videos: list[float] = field(default_factory=lambda: [5.0, 10.0])
 
     # 處理完要不要把結果 POST 給別的程式（GUI 用；CLI 看 socket/config.json 或 --post）
     notify_url: str = ""

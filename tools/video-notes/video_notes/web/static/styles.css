@@ -199,3 +199,53 @@ legend { font-weight: 600; padding: 0 6px; }
   opacity: 0; transition: all .25s; pointer-events: none; font-size: 14px; z-index: 50;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- v2：警示條、模式卡片、輸出多選、筆記庫多選 ---------- */
+.chip.warn { color: var(--warn); }
+.small.bad, .act-msg.bad { color: var(--bad); }
+.small.warn, .act-msg.warn { color: var(--warn); }
+
+#alert-bar {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 8px 20px; font-size: 14px;
+  background: color-mix(in srgb, var(--warn) 14%, var(--card)); border-bottom: 1px solid var(--warn);
+}
+.alert-item + .alert-item { margin-top: 6px; }
+.alert-item strong { color: var(--warn); }
+
+.preset-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 4px; }
+.preset-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
+  white-space: normal; padding: 8px 10px; border-radius: 10px;
+}
+.preset-card.on { background: var(--soft); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.preset-card .small { line-height: 1.35; }
+details.field > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+
+.out-groups { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.out-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.out-group-title { font-size: 12px; color: var(--muted); min-width: 4.5em; }
+label.check.out-opt { font-size: 13px; }
+label.check.unavail { color: var(--muted); text-decoration: line-through; cursor: not-allowed; }
+
+.lib-head { margin: 14px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.lib-actions {
+  position: sticky; top: 56px; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 8px 10px; margin-bottom: 8px; background: var(--card); border: 1px solid var(--accent); border-radius: 10px;
+}
+.lib-actions button { padding: 3px 10px; font-size: 13px; }
+.lib-row .top { gap: 8px; }
+.lib-row .pick { width: auto; margin: 0; flex: none; }
+.job .detail.wrap { white-space: normal; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+button.badge.link { border: none; cursor: pointer; padding: 1px 7px; color: var(--accent); }
+button.badge.link:hover { text-decoration: underline; }
+.out-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+
+.act-row { border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; margin: 6px 0; }
+.act-row .t, .redo-row .t { font-weight: 600; }
+.act-msg { white-space: pre-wrap; font-size: 13px; margin-top: 10px; }
+.estimate { background: var(--bg); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+.reuse-row { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.reuse-row select { width: auto; max-width: 100%; }
+.mode-fields > * + * { margin-top: 8px; }
+#dlg-act { width: min(680px, 94vw); max-height: 90vh; overflow: auto; }

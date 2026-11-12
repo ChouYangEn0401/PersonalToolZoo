@@ -1,0 +1,5 @@
+name = "上課筆記／課程合集"
+description = "知識學習＋名詞解釋＋時間軸：好幾堂課合成一份依課綱排序的筆記"
+profile = "knowledge"
+modifiers = ["glossary", "timeline"]
+outputs = ["tree-md", "html-tabs"]

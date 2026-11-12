@@ -153,6 +153,32 @@ class Artifacts:
     def all_notes(self) -> list[Path]:
         return sorted(self.folder.glob("notes.*.md"))
 
+    # ---- v2：分析結果與其他輸出（見 video_notes/analysis.py、adapters/render.py） ----
+    def analysis(self, slug: str) -> Path:
+        """同一個方案（slug，與 notes.<slug>.md 相同）的結構化分析結果。"""
+        return self.folder / f"analysis.{slug}.json"
+
+    def all_analyses(self) -> list[Path]:
+        return sorted(self.folder.glob("analysis.*.json"))
+
+    @property
+    def outputs_dir(self) -> Path:
+        return self.folder / "outputs"
+
+    def output(self, slug: str, renderer: str, extension: str) -> Path:
+        """markdown 輸出維持 notes.<slug>.md；其他輸出放 outputs/<slug>.<renderer><extension>。"""
+        if renderer == "markdown":
+            return self.notes(slug)
+        return self.outputs_dir / f"{slug}.{renderer}{extension}"
+
+    def all_outputs(self) -> list[Path]:
+        return sorted(p for p in self.outputs_dir.glob("*") if p.is_file()) if self.outputs_dir.is_dir() else []
+
+    @property
+    def collection(self) -> Path:
+        """只有合併資料夾有：成員清單與每次合併的紀錄。"""
+        return self.folder / "collection.json"
+
     def status(self) -> dict[str, object]:
         """各階段做完了沒（給 GUI 顯示「已有：…」、給 CLI 問要不要重做）。"""
         return {
@@ -160,4 +186,16 @@ class Artifacts:
             "audio": self.audio.exists(),
             "transcript": self.transcript_json.exists() and self.transcript_txt.exists(),
             "notes": [p.name[len("notes."):-len(".md")] for p in self.all_notes()],
+            "analyses": [p.name[len("analysis."):-len(".json")] for p in self.all_analyses()],
+            "outputs": [p.name for p in self.all_outputs()],
         }
+
+
+COLLECTIONS_DIR = "collections"
+
+
+def collection_folder(output_root: Path, title: str, when: str) -> Path:
+    """多片合併的資料夾：<輸出資料夾>/collections/<YYYYMMDD-HHMMSS> <標題>/（when 由呼叫端給，方便測試）。
+    裡面跟影片資料夾同一套 Artifacts 規則（analysis.<slug>.json、notes.<slug>.md、outputs/），
+    另外有 collection.json。find_folder 只看輸出資料夾的第一層，所以 collections/ 不會被當成影片。"""
+    return output_root / COLLECTIONS_DIR / f"{when} {safe_title(title or 'collection', 60)}"

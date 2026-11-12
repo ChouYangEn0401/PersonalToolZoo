@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>Video Notes 筆記</title>
+<!--
+  Video Notes 輸出範本：tabs —— 多分頁：總覽｜每個大主題一頁｜附錄（課綱式）
+  單一檔案、不載入任何外部資源。資料由程式填進下面 id="vn-data" 的區塊，頁面自己用 JS 畫出來。
+  資料契約、預覽方式、怎麼覆蓋內建範本：見同資料夾的 README.md。
+-->
+<style>
+/* ==== VN 共用樣式：四個範本這一段完全相同，要改請四個檔一起改 ==== */
+:root{
+  --bg:#f5f4ef;--surface:#fff;--surface-2:#eceae2;--text:#1d2226;--muted:#596068;--border:#dcd9cf;
+  --accent:#0d6b5e;--accent-ink:#fff;--accent-soft:#dff0eb;
+  --warn-bg:#fdf1d3;--warn-text:#6a4700;--warn-border:#e3c16a;
+  --shadow:0 1px 2px rgba(20,25,30,.06),0 8px 24px rgba(20,25,30,.06);
+  --font:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace;
+  --radius:12px;--w:760px;
+  color-scheme:light dark;
+}
+@media screen and (prefers-color-scheme:dark){:root{
+  --bg:#14171a;--surface:#1c2024;--surface-2:#272c31;--text:#e7e5df;--muted:#a3aab1;--border:#353c42;
+  --accent:#62cbb6;--accent-ink:#0b1f1b;--accent-soft:#1b332e;
+  --warn-bg:#352b10;--warn-text:#f1cd7a;--warn-border:#6b5620;
+  --shadow:0 1px 2px rgba(0,0,0,.45);
+}}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:400 16px/1.8 var(--font);letter-spacing:.02em;
+  overflow-wrap:anywhere;line-break:strict}
+h1,h2,h3,h4,h5,h6{line-height:1.4;margin:0;letter-spacing:.01em;text-wrap:balance}
+p{margin:0 0 .8em}
+a{color:var(--accent);text-underline-offset:3px}
+button{font:inherit;letter-spacing:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+[hidden]{display:none!important}
+.wrap{max-width:var(--w);margin:0 auto;padding:28px 16px 48px}
+
+/* 頁首 */
+.hd{margin-bottom:28px}
+.kicker{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.pill{display:inline-block;padding:1px 10px;border-radius:999px;font-size:.8rem;line-height:1.7;
+  background:var(--surface-2);color:var(--muted);max-width:100%}
+.pill-a{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.hd h1{font-size:clamp(1.5rem,1.1rem + 1.8vw,2.1rem);font-weight:800}
+.lead{margin:16px 0 0;padding-left:14px;border-left:4px solid var(--accent);font-size:1.12rem;line-height:1.7;font-weight:600}
+.lead-l{display:block;font-size:.75rem;font-weight:600;color:var(--accent);letter-spacing:.12em}
+.meta{margin:12px 0 0;color:var(--muted);font-size:.875rem;display:flex;flex-wrap:wrap;gap:2px 14px}
+.banner{margin:16px 0 0;padding:10px 14px;border:1px solid var(--warn-border);border-radius:var(--radius);
+  background:var(--warn-bg);color:var(--warn-text);font-size:.9rem}
+.banner p{margin:0}
+.banner strong{font-weight:700}
+.srcs{margin:16px 0 0;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);font-size:.9rem}
+.srcs>summary{padding:10px 14px;cursor:pointer;font-weight:600}
+.src-l{margin:0;padding:0 14px 10px 14px;list-style:none;counter-reset:src}
+.src-l li{counter-increment:src;position:relative;padding:8px 0 8px 30px;border-top:1px solid var(--border)}
+.src-l li::before{content:counter(src);position:absolute;left:0;top:10px;width:20px;height:20px;border-radius:50%;
+  background:var(--surface-2);color:var(--muted);font-size:.75rem;line-height:20px;text-align:center}
+.src-t{display:block;font-weight:600}
+.src-m{display:block;color:var(--muted);font-size:.8rem}
+
+/* 區塊 */
+.blk{margin:0 0 32px}
+.blk>h2{font-size:1.2rem;font-weight:700;margin-bottom:12px}
+.blk>h2::before{content:"";display:inline-block;width:.5em;height:.5em;border-radius:2px;background:var(--accent);
+  margin-right:.5em;vertical-align:.12em}
+.more{margin:6px 0 0;color:var(--muted);font-size:.85rem}
+.time{display:inline-block;font:500 .78rem/1.6 var(--mono);letter-spacing:0;font-variant-numeric:tabular-nums;
+  padding:0 7px;border-radius:6px;background:var(--accent-soft);color:var(--accent);text-decoration:none;
+  white-space:nowrap;vertical-align:.1em}
+a.time:hover{text-decoration:underline}
+.kp{margin:0;padding:0;list-style:none;counter-reset:kp}
+.kp li{counter-increment:kp;position:relative;padding:0 0 0 38px;margin:0 0 10px;min-height:26px}
+.kp li::before{content:counter(kp);position:absolute;left:0;top:.2em;width:26px;height:26px;border-radius:50%;
+  background:var(--accent);color:var(--accent-ink);font:700 .85rem/26px var(--font);text-align:center}
+.pts{margin:0 0 .8em;padding:0;list-style:none}
+.pts li{position:relative;padding-left:18px;margin:0 0 4px}
+.pts li::before{content:"";position:absolute;left:4px;top:.78em;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.tl{list-style:none;margin:0 0 0 6px;padding:0;border-left:2px solid var(--border)}
+.tl li{position:relative;padding:0 0 14px 18px}
+.tl li:last-child{padding-bottom:0}
+.tl li::before{content:"";position:absolute;left:-6px;top:.62em;width:10px;height:10px;border-radius:50%;
+  background:var(--surface);border:2px solid var(--accent)}
+.tl-l{font-weight:600}
+.tl .time{margin-right:8px}
+.tl-d{display:block;color:var(--muted);font-size:.9rem}
+.terms{margin:0;display:grid;grid-template-columns:fit-content(12em) minmax(0,1fr);gap:10px 18px}
+.terms dt{font-weight:700}
+.terms dd{margin:0}
+.acts{margin:0;padding:0;list-style:none}
+.acts li{position:relative;padding-left:30px;margin:0 0 8px}
+.acts li::before{content:"";position:absolute;left:2px;top:.42em;width:16px;height:16px;border:1.5px solid var(--accent);border-radius:4px}
+.quote{margin:0 0 12px;padding:12px 16px;border-left:3px solid var(--accent);background:var(--accent-soft);
+  border-radius:0 var(--radius) var(--radius) 0}
+.quote blockquote{margin:0;font-weight:500}
+.quote figcaption{margin-top:4px;color:var(--muted);font-size:.85rem}
+.persp{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:12px}
+.persp div{padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+.persp strong{display:block;font-size:.85rem;color:var(--accent)}
+.cav{margin:0;padding:12px 16px 12px 34px;border-radius:var(--radius);background:var(--warn-bg);border:1px solid var(--warn-border)}
+.cav li{margin:0 0 4px}
+.cav li:last-child{margin:0}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 28px;padding:0;list-style:none}
+.tags .pill::before{content:"#";opacity:.6;margin-right:1px}
+.ft{max-width:var(--w);margin:0 auto;padding:16px 16px 32px;color:var(--muted);font-size:.78rem;text-align:center}
+.state{max-width:480px;margin:18vh auto 0;padding:28px 24px;text-align:center;background:var(--surface);
+  border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}
+.state h1{font-size:1.25rem;margin-bottom:8px}
+.state p{margin:0;color:var(--muted);font-size:.95rem}
+@media (max-width:560px){
+  .terms{display:block}
+  .terms dd{margin:0 0 10px}
+}
+@media print{
+  body{background:#fff;font-size:11pt}
+  .no-print{display:none!important}
+  a{color:inherit;text-decoration:none}
+  .blk,.quote,.persp div,.kp li,.tl li{break-inside:avoid}
+  h1,h2,h3,h4{break-after:avoid}
+  .state,.srcs{box-shadow:none}
+}
+/* ==== 共用樣式結束 ==== */
+
+/* ---- tabs：多分頁（課綱式） ---- */
+:root{--w:880px}
+.tabbar{position:sticky;top:0;z-index:5;margin:0 -16px 24px;padding:0 16px;background:var(--bg);border-bottom:1px solid var(--border)}
+.tablist{display:flex;gap:6px;overflow-x:auto;padding:10px 4px;scrollbar-width:thin}
+.tab{flex:none;display:inline-flex;align-items:center;gap:6px;max-width:15em;padding:4px 14px;border:1px solid var(--border);
+  border-radius:999px;background:var(--surface);color:var(--muted);cursor:pointer;font-size:.92rem;line-height:1.7}
+.tab:hover{color:var(--text);border-color:var(--accent)}
+.tab:focus-visible{border-radius:999px}
+.tab-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tab-n{font:700 .78rem/1 var(--mono);color:var(--accent)}
+.tab[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.tab[aria-selected=true] .tab-n{color:inherit}
+.wrap>main{scroll-margin-top:72px}
+.panel:focus-visible{outline-offset:8px;border-radius:8px}
+.panel-k{margin:0 0 2px;color:var(--accent);font-size:.8rem;font-weight:700;letter-spacing:.12em}
+.panel-h{font-size:1.5rem;font-weight:800;margin-bottom:14px}
+.panel-h .time{margin-left:10px}
+.overview{font-size:1.05rem;margin-bottom:24px}
+.sum{color:var(--muted)}
+.sub{margin:12px 0 0;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+.sub .sub{background:var(--bg)}
+.sub .sub .sub{background:var(--surface)}
+.sub>summary{padding:10px 14px;cursor:pointer;font-weight:700}
+.sub>summary .time{margin-left:8px}
+.sub-b{padding:0 14px 12px}
+.sub-b>:last-child{margin-bottom:0}
+.syl{list-style:none;margin:0;padding:0}
+.syl button{display:flex;gap:12px;width:100%;margin:0 0 8px;padding:12px 14px;text-align:left;cursor:pointer;
+  border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+.syl button:hover{border-color:var(--accent)}
+.syl-n{flex:none;width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent);
+  font-weight:700;font-size:.85rem;line-height:28px;text-align:center}
+.syl-b{min-width:0}
+.syl-t{display:block;font-weight:700}
+.syl-d{display:block;color:var(--muted);font-size:.88rem}
+.pager{display:flex;justify-content:space-between;gap:12px;margin-top:36px;padding-top:16px;border-top:1px solid var(--border)}
+.pager button{max-width:48%;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);cursor:pointer;text-align:left;font-size:.92rem;font-weight:600}
+.pager button:hover{border-color:var(--accent)}
+.pager .next{margin-left:auto;text-align:right}
+.pager small{display:block;color:var(--muted);font-size:.75rem;font-weight:400}
+@media print{
+  .wrap{max-width:none;padding:0}
+  .panel[hidden]{display:block!important}
+  .panel{margin-bottom:28pt}
+  .sub{border:0;background:none!important}
+  .sub>summary{padding-left:0;list-style:none}
+  .sub-b{padding:0 0 0 12pt}
+}
+</style>
+</head>
+<body>
+<noscript><div class="state"><h1>需要開啟 JavaScript</h1><p>這份筆記的內容由頁面裡的程式排版，請允許這個檔案執行 JavaScript。</p></div></noscript>
+<div id="app"></div>
+<script type="application/json" id="vn-data">__VN_DATA__</script>
+<script>
+/* ==== VN 共用程式：四個範本這一段完全相同，要改請四個檔一起改 ====
+   安全規則：資料只用 textContent／createElement 放進畫面；不把資料組成 HTML 字串、不執行資料；
+   連結只接受 http／https。 */
+const VN = (() => {
+  'use strict';
+  const S = v => typeof v === 'string' ? v.trim() : (typeof v === 'number' && isFinite(v) ? String(v) : '');
+  const A = v => Array.isArray(v) ? v : [];
+  const O = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  const strs = v => A(v).map(S).filter(Boolean);
+  const objs = (v, key) => A(v).filter(o => o && typeof o === 'object' && !Array.isArray(o) && S(o[key]));
+  const secs = v => objs(v, 'title');
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null && text !== '') e.textContent = text;
+    return e;
+  }
+  function add(parent, ...kids) {
+    for (const k of kids) if (k) parent.appendChild(k);
+    return parent;
+  }
+  function fmtTime(sec) {
+    if (typeof sec !== 'number' || !isFinite(sec) || sec < 0) return '';
+    const s = Math.floor(sec), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+    const p = n => (n < 10 ? '0' : '') + n;
+    return h ? h + ':' + p(m) + ':' + p(x) : p(m) + ':' + p(x);
+  }
+  function safeUrl(u) {
+    u = S(u);
+    if (!/^https?:\/\//i.test(u)) return '';
+    try {
+      const x = new URL(u);
+      return x.protocol === 'http:' || x.protocol === 'https:' ? x.href : '';
+    } catch (e) { return ''; }
+  }
+  /* 安全的網址才變成連結，其他一律是純文字 */
+  function link(url, text, cls) {
+    const href = safeUrl(url);
+    if (!href) return el('span', cls, text);
+    const a = el('a', cls, text);
+    a.href = href; a.rel = 'noopener noreferrer'; a.target = '_blank';
+    return a;
+  }
+
+  /* 只有一個來源、而且是 YouTube 時，時間可以點了跳到該秒 */
+  let yt = '';
+  function initYt(sources) {
+    yt = '';
+    if (sources.length !== 1) return;
+    const href = safeUrl(O(sources[0]).url);
+    if (!href) return;
+    const host = new URL(href).hostname.toLowerCase().replace(/^(www|m|music)\./, '');
+    if (host === 'youtube.com' || host === 'youtu.be') yt = href;
+  }
+  function timeEl(sec) {
+    const t = fmtTime(sec);
+    if (!t) return null;
+    if (!yt) return el('span', 'time', t);
+    const u = new URL(yt);
+    u.searchParams.set('t', Math.floor(sec) + 's');
+    const a = link(u.href, t, 'time');
+    a.title = '在影片中跳到 ' + t;
+    return a;
+  }
+
+  function paras(text, cls) {
+    const parts = S(text).split(/\n+/).map(s => s.trim()).filter(Boolean);
+    if (!parts.length) return null;
+    const box = el('div', cls);
+    for (const p of parts) add(box, el('p', '', p));
+    return box;
+  }
+  function more(n) { return n > 0 ? el('p', 'more', '＋另外 ' + n + ' 項') : null; }
+  function list(tag, cls, items, limit) {
+    const shown = limit ? items.slice(0, limit) : items;
+    const box = el(tag, cls);
+    for (const it of shown) add(box, typeof it === 'string' ? el('li', '', it) : it);
+    return [box, more(items.length - shown.length)];
+  }
+  function block(id, title, ...body) {
+    const s = el('section', 'blk');
+    s.id = id;
+    add(s, el('h2', '', title), ...body);
+    return s;
+  }
+  function pts(v) {
+    const items = strs(v);
+    return items.length ? list('ul', 'pts', items)[0] : null;
+  }
+
+  const FLAG_TEXT = {
+    schema_repair_failed: '這份是降級結果，內容可能不完整。',
+    transcript_low_confidence: '語音辨識的品質不太好，內容可能有錯字或漏句。',
+    truncated_input: '影片內容太長，只整理到其中一部分。',
+    member_missing: '合併時有影片讀不到，已經略過。'
+  };
+  function banner(a) {
+    const flags = strs(a.quality_flags), msgs = Object.keys(FLAG_TEXT).filter(k => flags.includes(k));
+    if (!msgs.length) return null;
+    const box = el('div', 'banner');
+    box.setAttribute('role', 'note');
+    for (const k of msgs) {
+      const p = el('p');
+      add(p, el('strong', '', '提醒：'));
+      p.appendChild(document.createTextNode(FLAG_TEXT[k]));
+      add(box, p);
+    }
+    return box;
+  }
+  function sourceMeta(s) {
+    const d = fmtTime(s.duration);
+    return [S(s.channel), S(s.date), typeof s.duration === 'number' && s.duration > 0 && d ? '片長 ' + d : ''].filter(Boolean);
+  }
+  function sourceList(a) {
+    const items = A(a.sources).filter(s => s && typeof s === 'object').map(s => {
+      const li = el('li'), url = S(s.url), title = S(s.title) || url || S(s.id) || '（沒有標題）';
+      add(li, link(url, title, 'src-t'));
+      const m = sourceMeta(s);
+      if (url && !safeUrl(url) && url !== title) m.push(url);
+      if (m.length) add(li, el('span', 'src-m', m.join('・')));
+      return li;
+    });
+    return items.length ? list('ol', 'src-l', items)[0] : null;
+  }
+  function header(a, meta) {
+    const h = el('header', 'hd'), sources = A(a.sources).filter(s => s && typeof s === 'object');
+    const multi = a.kind === 'collection' || sources.length > 1;
+    const k = el('p', 'kicker');
+    if (S(meta.profile_name)) add(k, el('span', 'pill pill-a', S(meta.profile_name)));
+    for (const m of strs(meta.modifier_names)) add(k, el('span', 'pill', m));
+    if (a.kind === 'collection') add(k, el('span', 'pill', '合併筆記'));
+    if (k.firstChild) add(h, k);
+    add(h, el('h1', '', S(a.title) || '（沒有標題）'));
+    if (S(a.summary)) {
+      const lead = el('p', 'lead');
+      add(lead, el('span', 'lead-l', '一句話結論'));
+      lead.appendChild(document.createTextNode(S(a.summary)));
+      add(h, lead);
+    }
+    if (!multi && sources.length) {
+      const s = sources[0], m = el('p', 'meta'), url = S(s.url);
+      for (const t of sourceMeta(s)) add(m, el('span', '', t));
+      if (url) add(m, link(url, safeUrl(url) ? '開啟原始影片' : url));
+      if (m.firstChild) add(h, m);
+    }
+    add(h, banner(a));
+    if (multi && sources.length) {
+      const d = el('details', 'srcs');
+      d.open = sources.length <= 4;
+      add(d, el('summary', '', '這份筆記合併了 ' + sources.length + ' 支影片'), sourceList(a));
+      add(h, d);
+    }
+    return h;
+  }
+
+  function keyPoints(a, limit) {
+    const items = strs(a.key_points);
+    return items.length ? block('b-kp', '重點', ...list('ol', 'kp', items, limit)) : null;
+  }
+  function timeline(a, limit) {
+    const items = objs(a.timeline, 'label').map(t => {
+      const li = el('li');
+      add(li, timeEl(t.time), el('span', 'tl-l', S(t.label)));
+      if (S(t.detail)) add(li, el('span', 'tl-d', S(t.detail)));
+      return li;
+    });
+    return items.length ? block('b-tl', '時間軸', ...list('ol', 'tl', items, limit)) : null;
+  }
+  function terms(a) {
+    const items = objs(a.terms, 'term');
+    if (!items.length) return null;
+    const dl = el('dl', 'terms');
+    for (const t of items) add(dl, el('dt', '', S(t.term)), el('dd', '', S(t.definition)));
+    return block('b-terms', '名詞解釋', dl);
+  }
+  function actions(a, limit) {
+    const items = strs(a.actions);
+    return items.length ? block('b-acts', '行動清單', ...list('ul', 'acts', items, limit)) : null;
+  }
+  function quotes(a, limit) {
+    const items = objs(a.quotes, 'text');
+    if (!items.length) return null;
+    const shown = limit ? items.slice(0, limit) : items;
+    const figs = shown.map(q => {
+      const f = el('figure', 'quote');
+      add(f, el('blockquote', '', '「' + S(q.text).replace(/^[「『“"]+|[」』”"]+$/g, '') + '」'));
+      const who = S(q.speaker), t = timeEl(q.time);
+      if (who || t) {
+        const c = el('figcaption', '', who ? '—— ' + who + ' ' : '');
+        add(f, add(c, t));
+      }
+      return f;
+    });
+    return block('b-quotes', '金句', ...figs, more(items.length - shown.length));
+  }
+  function perspectives(a, limit) {
+    const items = A(a.perspectives).filter(p => p && typeof p === 'object' && (S(p.who) || S(p.stance)));
+    if (!items.length) return null;
+    const shown = limit ? items.slice(0, limit) : items, grid = el('div', 'persp');
+    for (const p of shown) add(grid, add(el('div'), el('strong', '', S(p.who)), el('span', '', S(p.stance))));
+    return block('b-persp', '各方說法', grid, more(items.length - shown.length));
+  }
+  function caveats(a, limit) {
+    const items = strs(a.caveats);
+    return items.length ? block('b-cav', '注意事項', ...list('ul', 'cav', items, limit)) : null;
+  }
+  function tags(a) {
+    const items = strs(a.tags);
+    if (!items.length) return null;
+    const ul = el('ul', 'tags');
+    ul.setAttribute('aria-label', '標籤');
+    for (const t of items) add(ul, add(el('li'), el('span', 'pill', t)));
+    return ul;
+  }
+  function footer(meta) {
+    const v = S(meta.tool_version), g = S(meta.generated_at).replace('T', ' ').slice(0, 16), p = S(meta.profile_name);
+    return el('footer', 'ft', '由 Video Notes' + (v ? ' ' + v : '') + ' 產生' + (g ? '於 ' + g : '') + (p ? '・方案 ' + p : ''));
+  }
+
+  function stateBox(title, text) {
+    return add(el('main', 'state'), el('h1', '', title), el('p', '', text));
+  }
+  function load() {
+    const node = document.getElementById('vn-data'), raw = node ? node.textContent.trim() : '';
+    if (!raw || raw === '__VN_' + 'DATA__') return { state: 'empty' };
+    try {
+      const d = JSON.parse(raw);
+      if (!d || typeof d !== 'object' || !d.analysis || typeof d.analysis !== 'object' || Array.isArray(d.analysis)) return { state: 'bad' };
+      return { state: 'ok', a: d.analysis, meta: O(d.meta) };
+    } catch (e) { return { state: 'bad' }; }
+  }
+  const BAD = ['讀不到筆記資料', '這個檔案裡的資料不完整或格式壞了。請回到 Video Notes，對這支影片重新產生一次輸出。'];
+  function start(render) {
+    const root = document.getElementById('app'), r = load();
+    if (r.state === 'empty') {
+      add(root, stateBox('這是範本，沒有資料', '這個檔案是 Video Notes 的輸出範本。在 Video Notes 裡選一支影片產生輸出，就會得到填好內容的頁面。'));
+      return;
+    }
+    if (r.state !== 'ok') { add(root, stateBox(BAD[0], BAD[1])); return; }
+    try {
+      initYt(A(r.a.sources));
+      if (S(r.a.title)) document.title = S(r.a.title) + '｜Video Notes';
+      render(root, r.a, r.meta);
+    } catch (e) {
+      root.textContent = '';
+      add(root, stateBox(BAD[0], BAD[1]));
+      return;
+    }
+    /* 列印時把所有收合的內容打開，印完還原 */
+    let closed = [];
+    window.addEventListener('beforeprint', () => {
+      closed = Array.from(document.querySelectorAll('details:not([open])'));
+      closed.forEach(d => { d.open = true; });
+    });
+    window.addEventListener('afterprint', () => { closed.forEach(d => { d.open = false; }); closed = []; });
+  }
+  return { S, A, O, strs, objs, secs, el, add, fmtTime, safeUrl, link, timeEl, paras, more, list, block, pts, banner,
+    sourceList, header, keyPoints, timeline, terms, actions, quotes, perspectives, caveats, tags, footer, start };
+})();
+/* ==== 共用程式結束 ==== */
+
+/* ---- tabs：總覽｜每個最上層段落一頁｜附錄。目前分頁記在網址的 #tab=… ---- */
+VN.start((root, a, meta) => {
+  const { el, add, S } = VN;
+  const secs = VN.secs(a.sections), tabs = [];
+  let cur = 0;
+
+  function panel(id, label, num, kicker, title, start) {
+    const p = el('section', 'panel');
+    if (kicker) add(p, el('p', 'panel-k', kicker));
+    add(p, add(el('h2', 'panel-h', title), VN.timeEl(start)));
+    tabs.push({ id, label, num, panel: p });
+    return p;
+  }
+  /* 子主題：可收合，前兩層預設打開，更深的點了才展開 */
+  function sub(s, depth) {
+    const d = el('details', 'sub'), body = el('div', 'sub-b');
+    d.open = depth <= 3;
+    add(d, add(el('summary'), el('span', '', S(s.title)), VN.timeEl(s.start)));
+    add(body, S(s.summary) ? el('p', 'sum', S(s.summary)) : null, VN.pts(s.points));
+    if (depth < 8) for (const c of VN.secs(s.children)) add(body, sub(c, depth + 1));
+    if (body.firstChild) add(d, body);
+    return d;
+  }
+
+  /* 總覽 */
+  const ov = panel('overview', '總覽', '', '', '總覽');
+  add(ov, VN.paras(a.overview, 'overview'), VN.tags(a), VN.keyPoints(a));
+  if (secs.length > 1) {
+    const syl = el('ol', 'syl');
+    secs.forEach((s, i) => {
+      const b = el('button'), n = VN.secs(s.children).length;
+      b.type = 'button';
+      const desc = S(s.summary) || (n ? n + ' 個子主題' : '');
+      add(b, el('span', 'syl-n', String(i + 1)), add(el('span', 'syl-b'), el('span', 'syl-t', S(s.title)), desc ? el('span', 'syl-d', desc) : null));
+      b.addEventListener('click', () => select(i + 1, { jump: true }));
+      add(syl, add(el('li'), b));
+    });
+    add(ov, VN.block('b-syl', '主題一覽', syl));
+  }
+  add(ov, VN.actions(a), VN.perspectives(a), VN.caveats(a));
+
+  /* 每個最上層段落一頁 */
+  secs.forEach((s, i) => {
+    const p = panel('t' + (i + 1), S(s.title), String(i + 1), '主題 ' + (i + 1) + '／' + secs.length, S(s.title), s.start);
+    add(p, S(s.summary) ? el('p', 'sum', S(s.summary)) : null, VN.pts(s.points));
+    for (const c of VN.secs(s.children)) add(p, sub(c, 2));
+  });
+
+  /* 附錄：有內容才出現 */
+  const extra = [VN.timeline(a), VN.terms(a), VN.quotes(a)].filter(Boolean);
+  const srcList = VN.sourceList(a);
+  if (srcList) extra.push(VN.block('b-src', '來源', srcList));
+  if (extra.length) add(panel('appendix', '附錄', '', '', '附錄'), ...extra);
+
+  /* 分頁列 */
+  const bar = el('div', 'tabbar no-print'), tablist = el('div', 'tablist');
+  tablist.setAttribute('role', 'tablist');
+  tablist.setAttribute('aria-label', '筆記分頁');
+  const main = el('main');
+  tabs.forEach((t, i) => {
+    const b = el('button', 'tab');
+    b.type = 'button'; b.id = 'tab-' + t.id;
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-controls', 'panel-' + t.id);
+    if (t.num) add(b, el('span', 'tab-n', t.num));
+    add(b, el('span', 'tab-t', t.label));
+    b.title = t.label;
+    b.addEventListener('click', () => select(i, {}));
+    t.btn = b;
+    t.panel.id = 'panel-' + t.id;
+    t.panel.setAttribute('role', 'tabpanel');
+    t.panel.setAttribute('aria-labelledby', b.id);
+    t.panel.tabIndex = 0;
+    /* 上一個／下一個主題 */
+    if (tabs.length > 1) {
+      const nav = el('nav', 'pager no-print');
+      nav.setAttribute('aria-label', '前後分頁');
+      const mk = (j, cls, word) => {
+        const pb = el('button', cls);
+        pb.type = 'button';
+        add(pb, el('small', '', word), document.createTextNode(tabs[j].label));
+        pb.addEventListener('click', () => select(j, { jump: true }));
+        return pb;
+      };
+      add(nav, i > 0 ? mk(i - 1, 'prev', '← 上一頁') : null, i < tabs.length - 1 ? mk(i + 1, 'next', '下一頁 →') : null);
+      add(t.panel, nav);
+    }
+    add(tablist, b);
+    add(main, t.panel);
+  });
+  tablist.addEventListener('keydown', e => {
+    const n = tabs.length;
+    const to = { ArrowRight: (cur + 1) % n, ArrowLeft: (cur - 1 + n) % n, Home: 0, End: n - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault();
+    select(to, { focus: true });
+  });
+
+  function select(i, opt) {
+    cur = i;
+    tabs.forEach((t, j) => {
+      const on = j === i;
+      t.btn.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.btn.tabIndex = on ? 0 : -1;
+      t.panel.hidden = !on;
+    });
+    const t = tabs[i];
+    if (!opt.silent) {
+      try { history.replaceState(null, '', '#tab=' + t.id); } catch (e) { /* 有些環境不允許改網址，分頁照樣能用 */ }
+    }
+    if (t.btn.scrollIntoView) t.btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (opt.focus) t.btn.focus();
+    if (opt.jump) {
+      if (main.scrollIntoView) main.scrollIntoView();
+      t.panel.focus({ preventScroll: true });
+    }
+  }
+  function fromHash() {
+    const m = /^#tab=([\w-]+)$/.exec(location.hash || '');
+    const i = m ? tabs.findIndex(t => t.id === m[1]) : -1;
+    return i < 0 ? 0 : i;
+  }
+
+  const wrap = el('div', 'wrap');
+  add(wrap, VN.header(a, meta), add(bar, tablist), main);
+  add(root, wrap, VN.footer(meta));
+  select(fromHash(), { silent: true });
+  window.addEventListener('hashchange', () => select(fromHash(), { silent: true }));
+});
+</script>
+</body>
+</html>

@@ -17,23 +17,41 @@
   <div class="chips" id="env-chips"></div>
   <button id="btn-settings" class="ghost">⚙ 設定</button>
 </header>
+<div id="alert-bar" hidden></div>
 
 <main class="layout">
   <section class="left">
     <div class="card">
       <h2>新增影片</h2>
       <textarea id="urls" rows="3" placeholder="貼上影片網址，一行一個（YouTube、Shorts、TikTok、IG Reels、Bilibili…）"></textarea>
-      <div class="grid2">
-        <label>整理方式<select id="profile"></select></label>
-        <label>常用組合<select id="preset"><option value="">（不使用）</option></select></label>
-      </div>
+
       <div class="field">
-        <span class="label">加料（可以多選）</span>
-        <div id="modifiers" class="toggles"></div>
+        <span class="label">模式（選一個，會自動帶入適合的整理方式與輸出）</span>
+        <div id="presets" class="preset-cards"></div>
       </div>
-      <label class="field">特別想知道（選填）
-        <input id="focus" placeholder="例如：AI 伺服器、對台積電的看法——無關的內容會被濃縮成一行">
+
+      <details id="advanced" class="field">
+        <summary>進階：自己挑整理方式、加料、關注重點</summary>
+        <label class="field">整理方式<select id="profile"></select></label>
+        <div class="field">
+          <span class="label">加料（可以多選）</span>
+          <div id="modifiers" class="toggles"></div>
+        </div>
+        <label class="field">特別想知道（選填）
+          <input id="focus" placeholder="例如：AI 伺服器、對台積電的看法——無關的內容會被濃縮成一行">
+        </label>
+      </details>
+
+      <div class="field">
+        <span class="label">輸出形式（Markdown 筆記一定會產生；其他可以多選，之後也能隨時補產生）</span>
+        <div id="outputs"></div>
+      </div>
+
+      <label class="field">語音辨識
+        <select id="stt"></select>
       </label>
+      <div id="stt-hint" class="muted small"></div>
+
       <div class="options">
         <label class="check"><input type="checkbox" id="opt-transcript-only"> 只產生逐字稿（不呼叫 AI）</label>
         <label class="check"><input type="checkbox" id="opt-keep-video"> 保留影片檔</label>
@@ -49,7 +67,13 @@
       <button data-tab="library">筆記庫</button>
     </nav>
     <div id="jobs" class="list"></div>
-    <div id="library" class="list" hidden></div>
+    <div id="library" hidden>
+      <div id="lib-actions" class="lib-actions" hidden></div>
+      <h3 class="lib-head">影片</h3>
+      <div id="lib-videos" class="list"></div>
+      <h3 class="lib-head">合併的筆記</h3>
+      <div id="lib-collections" class="list"></div>
+    </div>
   </section>
 
   <section class="right card" id="viewer">
@@ -67,10 +91,12 @@
         <div class="actions">
           <select id="v-note-select" title="這支影片的其他筆記（不同整理方案）"></select>
           <button id="v-copy" class="primary">📋 複製 Markdown</button>
-          <button id="v-redo" class="ghost" title="用目前表單的設定重新整理這支影片">🔁 換方案重做</button>
+          <button id="v-render" class="ghost" title="用已經分析好的結果產生其他格式（不花 token）">🧩 產生其他輸出</button>
+          <button id="v-redo" class="ghost" title="沿用逐字稿，換一個模式重新分析（會花 token）">🔁 換模式重新分析</button>
           <button id="v-open" class="ghost">📂 資料夾</button>
         </div>
       </div>
+      <div id="v-outputs" class="out-row" hidden></div>
       <nav class="tabs small" id="view-tabs">
         <button data-view="rendered" class="active">筆記</button>
         <button data-view="markdown">Markdown</button>
@@ -96,9 +122,25 @@
     <h2>這些影片處理過了</h2>
     <p class="muted small">已經有的檔案預設沿用（省時間也省 API 費用）。要重做哪些？重新下載或重新轉錄時，後面的步驟會跟著重做。</p>
     <div id="redo-rows"></div>
+    <div id="redo-outputs" class="field" hidden>
+      <span class="label">要補產生哪些輸出（不花 token）</span>
+      <div id="redo-outputs-box"></div>
+    </div>
     <div class="dialog-actions">
       <button value="cancel" class="ghost">取消</button>
       <button value="ok" class="primary" id="redo-ok">開始處理</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-act">
+  <form method="dialog" id="act-form">
+    <h2 id="act-title"></h2>
+    <div id="act-body"></div>
+    <div id="act-msg" class="act-msg" hidden></div>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="act-cancel">取消</button>
+      <button type="submit" class="primary" id="act-ok">確定</button>
     </div>
   </form>
 </dialog>
@@ -117,12 +159,21 @@
     </fieldset>
 
     <fieldset>
+      <legend>預設輸出形式</legend>
+      <div class="muted small">每次處理完自動多產生這些格式（Markdown 筆記一定會有）。新增影片時還是可以臨時改。</div>
+      <div id="s-outputs"></div>
+    </fieldset>
+
+    <fieldset>
       <legend>AI 整理</legend>
       <div class="grid2">
         <label>服務<select id="s-provider"></select></label>
         <label>模型<input id="s-model" list="model-hints" placeholder="空白 = 預設"></label>
       </div>
       <datalist id="model-hints"></datalist>
+      <label id="s-compat-row" hidden>相容端點網址
+        <input id="s-compat" placeholder="例如 http://127.0.0.1:11434/v1（Ollama）">
+      </label>
       <div class="key-row">
         <input id="s-key" type="password" placeholder="貼上這個服務的 API Key（存到共用金鑰檔）" autocomplete="off">
         <button type="button" id="s-key-save" class="ghost">儲存金鑰</button>
@@ -132,8 +183,11 @@
 
     <fieldset>
       <legend>語音辨識</legend>
+      <label>服務<select id="s-stt"></select></label>
+      <div class="muted small" id="s-stt-hint"></div>
+      <label class="check"><input type="checkbox" id="s-stt-fallback"> 雲端辨識失敗時，退回本機辨識（本機不會自動改用雲端）</label>
       <div class="grid3">
-        <label>模型<select id="s-whisper"></select></label>
+        <label>本機模型<select id="s-whisper"></select></label>
         <label>裝置<select id="s-device"><option value="auto">自動</option><option value="cuda">GPU</option><option value="cpu">CPU</option></select></label>
         <label>語言<input id="s-language" list="lang-hints" placeholder="auto"></label>
       </div>
@@ -142,11 +196,21 @@
     </fieldset>
 
     <fieldset>
+      <legend>多支合併</legend>
+      <label>預估超過幾個 token 就先問我一次<input id="s-combine-tokens" type="number" min="1000" step="5000"></label>
+    </fieldset>
+
+    <fieldset>
       <legend>進階</legend>
       <div class="grid2">
         <label>同時處理幾支影片<input id="s-parallel" type="number" min="1" max="8"></label>
-        <label>長逐字稿分段門檻（字）<input id="s-long" type="number" min="5000" step="5000"></label>
+        <label>同時下載幾支<input id="s-dl-parallel" type="number" min="1" max="6"></label>
       </div>
+      <div class="grid2">
+        <label>影片之間至少隔幾秒<input id="s-sleep-min" type="number" min="0" step="1"></label>
+        <label>最多隔幾秒<input id="s-sleep-max" type="number" min="0" step="1"></label>
+      </div>
+      <label>長逐字稿分段門檻（字）<input id="s-long" type="number" min="5000" step="5000"></label>
       <label>需要登入才看得到的影片：用哪個瀏覽器的登入狀態
         <select id="s-cookies"><option value="">不使用</option><option>chrome</option><option>edge</option><option>firefox</option><option>brave</option></select>
       </label>
