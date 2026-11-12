@@ -10,7 +10,10 @@ import base64
 import hmac as _hmac
 import re
 
-from ..sealed.errors import SealError
+try:  # 測試時是 crypto_tool.agefmt；從 GUI__Encrypter.py 執行時 crypto_tool/ 在 sys.path 上，是 agefmt
+    from ..sealed.errors import SealError
+except ImportError:  # pragma: no cover - 依執行方式而定
+    from sealed.errors import SealError
 
 try:  # cryptography 42 起就有下面這些 API
     from cryptography.exceptions import InvalidTag
