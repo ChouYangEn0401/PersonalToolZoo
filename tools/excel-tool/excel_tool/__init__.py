@@ -14,4 +14,4 @@ Phase 1 delivers the skeleton + empty-shell tabs only; each tab's controls are
 filled in on later phases.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
