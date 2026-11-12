@@ -328,7 +328,7 @@ DLL 不齊時自動改用 CPU（int8，比較慢）。設定頁標題列會顯�
 | 項目 | 內容 |
 |---|---|
 | 入口 | `VideoNotes.py`（無參數 → `video_notes/web/server.py` 的 GUI；有參數 → `video_notes/cli.py`） |
-| 版本號 | `version.py` 的 `__version__` → exe 檔名 `VideoNotes(vX.Y.Z).exe`、GUI 標題與 CLI |
+| 版本號 | `version.py` 的 `__version__` → exe 檔名 `VideoNotes(vX.Y.Z).exe`、GUI 標題與 CLI。目前是 **2.2.0-alpha（內部測試版，v2 架構）**；實測沒問題後用 `release.ps1 video-notes 2.2.0 -NoSmoke` 轉正式版 |
 | 環境 | 有第三方套件 → `tools\video-notes\.venv` |
 | 依賴 | `yt-dlp[default]<2028`（網站常改版，上限刻意給到年底後一年）、`faster-whisper<2`、`nvidia-cublas-cu12<13`、`nvidia-cudnn-cu12<10`、`opencc-python-reimplemented<0.2`、`claude-subscription`（Claude 訂閱，釘在 GitHub tag `v0.2.1`，安裝要有 git）、`openai<3`、`anthropic<2`、`fastapi<1`、`uvicorn<1` |
 | 預設 AI | Claude 訂閱（`claude-sub`，模型 `sonnet`）——要先安裝並登入 Claude Code，**會用掉訂閱額度**；存過設定的人照原本的選擇 |
