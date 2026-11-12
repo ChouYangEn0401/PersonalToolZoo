@@ -213,15 +213,16 @@ pre { margin: 0; background: var(--code-bg); border-radius: 8px; padding: 12px 1
       </article>
 
       <article class="tool" id="t-encrypter">
-        <header><h3>Encrypter</h3><span class="short">enc · tools/encrypter</span><span class="ver">v0.3.0</span><span class="pill ok">穩定</span></header>
-        <p class="purpose">檔案與文字加密，自訂 <code>.isd</code> 格式，支援多種演算法與 Mixture（多階段）加密模式。</p>
+        <header><h3>Encrypter</h3><span class="short">enc · tools/encrypter</span><span class="ver">v0.3.0</span><span class="pill ok">穩定</span><span class="pill warn">開發線上有改版，待驗收</span></header>
+        <p class="purpose">把檔案或資料夾加密成 <code>.isd2</code>（標準的認證加密），有視窗也有命令列。已發布的 v0.3.0 是舊版：自訂 <code>.isd</code> 格式、多種演算法與 Mixture（多階段）模式。</p>
         <dl class="facts">
-          <dt>現況</dt><dd>這次沒改程式。10/27 幫 <code>pycryptodome</code>、<code>tkinterdnd2</code> 補上主版本上限（原本只寫 <code>&gt;=</code>）。</dd>
+          <dt>現況</dt><dd>已發布的仍是 v0.3.0。<strong>11/12 在 <code>dev/encrypter</code> 做了改版，還沒合併、還沒發版</strong>：① 命令列 <code>python -m crypto_tool encrypt|decrypt|info|keygen</code>（單檔與資料夾、<code>--json</code>、固定退出碼、目標已存在就拒絕、密語只能從標準輸入給），給別的程式呼叫；② 新格式 ISD2：AES-256-GCM／ChaCha20-Poly1305、密語走 scrypt、分塊驗證，改動或截斷都會明確失敗；③ 新介面：加密／解密／金鑰／關於，簡單模式為預設；④ 舊的 <code>.isd</code>、Mixture、PGP、大檔分段沒刪，收進「關於 → 開啟舊版工具」，只建議用來解舊檔。Mixture 兩種模式為什麼一直改不對、之後的選項，寫在 <code>tools/encrypter/docs/handoffs/</code> 的交接單。</dd>
+          <dt>金鑰</dt><dd>金鑰檔（例如 <code>.decryption_code.env</code>）或密語不見，加密的東西就打不開，沒有救援方法。<strong>一定要在這台電腦以外另外留一份</strong>，也不要跟加密檔放在同一個地方。細節見工具 README「金鑰要怎麼放」。</dd>
           <dt>來源</dt><dd>封存分支 <code>feat/Encrypter/all_platform</code>。開發線 <code>dev/encrypter</code>，tag <code>Encrypter_v0.3.0</code>。</dd>
           <dt>資料</dt><dd>不存設定，只寫你選的加密／解密輸出檔。</dd>
           <dt>AI</dt><dd>無</dd>
-          <dt>驗證</dt><dd>打包 OK（19.3 MB）。7 個測試全過（用不需要 pytest 的方式跑，沒有往環境裡另外裝套件）。</dd>
-          <dt>注意</dt><dd><code>ttkbootstrap</code> 不能升 2.x（打包後一啟動就崩潰）。版本照 0.3.x 往下發；文件裡的 1.0～1.4 是開發時的內部編號。</dd>
+          <dt>驗證</dt><dd>v0.3.0：打包 OK（19.3 MB），7 個測試全過。改版：新測試 76 個全過（unittest，只用標準庫；在另一個有 <code>cryptography</code> 的 Python 上跑的）。<strong>還沒驗證</strong>：新介面的畫面沒有人看過（要在真的電腦上跑 <code>run.bat</code>，照 <code>docs/ui-spec.md</code> 的清單看）、工具自己的環境還沒裝 <code>cryptography</code>、<code>build.ps1 enc</code> 還沒跑。</dd>
+          <dt>注意</dt><dd><code>ttkbootstrap</code> 不能升 2.x（打包後一啟動就崩潰）。版本照 0.3.x／0.4.0 往下發；文件裡的 1.0～1.4 是開發時的內部編號。打包的 exe 沒有主控台，命令列要從原始碼執行。舊版的 <code>core/</code> 與 <code>gui/tab_*.py</code> 不要改（舊檔靠它們解）。</dd>
         </dl>
       </article>
 

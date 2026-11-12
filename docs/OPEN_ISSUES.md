@@ -82,8 +82,13 @@
 
 - **Video Downloader 的 web API 測試**需要 `httpx2`，它不在工具自己的環境裡，所以在自己的 `.venv` 跑時那 2 個測試會略過
   （用 Video Notes 的環境跑就 10/10）。要的話把測試依賴寫成獨立的 requirements。
-- **Encrypter 的測試**：README 叫你手動 `pip install pytest` 進工具的環境，跟 AGENTS.md「不要手動往 venv 裝套件」衝突。
-  測試本身是純 `assert` 函式，2026-10-27 是用不需要 pytest 的方式跑的（7 個全過）。要的話把它改成 unittest，或把 pytest 列成獨立的測試依賴。
+- **Encrypter 改版（`dev/encrypter`，2026-11-12）還沒驗收、還沒合併**：命令列、新格式 ISD2、新介面都寫好了，新測試 76 個全過。
+  剩下三件要在真的電腦上做：① 跑 `tools\encrypter\run.bat`，照 `tools/encrypter/docs/ui-spec.md` 最後的清單把畫面看一遍（畫面沒有人看過）；
+  ② 用工具自己的環境跑 `python -m unittest discover -s tools\encrypter\tests -v`（應該 83 個，含舊的 7 個）；
+  ③ `build.ps1 enc`（新增了 `cryptography`，要確認打包後開得起來）。都過了再 `git merge --no-ff dev/encrypter`，建議發 0.4.0。
+  要你決定的事（之後要不要做「多把鑰匙都到齊才能開」「多人各自能開」、手上有沒有舊 `.isd` 要轉、解密結果要不要能直接給程式讀）
+  都有預設，寫在 `tools/encrypter/docs/handoffs/20261112-223325-encrypter-intent-and-redesign.md` 的選項表。
+- **金鑰檔要另外備份**：Encrypter 的金鑰檔或密語不見就打不開。開始用它加密真的東西之前，先把金鑰檔複製一份到這台電腦以外的地方。
 - **Claude 訂閱**：「檢查 Claude Code」只確認找得到執行檔，登入過期要到第一次真的呼叫才知道；每次呼叫都用訂閱額度。
 - **HANDOFF.html 在 GitHub 上看不到排版**（GitHub 只顯示 HTML 原始碼）：在本機用瀏覽器打開，或看 claude.ai 上的同名 artifact。
 
@@ -98,6 +103,7 @@
 | 2026-10-23 | Change Folder Cover 一直沒成功 | 用 Windows 的 `SHGetSetFolderCustomSettings` 重做成 `tools/folder-cover`（v1.0.0） |
 | 2026-10-23 | 從原始碼執行容易用錯環境 | 每個工具一支 `run.bat`（`scripts/run.ps1`），`--check-all` 一次檢查全部 |
 | 2026-10-27 | 4 個工具的依賴只寫 `>=`（Encrypter、Excel Tool、HashMyFile、Table Converter） | 照 venv 裡實際的版本補上主版本上限，重新 build 冒煙測試 OK |
+| 2026-11-12 | Encrypter 的測試要手動 `pip install pytest` 進工具的環境 | 新測試都用標準庫的 unittest 寫，舊的 7 個用 `tests/test_legacy_core.py` 包起來；指令改成 `python -m unittest discover -s tools\encrypter\tests -v`（在 `dev/encrypter`，隨改版一起合併） |
 | 2026-10-27 | 每個工具沒有自己的開發線 | 開 15 條 `dev/<工具資料夾>`，流程寫進 README「開發線」與 AGENTS.md |
 | 2026-10-27 | GitHub 上的 `feat/tool-migration`（舊的 41 個 commit） | 確認它的內容都在 master 之後刪除 |
 | 2026-10-27 | push 前要確認沒有機密 | 掃完所有分支與 tag 的歷史：沒有金鑰、`.env` 與 `data\` 沒被追蹤；之後 push 到 GitHub |
