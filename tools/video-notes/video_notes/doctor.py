@@ -86,8 +86,9 @@ def _check_ffmpeg(env: Env) -> dict:
     if path:
         return _item("ffmpeg", "ok", f"找到：{path}")
     err = ToolError("dependency_missing", "找不到 ffmpeg，下載合併與抽音訊會失敗", source="ffmpeg",
-                    remedy=Remedy("needs_config", "安裝 ffmpeg 並加入 PATH，或在設定裡指定 ffmpeg.exe 的位置",
-                                  "https://ffmpeg.org/download.html"))
+                    remedy=Remedy("auto_fixable", "在 GUI 的「環境」按「一鍵下載 ffmpeg」，或執行 VideoNotes --install-deps ffmpeg；"
+                                  "也可以自己裝：winget install Gyan.FFmpeg",
+                                  "https://www.gyan.dev/ffmpeg/builds/"))
     return _item("ffmpeg", "error", err.reason, err)
 
 
@@ -108,14 +109,17 @@ def _check_js(env: Env) -> dict:
         return _item("JavaScript 執行環境", "ok", "、".join(notes))
     if not found:
         err = ToolError("dependency_missing", "找不到 JavaScript 執行環境（YouTube 需要 Deno 2.3 以上或 Node 22 以上）",
-                        source="yt-dlp", remedy=Remedy("needs_config", "安裝 Deno 2.3 以上或 Node.js 22 以上並加入 PATH",
-                                                       "https://github.com/yt-dlp/yt-dlp/wiki/EJS"))
+                        source="yt-dlp", remedy=Remedy(
+                            "auto_fixable", "在 GUI 的「環境」按「一鍵下載 Deno」，或執行 VideoNotes --install-deps deno；"
+                            "也可以自己裝：winget install DenoLand.Deno（或 Node.js 22 以上）",
+                            "https://github.com/yt-dlp/yt-dlp/wiki/EJS"))
         return _item("JavaScript 執行環境", "error", err.reason, err)
     if all("版本不明" in n for n in notes):
         return _item("JavaScript 執行環境", "warn", "、".join(notes) + "；無法確認版本夠不夠新")
     err = ToolError("dependency_outdated", "JavaScript 執行環境版本太舊（需要 Deno 2.3 以上或 Node 22 以上）",
                     detail="、".join(notes), source="yt-dlp",
-                    remedy=Remedy("needs_update", "升級 Deno 或 Node.js", "https://github.com/yt-dlp/yt-dlp/wiki/EJS"))
+                    remedy=Remedy("needs_update", "升級 Node.js，或在 GUI 的「環境」按「一鍵下載 Deno」"
+                                  "（VideoNotes --install-deps deno）", "https://github.com/yt-dlp/yt-dlp/wiki/EJS"))
     return _item("JavaScript 執行環境", "error", "、".join(notes), err)
 
 

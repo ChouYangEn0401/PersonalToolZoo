@@ -17,6 +17,14 @@ from toolzoo.appdirs import load_env  # noqa: E402
 # 專案 .env 的參數（CLAUDE_BINARY、VIDEO_NOTES_MODEL_DIR、VIDEO_NOTES_CUDA_DIR…）；已設定的環境變數優先
 load_env()
 
+# 之前用「一鍵下載」裝到 data\bin\ 的 ffmpeg／Deno 放進 PATH（yt-dlp 與 ffmpeg 的搜尋都看 PATH）
+try:
+    from video_notes.deps import activate as _activate_deps
+
+    _activate_deps()
+except OSError:
+    pass   # 讀不到 data 資料夾就當沒裝；自我檢查會說缺什麼
+
 
 def main() -> None:
     args = sys.argv[1:]

@@ -212,6 +212,8 @@ legend { font-weight: 600; padding: 0 6px; }
 }
 .alert-item + .alert-item { margin-top: 6px; }
 .alert-item strong { color: var(--warn); }
+.dep-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 2px; }
+.dep-actions code { font-size: 12px; padding: 2px 6px; border-radius: 6px; background: var(--card); user-select: all; }
 
 .preset-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 4px; }
 .preset-card {

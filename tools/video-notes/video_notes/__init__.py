@@ -17,6 +17,7 @@
     library     筆記庫（影片與合併）
     health      依賴壞掉的記帳（連續失敗 3 次就不再自動重試）
     doctor      不連網的自我檢查
+    deps        缺 ffmpeg／Deno 時從官方一鍵下載到 data/bin/（核對 SHA-256），並加進 PATH
     jobs        多支影片同時處理（GUI 與 CLI 批次共用）
     notify      socket 模式：把結果 POST 給別的程式
     cli / web   兩種介面，底層完全相同

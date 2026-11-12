@@ -99,6 +99,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--stt-model", help="雲端語音辨識的模型（空白 = 該服務的預設）")
     p.add_argument("--check", action="store_true", help="自我檢查（ffmpeg、JS 環境、yt-dlp、金鑰、壞掉記帳…）；有錯誤退出碼 3")
     p.add_argument("--recheck", action="store_true", help="先清掉「壞掉」記帳再檢查（等於 --check，並重新給依賴一次機會）")
+    p.add_argument("--install-deps", metavar="名稱", nargs="?", const="missing",
+                   help="從官方下載 ffmpeg／Deno 到工具旁邊的 data\\bin\\：ffmpeg、deno、all，或不給 = 缺的才裝。"
+                        "會先問你；非互動或 --json 時必須加 --yes")
     p.add_argument("--status", action="store_true", help="目前有哪些工作＋依賴健康狀態（只讀；配 --json）")
     p.add_argument("--library", action="store_true", help="列出輸出資料夾裡的筆記庫：影片與合併（只讀；配 --json）")
     p.add_argument("--render", metavar="資料夾", help="只從既有的分析結果產生輸出，不呼叫 AI（要配 --outputs）")
@@ -450,6 +453,55 @@ def _combine(args, lib, settings: Settings, plan, root: Path, members: list[Memb
     return out
 
 
+def _run_install_deps(args) -> int:
+    """--install-deps：從官方下載 ffmpeg／Deno（先列出要下載什麼、從哪裡、多大，經過同意才下載）。"""
+    from video_notes import deps
+
+    want = args.install_deps.strip().lower()
+    if want == "missing":
+        names = deps.missing()
+    elif want == "all":
+        names = list(deps.COMPONENTS)
+    else:
+        names = [n.strip() for n in want.split(",") if n.strip()]
+        unknown = [n for n in names if n not in deps.COMPONENTS]
+        if unknown:
+            raise _bad_input(f"不認得：{', '.join(unknown)}", f"可用：{', '.join(deps.COMPONENTS)}、all")
+    if not names:
+        return _ok(args, {"installed": {}, "status": deps.status()}, "ffmpeg 與 JavaScript 執行環境都已經有了，不用下載。")
+
+    plan_lines = [f"- {deps.COMPONENTS[n].label}（{deps.COMPONENTS[n].size_hint}，{deps.COMPONENTS[n].license}）"
+                  f"：{deps.COMPONENTS[n].url}" for n in names]
+    _info(args, "要從官方下載（下載後會核對 SHA-256，放在工具旁邊的 data\\bin\\）：\n" + "\n".join(plan_lines))
+    if not args.yes:
+        if args.json or not sys.stdin.isatty():
+            raise _bad_input("下載前需要同意", "確定要下載的話加上 --yes")
+        if not _ask("要下載嗎？"):
+            raise ToolError("cancelled", "你選擇不下載", source="cli")
+
+    installed: dict[str, str] = {}
+    errors: list[ToolError] = []
+    for name in names:
+        last = [-1]
+
+        def progress(frac: float, text: str, _last=last) -> None:
+            pct = int(frac * 100)
+            if pct // 10 != _last[0] // 10:     # 每 10% 印一次，不洗版
+                _info(args, f"  {text}")
+                _last[0] = pct
+
+        try:
+            installed[name] = str(deps.install(name, on_progress=progress))
+            _info(args, f"  ✓ {deps.COMPONENTS[name].label}：{installed[name]}")
+        except ToolError as err:
+            errors.append(err)
+            _info(args, f"  ✗ {deps.COMPONENTS[name].label}：{err.reason}")
+    data = {"installed": installed, "status": deps.status()}
+    if errors:
+        return _fail(args, _worst(errors), data)
+    return _ok(args, data, "完成。用 --check 確認環境。")
+
+
 def main(argv: list[str] | None = None) -> int:
     # 主控台：Windows 會用 Unicode API 寫出，什麼字都能顯示。被導到管線 / 檔案時（例如 --json 給別的程式讀）
     # 統一用 UTF-8；打包後的 exe 不吃 PYTHONIOENCODING，不這樣做就會變成 cp950，emoji 與簡體字會壞掉。
@@ -480,6 +532,8 @@ def _dispatch(args) -> int:
 
     base = load_settings()
     settings = _settings_from_args(args, base)
+    if args.install_deps:
+        return _run_install_deps(args)
     if args.check or args.recheck:
         return _run_check(args, settings)
     if args.status:
