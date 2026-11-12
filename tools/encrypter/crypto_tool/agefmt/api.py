@@ -3,7 +3,7 @@
 * ``encrypt_stream``／``decrypt_stream``：在已開啟的二進位串流上工作，記憶體不隨大小成長。
   注意 ``decrypt_stream`` 會邊驗證邊寫出「已驗證的分塊」；要「全部驗證通過才出現結果」
   請用 ``decrypt_file``。
-* ``encrypt_file``／``decrypt_file``：輸出先寫暫存檔、fsync，
+* ``encrypt_file``／``decrypt_file``／``rewrap``／``rekey``：輸出先寫暫存檔、fsync，
   全部成功才原子換名；失敗時刪掉暫存檔。
 * ``inspect``：不需要金鑰，看標頭與大小。
 * 結果物件只含公開資訊（種類、數量、大小、公鑰），不含金鑰、密語或明文。
@@ -11,11 +11,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterable
 
 from ._common import fail, header_error
 from ._fileio import as_path, atomic_write, check_input, check_output, same_file
@@ -53,6 +54,22 @@ class DecryptResult:
     stanza_types: tuple[str, ...]
     matched: str            # "X25519 age1…"（公鑰）或 "scrypt"
     plaintext_size: int
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class RewrapResult:
+    output: str | None
+    armored: bool
+    old_stanza_types: tuple[str, ...]
+    new_recipient_types: tuple[str, ...]
+    new_recipient_count: int
+    matched: str
+    payload_size: int        # 原封不動搬過去的內容位元組數（含 16 位元組 nonce）
+    payload_sha256: str      # 那段內容（密文）的 SHA-256，方便比對「內容沒變」
+    payload_verified: bool
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -319,6 +336,132 @@ def inspect(path) -> AgeInfo:
                    file_size, "scrypt" in counts, work_factor)
 
 
+# --- 換鎖（rewrap）與換檔案金鑰（rekey）-------------------------------------------------
+
+class _Tee:
+    """讀來源的同時把讀到的位元組原封不動寫出去（rewrap 搬內容用）。"""
+
+    def __init__(self, read, write):
+        self._read = read
+        self._write = write
+        self.hash = hashlib.sha256()
+        self.n = 0
+
+    def read(self, n: int) -> bytes:
+        data = self._read(n)
+        if data:
+            self._write(data)
+            self.hash.update(data)
+            self.n += len(data)
+        return data
+
+
+class _IterReader:
+    """把「一塊一塊產生的明文」變成有 read(n) 的物件（rekey 用，不落地）。"""
+
+    def __init__(self, chunks: Iterable[bytes]):
+        self._it = iter(chunks)
+        self._buf = b""
+
+    def read(self, n: int) -> bytes:
+        while len(self._buf) < n:
+            try:
+                self._buf += next(self._it)
+            except StopIteration:
+                break
+        out, self._buf = self._buf[:n], self._buf[n:]
+        return out
+
+
+def _prepare_replace(src, dst, overwrite: bool) -> tuple[Path, Path]:
+    src_p, dst_p = as_path(src, "輸入"), as_path(dst, "輸出")
+    check_input(src_p)
+    if same_file(src_p, dst_p):
+        if not overwrite:
+            raise fail("output_exists", "輸出位置就是輸入檔；要原地換鎖必須明確要求覆蓋。",
+                       "換一個輸出位置，或確定要取代原檔時明確要求覆蓋。")
+    else:
+        check_output(dst_p, overwrite)
+    return src_p, dst_p
+
+
+def rewrap(src, dst, identities, new_recipients, *, armor: bool | None = None,
+           overwrite: bool = False, verify_payload: bool = True) -> RewrapResult:
+    """換鎖：用任一把能開的身分取出 file key，以新的收件人集合重建標頭（新 MAC），
+    內容（nonce 與所有密文分塊）的位元組原封不動。
+
+    限制（誠實說明）：file key 沒換，所以「舊檔案的副本」仍然可以被舊鑰匙打開，
+    曾經拿到 file key 的人也仍然能解新檔。要真正撤銷舊鑰匙請用 ``rekey``。
+    因為這個原因，新收件人是密語時，只允許來源本來就只有密語（換密語）。
+
+    armor=None 時沿用來源的形式。verify_payload=True 時會先把整份內容驗證一遍
+    （不輸出明文），損壞的檔案不會被換鎖。
+    """
+    src_p, dst_p = _prepare_replace(src, dst, overwrite)
+    ids = _normalize_identities(identities)
+    recips = normalize_recipients(new_recipients)
+
+    def work(out):
+        with open(src_p, "rb") as fin:
+            source, src_armored, _ = _open_source(fin, None)
+            header = parse_header(source)
+            file_key, matched = _unwrap(header, ids)
+            if any(isinstance(r, ScryptRecipient) for r in recips) and header.stanza_types != ("scrypt",):
+                raise fail(
+                    "bad_input",
+                    "換鎖不會更換檔案金鑰，原本的收件人仍然知道它；改成密語保護會讓密語失去「只有知道密語的人能做出這個檔」的保證。",
+                    "改用 rekey（換檔案金鑰、整份重新加密）來改成密語保護。",
+                    "rewrap-to-scrypt",
+                )
+            use_armor = src_armored if armor is None else bool(armor)
+            counted = _Counter(out.write)
+            writer = ArmorWriter(counted) if use_armor else counted
+            new_header = seal_header(file_key, [r.wrap(file_key) for r in recips])
+            writer.write(new_header.marshal())
+            tee = _Tee(source.read, writer.write)
+            nonce = _read_nonce(tee)
+            if verify_payload:
+                for _ in decrypt_payload(tee.read, payload_key(file_key, nonce)):
+                    pass
+            else:
+                while tee.read(1 << 16):
+                    pass
+            if use_armor:
+                writer.close()
+            return RewrapResult(str(dst_p), use_armor, header.stanza_types,
+                                tuple(r.kind for r in recips), len(recips), matched,
+                                tee.n, tee.hash.hexdigest(), verify_payload)
+
+    return atomic_write(dst_p, True if same_file(src_p, dst_p) else overwrite, work)
+
+
+def rekey(src, dst, identities, new_recipients, *, armor: bool | None = None,
+          overwrite: bool = False, progress: Progress | None = None) -> EncryptResult:
+    """換檔案金鑰：解開後用新的 file key 與 nonce 整份重新加密（明文不落地）。
+
+    之後只有新收件人打得開新檔；但已經流出去的舊檔副本，舊鑰匙仍然打得開。
+    """
+    src_p, dst_p = _prepare_replace(src, dst, overwrite)
+    ids = _normalize_identities(identities)
+    recips = normalize_recipients(new_recipients)
+    size = src_p.stat().st_size
+
+    def work(out):
+        with open(src_p, "rb") as fin:
+            source, src_armored, _ = _open_source(fin, None)
+            header = parse_header(source)
+            file_key, _matched = _unwrap(header, ids)
+            nonce = _read_nonce(source)
+            plain = decrypt_payload(source.read, payload_key(file_key, nonce))
+            use_armor = src_armored if armor is None else bool(armor)
+            return encrypt_stream(_IterReader(plain), out, recips, armor=use_armor,
+                                  progress=_progress_adapter(progress, size))
+
+    r = atomic_write(dst_p, True if same_file(src_p, dst_p) else overwrite, work)
+    return EncryptResult(str(dst_p), r.armored, r.recipient_types, r.recipient_count,
+                         r.plaintext_size, r.output_size)
+
+
 # --- 記憶體內的小工具（身分檔等小資料用）-------------------------------------------------
 
 def encrypt_bytes(data: bytes, recipients, *, armor: bool = False) -> bytes:
@@ -334,7 +477,7 @@ def decrypt_bytes(data: bytes, identities, *, armor: bool | None = None) -> byte
 
 
 __all__ = [
-    "AgeInfo", "DecryptResult", "EncryptResult", "decrypt_bytes", "decrypt_file",
+    "AgeInfo", "DecryptResult", "EncryptResult", "RewrapResult", "decrypt_bytes", "decrypt_file",
     "decrypt_stream", "detect", "encrypt_bytes", "encrypt_file", "encrypt_stream", "inspect",
-    "is_age", "normalize_recipients",
+    "is_age", "normalize_recipients", "rekey", "rewrap",
 ]
