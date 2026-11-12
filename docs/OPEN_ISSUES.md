@@ -3,7 +3,7 @@
 > 還沒處理、需要使用者決定、或之後要做的事。整體交接（每個工具的版本、用途、狀態）在 [HANDOFF.html](HANDOFF.html)。
 > 處理完一項就把它移到最下面的「已解決」，寫上日期與怎麼解決的。
 
-最後更新：2026-11-12
+最後更新：2026-11-13
 
 ## 要你決定
 
@@ -82,17 +82,15 @@
 
 - **Video Downloader 的 web API 測試**需要 `httpx2`，它不在工具自己的環境裡，所以在自己的 `.venv` 跑時那 2 個測試會略過
   （用 Video Notes 的環境跑就 10/10）。要的話把測試依賴寫成獨立的 requirements。
-- **Encrypter 改版（`dev/encrypter`，2026-11-12）還沒驗收、還沒合併**：命令列、新格式 ISD2、新介面都寫好了，新測試 76 個全過。
-  **先要你決定一件事**：加密檔的格式維持現在這版（自己排的、只用 `cryptography`、還沒有人審過），還是發版前換成公開的 age 格式
-  （同一天另一批設計文件的建議；災難時不必靠這個工具也解得開）。建議後者；決定前不要用它加密要長期保存的真資料。
-  兩邊的差異表在 `tools/encrypter/docs/handoffs/20261112-223325-encrypter-intent-and-redesign.md`，其餘待決事項（Q1～Q7）在同資料夾的
-  `20261112-221400-workpackages-and-decisions.md`。
-  剩下三件要在真的電腦上做：① 跑 `tools\encrypter\run.bat`，照 `tools/encrypter/docs/ui-spec.md` 最後的清單把畫面看一遍（畫面沒有人看過）；
-  ② 用工具自己的環境跑 `python -m unittest discover -s tools\encrypter\tests -v`（應該 83 個，含舊的 7 個）；
-  ③ `build.ps1 enc`（新增了 `cryptography`，要確認打包後開得起來）。都過了再 `git merge --no-ff dev/encrypter`，建議發 0.4.0。
-  要你決定的事（之後要不要做「多把鑰匙都到齊才能開」「多人各自能開」、手上有沒有舊 `.isd` 要轉、解密結果要不要能直接給程式讀）
-  都有預設，寫在 `tools/encrypter/docs/handoffs/20261112-223325-encrypter-intent-and-redesign.md` 的選項表。
-- **金鑰檔要另外備份**：Encrypter 的金鑰檔或密語不見就打不開。開始用它加密真的東西之前，先把金鑰檔複製一份到這台電腦以外的地方。
+- **Encrypter 0.4.0 在 `dev/encrypter` 整合完成（2026-11-13），還沒合併、還沒打包、還沒發版**：
+  格式已決定（只產生公開的 age 與 OpenPGP；萬用鎖＝多收件人；剝洋蔥 `--all-layers`；`rewrap`／`rekey`），版本已改 0.4.0。
+  測試 225 個：221 過、2 個舊測試缺 pycryptodome（原本就如此）、2 個略過。這台電腦不能從網路裝套件，所以下面幾步要在有網路的電腦做，
+  **確切指令與順序**在 `tools/encrypter/docs/handoffs/20261113-013906-format-decision-age-openpgp.md`「擁有者的步驟」：
+  ① 合併回 master（預期衝突：`README.md`、`docs/HANDOFF.html`、`docs/OPEN_ISSUES.md`，都是兩邊都改了這三份總覽；master 上目前有別人沒 commit 的修改，要先處理）；
+  ② `build.ps1 enc` 打包＋冒煙測試；③ 用工具自己的環境跑全部測試；④ 照 `tools/encrypter/docs/ui-spec.md` 最後的清單把畫面看一遍；
+  ⑤ **在有 age／rage 的電腦做互通交叉測試**（age 部分是自寫實作，通過官方向量但沒有人審過）；⑥ `release.ps1 enc keep -Yes` 打 tag；⑦ push。
+  要你決定的事（都有預設，不回答就照預設）列在同一張交接單：要不要找人審閱 age 實作、要不要做簽章、萬用鎖私鑰怎麼保管、`--key-env` 要不要在下一版拿掉。
+- **萬用鎖與身分檔要另外備份**：Encrypter 的私鑰（身分檔）或密語不見就打不開。萬用鎖的私鑰要離線收好（隨身碟＋紙本），不要放在這台電腦上。
 - **Claude 訂閱**：「檢查 Claude Code」只確認找得到執行檔，登入過期要到第一次真的呼叫才知道；每次呼叫都用訂閱額度。
 - **HANDOFF.html 在 GitHub 上看不到排版**（GitHub 只顯示 HTML 原始碼）：在本機用瀏覽器打開，或看 claude.ai 上的同名 artifact。
 
@@ -114,3 +112,4 @@
 | 2026-11-12 | Video Notes：內建語音辨識不夠好、只能一片一片整理、輸出只有文字筆記 | v2：可換的語音辨識（本機／OpenAI／Gemini）、分析存成 `analysis.json` 重複利用、10 種輸出、多片合併、錯誤合約與自我檢查。規劃與驗收在 `tools/video-notes/docs/handoffs/` |
 | 2026-11-12 | Q6 Video Notes v2 要不要發版 | 你選「直接發、標 alpha」：發 `2.2.0-alpha`（`release.ps1` 改成接受預覽版號、加 `-NoSmoke`）。實測後轉正式版列在「之後可以做」 |
 | 2026-11-12 | `dev/video-downloader` 上另一個 session 留下的修正沒收 | 測試 11 個全過、打包 OK 後 `--no-ff` 收進 master |
+| 2026-11-13 | Encrypter 加密檔格式要用自有的 ISD2 還是公開的 age（兩批設計文件不一致） | 決定只產生公開格式：簡單模式＝age v1（自寫實作，通過 C2SP 官方向量）、PGP 模式＝OpenPGP（呼叫 gpg）；開發線上的自有格式改稱「ISD2 預覽格式（已停用）」只能解密，設計稿的「金鑰槽版 ISD2」標示未採用。紀錄在 `tools/encrypter/docs/handoffs/20261113-013906-format-decision-age-openpgp.md`（在 `dev/encrypter`，隨 0.4.0 一起合併） |
