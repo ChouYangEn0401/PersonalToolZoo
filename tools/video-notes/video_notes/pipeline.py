@@ -30,6 +30,7 @@ from toolzoo import ytdlp
 from toolzoo.ai import LLM
 
 from video_notes import analysis as analysis_mod
+from video_notes import health as health_mod
 from video_notes import media
 from video_notes.adapters import render as render_mod
 from video_notes.analyze import Analyzer
@@ -89,8 +90,10 @@ class Pipeline:
     def __init__(self, settings: Settings, library: PromptLibrary, locks: Locks | None = None,
                  llm_factory: Callable[[Settings], object] | None = None,
                  source_factory: Callable[[str, Settings], object] | None = None,
-                 stt_factory: Callable[[Settings], object] | None = None):
+                 stt_factory: Callable[[Settings], object] | None = None,
+                 health: health_mod.HealthBook | None = None):
         self.settings = settings
+        self.health = health or health_mod.default()   # 壞掉記帳；測試注入 tempfile 的 HealthBook
         self.library = library
         self.locks = locks or Locks.from_settings(settings)
         # 都可以注入：測試換成假的，其他程式也可以換成自己的實作（Protocol 見 adapters/）
@@ -98,6 +101,20 @@ class Pipeline:
         self.source_factory = source_factory or (lambda url, s: _default_source(url, s))
         self.stt_factory = stt_factory or (lambda s: _default_stt(s))
         self.ffmpeg = ytdlp.find_ffmpeg()
+
+    # ------------------------------------------------------------------ 壞掉記帳（health）
+    def _tracked(self, source: str | Callable[[], str], fn: Callable[[], object], version: str = ""):
+        """呼叫外部依賴並記帳：失敗 record_failure（原例外照丟，行為不變）、成功 record_success。"""
+        try:
+            result = fn()
+        except Cancelled:
+            raise
+        except Exception as exc:    # noqa: BLE001 —— 只記帳，原例外照丟
+            name = source() if callable(source) else source    # LLM 的名稱要等 adapter 建好才知道
+            self.health.record_failure(name, as_tool_error(exc, source=name), version)
+            raise
+        self.health.record_success(source() if callable(source) else source)
+        return result
 
     # ------------------------------------------------------------------ 公開介面
     def run(self, url: str, opts: JobOptions, emit: Event | None = None,
@@ -112,8 +129,15 @@ class Pipeline:
         def get_source():
             nonlocal source
             if source is None:
+                # 來源已被標記壞掉（連續失敗多次且版本沒變）→ 直接丟那個錯誤，不再自動重試
+                degraded = self.health.is_degraded("yt-dlp", ytdlp.version())
+                if degraded is not None:
+                    raise degraded
                 source = self.source_factory(url, self.settings)
             return source
+
+        def tracked_source(fn):
+            return self._tracked("yt-dlp", fn, ytdlp.version())
 
         def stage(name: str, state: str, **extra) -> None:
             emit("stage", {"stage": name, "state": state, **extra})
@@ -128,7 +152,7 @@ class Pipeline:
         record = _read_json(Artifacts(folder).info) if folder else {}
         info = record.get("video") or {}
         if not info or "download" in opts.redo:
-            info = get_source().fetch_info(url)
+            info = tracked_source(lambda: get_source().fetch_info(url))
         if folder is None:
             folder = new_folder(opts.output_root, ref, info.get("title") or ref.video_id)
             folder.mkdir(parents=True, exist_ok=True)
@@ -146,9 +170,9 @@ class Pipeline:
             for old in folder.glob("media.*"):   # 使用者要求重新下載：換掉舊檔
                 old.unlink()
             with self.locks.download:
-                get_source().download(
+                tracked_source(lambda: get_source().download(
                     url, folder, keep_video=opts.keep_video, cancel=cancel,
-                    on_progress=lambda f, d: emit("progress", {"stage": "download", "value": f, "detail": d}))
+                    on_progress=lambda f, d: emit("progress", {"stage": "download", "value": f, "detail": d})))
             if art.media() is None:
                 raise ToolError("internal_bug", "下載結束了，但資料夾裡找不到影音檔",
                                 remedy=Remedy("needs_owner", "把工作紀錄交給維護者"))
@@ -178,16 +202,19 @@ class Pipeline:
                 stt = self.stt_factory(self.settings)
                 emit("log", {"message": f"語音辨識：{stt.describe()}"})
                 language = None if self.settings.language in ("", "auto") else self.settings.language
-                transcript = stt.transcribe(
+                transcript = self._tracked(f"stt:{self.settings.stt_provider or 'local'}", lambda: stt.transcribe(
                     art.audio, language=language, cancel=cancel,
                     on_progress=lambda f, t: emit("progress", {"stage": "transcribe", "value": f, "detail": t}),
-                )
+                ))
             # 辨識服務退回本機時，之後的分析要標 stt_fallback_local；記在 info.json 讓沿用逐字稿時也看得到
             fell_back = bool(getattr(stt, "fell_back", False))
             record["stt"] = {"adapter": getattr(stt, "name", ""), "model": getattr(stt, "model", ""),
                              "fell_back": fell_back}
             if fell_back:
                 emit("log", {"message": "雲端語音辨識失敗，已退回本機辨識"})
+                cloud_error = getattr(stt, "fallback_error", None)
+                if isinstance(cloud_error, ToolError):    # 雲端那次失敗也要記帳（退回本機成功不會蓋掉它）
+                    self.health.record_failure(f"stt:{self.settings.stt_provider}", cloud_error)
             transcript.save(art.transcript_txt, art.transcript_srt, art.transcript_json)
             fresh.add("transcribe")
             stage("transcribe", "done", language=transcript.language)
@@ -301,11 +328,13 @@ class Pipeline:
         plan = opts.plan
         ctx = VideoContext.from_info(ref.url, ref.kind, info)
         analyzer = None
+        llm_source = "llm:" + (self.settings.provider or "")
 
         def get_analyzer() -> Analyzer:
-            nonlocal analyzer
+            nonlocal analyzer, llm_source
             if analyzer is None:
                 llm = self.llm_factory(self.settings)
+                llm_source = f"llm:{getattr(llm, 'provider', '') or self.settings.provider}"
                 analyzer = Analyzer(llm, self.library, self.settings, lock=self.locks.llm)
                 emit("log", {"message": f"AI：{llm.provider} / {llm.model}"})
             return analyzer
@@ -317,7 +346,7 @@ class Pipeline:
                 profile_id, reason = cached, record.get("auto_reason", "")
             else:
                 stage("notes", "running", detail="判斷影片類型…")
-                profile_id, reason = get_analyzer().classify(transcript, ctx, cancel)
+                profile_id, reason = self._tracked(lambda: llm_source, lambda: get_analyzer().classify(transcript, ctx, cancel))
                 record["auto_profile"], record["auto_reason"] = profile_id, reason
             emit("log", {"message": f"自動判斷：{self.library.profiles[profile_id].name}　{reason}"})
 
@@ -345,11 +374,11 @@ class Pipeline:
                         "profile_reason": reason, "analysis_file": "", "outputs": {"markdown": str(md_path)}}
             stage("notes", "waiting")
             stt_info = record.get("stt") or {"adapter": "local", "model": ""}
-            outcome = get_analyzer().analyze(
+            outcome = self._tracked(lambda: llm_source, lambda: get_analyzer().analyze(
                 plan, profile_id, transcript, ctx, ref=ref, folder_name=art.folder.name, stt=stt_info, cancel=cancel,
                 on_status=lambda msg: stage("notes", "running", detail=msg),
                 on_token=lambda tok: emit("token", {"text": tok}),
-            )
+            ))
             data, fallback_md = outcome.analysis, outcome.fallback_markdown
             analysis_mod.save(a_path, data)
             cost = data.get("cost") or {}
