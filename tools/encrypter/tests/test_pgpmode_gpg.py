@@ -86,6 +86,14 @@ def setUpModule():
     keys = base.parent / (base.name + "-keys")
     keys.mkdir()
     _STATE["keys"] = keys
+    try:
+        _make_keys(keys)
+    except BaseException:
+        tearDownModule()   # setUpModule 失敗時 unittest 不會呼叫 tearDownModule
+        raise
+
+
+def _make_keys(keys: Path) -> None:
     _STATE["A"] = pgpmode.generate_keypair(
         "Test A", "a@example.invalid", out_public=keys / "a.pub.asc", out_secret=keys / "a.sec.asc")
     _STATE["B"] = pgpmode.generate_keypair(
