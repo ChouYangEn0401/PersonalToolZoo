@@ -1,0 +1,174 @@
+{
+  "analysis": {
+    "schema_version": 1,
+    "kind": "collection",
+    "title": "手沖咖啡入門：三支教學影片整理 <script>alert(1)</script>",
+    "mode": {"profile": "knowledge", "modifiers": ["terms", "actions"], "focus": ""},
+    "language": "zh",
+    "summary": "三支影片的共識是：先把豆子、研磨、水溫、粉水比四件事固定下來，再一次只調一個變數，手沖就能穩定好喝。",
+    "overview": "這份筆記合併了三支手沖咖啡教學影片：一支講器材與基本步驟，一支專講研磨與萃取的關係，一支示範如何依風味調整。\n三位講者的沖法細節不同（注水段數、悶蒸時間），但對「固定變數、一次調一個」的方法完全一致；有出入的地方整理在「各方說法」。",
+    "sections": [
+      {
+        "title": "器材與準備",
+        "summary": "不用買齊全套，磨豆機與電子秤最值得先投資。",
+        "points": ["必備：濾杯、濾紙、手沖壺、電子秤、磨豆機", "預算有限時先買好一點的磨豆機，壺可以晚點再換", "濾紙先用熱水沖過，去掉紙味並溫熱器具"],
+        "start": null,
+        "children": [
+          {
+            "title": "豆子怎麼挑",
+            "summary": "",
+            "points": ["烘焙日期在兩週到一個月內風味最穩", "淺焙偏酸香、深焙偏苦甜，入門建議中焙", "一次買 200 公克以內，喝完再買"],
+            "start": null,
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "四個基本變數",
+        "summary": "三支影片都從這四件事開始講。",
+        "points": [],
+        "start": null,
+        "children": [
+          {
+            "title": "研磨粗細",
+            "summary": "影響最大的變數：越細萃取越多、流速越慢。",
+            "points": ["手沖建議約二號砂糖的粗細", "太細容易苦澀、太粗容易酸而水感", "每台磨豆機刻度不同，別人的刻度只能參考"],
+            "start": null,
+            "children": []
+          },
+          {
+            "title": "水溫",
+            "summary": "",
+            "points": ["淺焙 92～96 度、中焙 88～92 度、深焙 84～88 度", "沒有溫控壺時，水滾後靜置約一分鐘"],
+            "start": null,
+            "children": []
+          },
+          {
+            "title": "粉水比",
+            "summary": "",
+            "points": ["常用 1:15 到 1:16，例如 15 公克粉配 225～240 公克水", "想濃一點就減水，不要用磨更細來補"],
+            "start": null,
+            "children": []
+          },
+          {
+            "title": "時間",
+            "summary": "",
+            "points": ["總時間約 2 分到 2 分 30 秒", "時間是結果不是目標：太快就磨細一點，太慢就磨粗一點"],
+            "start": null,
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "沖煮步驟",
+        "summary": "",
+        "points": ["悶蒸：注入粉量兩倍的水，等 30 秒左右", "分段注水：由中心向外畫圓，不要沖到濾紙邊緣", "水位降到粉面露出前注下一段", "達到目標水量就移開濾杯，不等最後幾滴"],
+        "start": null,
+        "children": []
+      },
+      {
+        "title": "依風味調整",
+        "summary": "一次只改一個變數，並寫下結果。",
+        "points": ["太酸、單薄：磨細一點或提高水溫", "太苦、澀：磨粗一點或降低水溫", "太淡：減少水量", "每次沖完記錄刻度、水溫、時間與感想"],
+        "start": null,
+        "children": [
+          {
+            "title": "安全檢查用的資料（不是筆記內容）",
+            "summary": "下面這幾條是故意放的怪字串，頁面應該把它們當成普通文字顯示。",
+            "points": [
+              "很長沒有空白的字串：012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789",
+              "<img src=x onerror=alert(1)>",
+              "</script><script>alert(2)</script>",
+              "javascript:alert(3)"
+            ],
+            "start": null,
+            "children": []
+          }
+        ]
+      }
+    ],
+    "key_points": [
+      "先固定豆子、研磨、水溫、粉水比，再一次只調一個變數",
+      "研磨粗細是影響最大的變數，磨豆機最值得投資",
+      "粉水比從 1:15 開始，總時間落在 2 分到 2 分半",
+      "太酸往「多萃取」調（磨細、升溫），太苦往「少萃取」調（磨粗、降溫）",
+      "每次沖完都記錄，才知道自己改了什麼"
+    ],
+    "timeline": [],
+    "terms": [
+      {"term": "悶蒸", "definition": "第一段先注少量水讓咖啡粉排氣，後面的萃取才會均勻。"},
+      {"term": "萃取", "definition": "水把咖啡粉裡的風味物質帶出來的過程；太少偏酸、太多偏苦。"},
+      {"term": "粉水比", "definition": "咖啡粉重量與注水總重量的比例，例如 1:15。"},
+      {"term": "<b>通道效應</b>", "definition": "水只從粉層的某幾條路徑流過，造成一部分過度萃取、一部分萃取不足。"}
+    ],
+    "actions": [
+      "買一台電子秤，之後每次都秤粉量與水量",
+      "用同一包豆子、1:15、90 度連沖三天，只改研磨刻度",
+      "準備一本沖煮紀錄，寫下刻度、水溫、時間與味道"
+    ],
+    "quotes": [
+      {"text": "手沖不是玄學，是把變數一個一個固定下來的過程。", "speaker": "第一支影片的講者", "time": null}
+    ],
+    "perspectives": [
+      {"who": "影片一（器材與基本步驟）", "stance": "主張三段式注水，悶蒸 30 秒，新手照做最不容易出錯。"},
+      {"who": "影片二（研磨與萃取）", "stance": "認為段數不重要，研磨粗細與總時間才是關鍵，示範一刀流也能沖得好。"},
+      {"who": "影片三（依風味調整）", "stance": "建議悶蒸拉長到 40～45 秒，尤其是烘焙日期很新的豆子。"}
+    ],
+    "caveats": [
+      "三支影片用的濾杯不同（錐形與平底），流速與建議刻度不能直接互相套用",
+      "水溫建議是講者的經驗值，影片中沒有提供測試數據",
+      "有一支影片的來源網址不是一般網址，頁面只會以文字顯示"
+    ],
+    "tags": ["手沖咖啡", "研磨", "萃取", "粉水比", "入門", "\"><img src=x onerror=alert(1)>"],
+    "layout_hint": {"template": "longform", "tree_depth": 2},
+    "sources": [
+      {
+        "id": "youtube:SAMPLEcoffee1",
+        "url": "https://www.youtube.com/watch?v=SAMPLEcoffee1",
+        "title": "手沖咖啡新手入門：器材與基本步驟",
+        "channel": "範例咖啡研究室",
+        "duration": 912,
+        "date": "2026-08-03",
+        "folder": "手沖咖啡新手入門 [video-SAMPLEcoffee1]"
+      },
+      {
+        "id": "other:SAMPLEcoffee2",
+        "url": "javascript:alert(1)",
+        "title": "研磨粗細決定一切？萃取原理一次講清楚",
+        "channel": "範例豆子日記",
+        "duration": 1384,
+        "date": "2026-09-21",
+        "folder": "研磨粗細決定一切 [video-SAMPLEcoffee2]"
+      },
+      {
+        "id": "vimeo:SAMPLEcoffee3",
+        "url": "https://example.com/videos/SAMPLEcoffee3",
+        "title": "太酸？太苦？手沖風味調整指南",
+        "channel": "範例沖煮教室",
+        "duration": 3725,
+        "date": "2026-10-12",
+        "folder": "手沖風味調整指南 [video-SAMPLEcoffee3]"
+      }
+    ],
+    "members": [
+      "手沖咖啡新手入門 [video-SAMPLEcoffee1]/analysis.knowledge+terms+actions.json",
+      "研磨粗細決定一切 [video-SAMPLEcoffee2]/analysis.knowledge+terms+actions.json",
+      "手沖風味調整指南 [video-SAMPLEcoffee3]/analysis.knowledge+terms+actions.json"
+    ],
+    "provenance": {
+      "source_hash": "",
+      "stt": {},
+      "analyzer": {"provider": "claude-sub", "model": "sonnet"},
+      "prompt_version": "collection:knowledge+terms+actions@1",
+      "created_at": "2026-11-12T19:55:30"
+    },
+    "cost": {"input_tokens": 9800, "output_tokens": 2600, "estimated": true, "audio_seconds": 0},
+    "quality_flags": ["estimated_cost"]
+  },
+  "meta": {
+    "profile_name": "📚 知識課程",
+    "modifier_names": ["📖 名詞解釋", "✅ 行動清單"],
+    "tool_version": "2.1.0",
+    "generated_at": "2026-11-12T20:00:00"
+  }
+}
