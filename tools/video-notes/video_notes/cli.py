@@ -194,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
     elif isinstance(args.post, str):
         post_url = args.post
 
-    pipeline = Pipeline(settings, lib, Locks())
+    pipeline = Pipeline(settings, lib, Locks.from_settings(settings))
     if not pipeline.ffmpeg:
         print("錯誤：找不到 ffmpeg（請安裝並加入 PATH）", file=sys.stderr)
         return 2

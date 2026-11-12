@@ -42,7 +42,7 @@ class Hub:
 
     def __init__(self):
         self.settings = load_settings()
-        self.locks = Locks()
+        self.locks = Locks.from_settings(self.settings)
         self.manager = JobManager(self._pipeline(), self.settings.parallel_jobs)
         self.lock = threading.Lock()
 

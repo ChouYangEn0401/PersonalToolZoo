@@ -1,6 +1,7 @@
 name = "名詞解釋"
 icon = "📖"
 order = 40
+field = "terms"            # v2：內容寫進 analysis 的這個欄位（不寫進 sections）
 description = "整理影片中出現的專有名詞與術語"
 instructions = ["名詞解釋只能用影片中的說法；影片沒有解釋的名詞就只列出名稱，標示「影片中未解釋」。"]
 sections = """

@@ -1,6 +1,7 @@
 name = "金句"
 icon = "💬"
 order = 30
+field = "quotes"            # v2：內容寫進 analysis 的這個欄位（不寫進 sections）
 description = "保留講者印象深刻的原話"
 instructions = ["金句要接近講者原話（可以修正辨識錯字），不要改寫成你的話。"]
 sections = """
