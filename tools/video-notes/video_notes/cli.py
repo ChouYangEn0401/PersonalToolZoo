@@ -30,6 +30,7 @@ from video_notes import health as health_mod
 from video_notes import library as library_mod
 from video_notes import notify
 from video_notes.adapters import render as render_mod
+from video_notes.adapters.llm import COMPAT
 from video_notes.collection import Member
 from video_notes.config import OUTPUT_CUSTOM, OUTPUT_DATA, OUTPUT_DOWNLOADS, Settings, load_settings
 from video_notes.errors import Remedy, ToolError, as_tool_error, exit_code
@@ -68,8 +69,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-w", "--with", dest="modifiers", default="", help="加料，逗號分隔，例如 timeline,actions")
     p.add_argument("--preset", default="", help="常用組合（--list 看有哪些）")
     p.add_argument("--focus", default="", help="特別想知道的主題；無關的內容會被濃縮成一行")
-    p.add_argument("--provider", choices=list(PROVIDERS),
-                   help="AI 服務：claude-sub（Claude 訂閱，預設，不需要金鑰）、openai、gemini、anthropic（Claude API）")
+    p.add_argument("--provider", choices=[*PROVIDERS, COMPAT],
+                   help="AI 服務：claude-sub（Claude 訂閱，預設，不需要金鑰）、openai、gemini、anthropic（Claude API）、"
+                        "openai-compat（設定裡的相容端點，例如 Ollama）")
     p.add_argument("--model", help="AI 模型（例如 sonnet、haiku、gpt-5.1、gemini-2.5-flash、claude-opus-5-5）；"
                                    "只給模型時從名稱判斷服務")
     p.add_argument("--whisper-model", help="語音辨識模型：tiny / base / small / medium / large-v3 / large-v3-turbo")

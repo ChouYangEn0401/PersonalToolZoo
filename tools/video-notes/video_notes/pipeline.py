@@ -27,7 +27,6 @@ from pathlib import Path
 from typing import Callable
 
 from toolzoo import ytdlp
-from toolzoo.ai import LLM
 
 from video_notes import analysis as analysis_mod
 from video_notes import health as health_mod
@@ -86,6 +85,12 @@ def _default_stt(settings: Settings):
     return stt.build_stt(settings)
 
 
+def _default_llm(settings: Settings):
+    from video_notes.adapters.llm import build_llm
+
+    return build_llm(settings)
+
+
 class Pipeline:
     def __init__(self, settings: Settings, library: PromptLibrary, locks: Locks | None = None,
                  llm_factory: Callable[[Settings], object] | None = None,
@@ -97,7 +102,8 @@ class Pipeline:
         self.library = library
         self.locks = locks or Locks.from_settings(settings)
         # 都可以注入：測試換成假的，其他程式也可以換成自己的實作（Protocol 見 adapters/）
-        self.llm_factory = llm_factory or (lambda s: LLM(s.provider, s.model or None))
+        # 預設走 adapters.llm.build_llm：一般服務就是 toolzoo.ai.LLM，openai-compat 用自訂端點
+        self.llm_factory = llm_factory or _default_llm
         self.source_factory = source_factory or (lambda url, s: _default_source(url, s))
         self.stt_factory = stt_factory or (lambda s: _default_stt(s))
         self.ffmpeg = ytdlp.find_ffmpeg()
