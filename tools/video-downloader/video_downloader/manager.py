@@ -182,9 +182,9 @@ class DownloadManager:
         except DownloadCancelled:
             job.status, job.stage = "cancelled", "已取消（已下載的部分保留，按重試會接著下載）"
         except DownloadError as exc:
-            job.status, job.error = "failed", explain_error(str(exc))
+            job.status, job.error = "failed", explain_error(str(exc), job.request.url)
         except Exception as exc:  # noqa: BLE001 — 任何錯誤都要顯示，不能讓執行緒默默死掉
-            job.status, job.error = "failed", explain_error(f"{type(exc).__name__}: {exc}")
+            job.status, job.error = "failed", explain_error(f"{type(exc).__name__}: {exc}", job.request.url)
         finally:
             job.finished = time.time()
             if job.status in ("done", "failed"):

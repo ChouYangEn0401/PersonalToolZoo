@@ -115,8 +115,24 @@ def probe_options(settings: Settings, headers: dict[str, str]) -> dict:
     return opts
 
 
-def explain_error(message: str) -> str:
-    """yt-dlp 的錯誤 → 加上下一步該怎麼做。"""
+_YOUTUBE_HOSTS = ("youtube.com", "youtu.be", "youtube-nocookie.com")
+
+# YouTube 改版、yt-dlp 還沒跟上時常見的錯誤字樣。這類問題升級 yt-dlp 幾乎都會好，
+# 加 Referer 或換設定都沒用（yt-dlp 官方 issue 裡這幾種錯誤都是靠新版修掉的）。
+_YOUTUBE_STALE_MARKERS = (
+    "http error 403", "forbidden", "the page needs to be reloaded", "requested format is not available",
+    "nsig extraction failed", "signature extraction failed", "challenge solving failed",
+    "only images are available",
+)
+
+
+def _is_youtube(low_message: str, url: str) -> bool:
+    low_url = url.lower()
+    return any(h in low_url for h in _YOUTUBE_HOSTS) or "[youtube" in low_message
+
+
+def explain_error(message: str, url: str = "") -> str:
+    """yt-dlp 的錯誤 → 加上下一步該怎麼做。url 有給的話，YouTube 的錯誤會給 YouTube 專用的建議。"""
     msg = message.replace("ERROR: ", "").strip()
     low = msg.lower()
     if "drm" in low:
@@ -124,6 +140,11 @@ def explain_error(message: str) -> str:
     if any(k in low for k in ("sign in to confirm", "login required", "members-only", "private video",
                               "this video is only available", "account")):
         return msg + "\n→ 需要登入才看得到：在設定選「用哪個瀏覽器的登入狀態」（Windows 上 Firefox 最穩），並先在那個瀏覽器登入。"
+    if _is_youtube(low, url) and any(k in low for k in _YOUTUBE_STALE_MARKERS):
+        return msg + (
+            f"\n→ YouTube 常改版，這通常是 yt-dlp 太舊（目前 {ytdlp.version()}），升級就會好："
+            "原始碼執行跑 tools\\video-downloader\\.venv\\Scripts\\python.exe -m pip install -U \"yt-dlp[default]<2028\"；"
+            "exe 版升級後要重新 build。也確認標題列的 JS 是 ✓（YouTube 需要 Node 或 Deno）。")
     if "http error 403" in low or "forbidden" in low:
         return msg + "\n→ 伺服器拒絕：在進階選項加上 Referer（影片所在頁面的網址），或改用瀏覽器的登入狀態。"
     if "unsupported url" in low:

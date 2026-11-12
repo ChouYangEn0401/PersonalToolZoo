@@ -73,6 +73,21 @@ class OptionsTest(unittest.TestCase):
         self.assertIn("登入", explain_error("ERROR: [youtube] x: Sign in to confirm your age"))
         self.assertIn("DRM", explain_error("ERROR: This video is DRM protected"))
 
+    def test_youtube_errors_point_to_upgrading_yt_dlp(self):
+        # YouTube 的 403／格式不見了，是 yt-dlp 跟不上 YouTube 改版：建議升級，不是加 Referer
+        forbidden = "ERROR: unable to download video data: HTTP Error 403: Forbidden"
+        for url in ("https://www.youtube.com/watch?v=abc", "https://youtu.be/abc"):
+            hint = explain_error(forbidden, url)
+            self.assertIn("pip install -U", hint)
+            self.assertNotIn("Referer", hint)
+        self.assertIn("pip install -U", explain_error("ERROR: [youtube] abc: The page needs to be reloaded."))
+        self.assertIn("pip install -U", explain_error(
+            "ERROR: [youtube] abc: Requested format is not available. Use --list-formats", "https://youtu.be/abc"))
+        # 其他網站的 403 維持原本的建議；YouTube 要登入的錯誤也維持登入建議
+        self.assertIn("Referer", explain_error(forbidden, "https://cdn.example.com/master.m3u8"))
+        self.assertIn("登入", explain_error("ERROR: [youtube] abc: Sign in to confirm you’re not a bot",
+                                           "https://youtu.be/abc"))
+
 
 from yt_dlp import YoutubeDL as RealYDL  # noqa: E402
 

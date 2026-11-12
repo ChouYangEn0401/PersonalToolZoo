@@ -15,7 +15,7 @@ def probe(url: str, settings: Settings, headers: dict[str, str] | None = None) -
         with YoutubeDL(probe_options(settings, headers or {})) as ydl:
             info = ydl.sanitize_info(ydl.extract_info(url, download=False))
     except DownloadError as exc:
-        return {"url": url, "error": explain_error(str(exc))}
+        return {"url": url, "error": explain_error(str(exc), url)}
 
     if info.get("_type") in ("playlist", "multi_video"):
         entries = []
