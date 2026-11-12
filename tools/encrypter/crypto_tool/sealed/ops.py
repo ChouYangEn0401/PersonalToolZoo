@@ -46,6 +46,15 @@ def _temp_beside(dst: Path) -> Path:
     return dst.with_name(f".{dst.name}.partial-{secrets.token_hex(4)}")
 
 
+def _sync(fileobj) -> None:
+    """改名之前先確定內容真的寫到磁碟了（斷電時不會留下一個名字對、內容不全的檔）。"""
+    fileobj.flush()
+    try:
+        os.fsync(fileobj.fileno())
+    except OSError:  # 少數檔案系統不支援
+        pass
+
+
 def _remove(path: Path) -> None:
     try:
         if path.is_dir() and not path.is_symlink():
@@ -227,6 +236,7 @@ def encrypt_path(
                             progress(done, total)
                 result["bytes_in"] = done
             writer.close()
+            _sync(out)
         result["bytes_out"] = tmp.stat().st_size
 
     _run(tmp, dst_p, force, work)
@@ -345,6 +355,7 @@ def decrypt_path(
                     written += len(block)
                     if progress:
                         progress(min(fh.tell(), total), total)
+                _sync(out)
             result["bytes_out"] = written
 
     _run(tmp, dst_p, force, work)
