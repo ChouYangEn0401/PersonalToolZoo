@@ -38,15 +38,15 @@ _BYTES_PER_SECOND = 4 * 1024 * 1024    # 估逾時用的保守速度
 _LONGEST_SOCKET = "/S.gpg-agent.browser"
 _SOCKET_HOME_LEN = 107 - len(_LONGEST_SOCKET)   # 87：再長 agent 根本起不來
 # 但 home 的長度還會影響另一件事：實測 Git for Windows 的 GnuPG 2.4.9，匯入「沒有密語保護」的
-# Curve25519 私鑰後第一次使用，會不會「Bad secret key」取決於 home 參數（/c/… 形式）的**長度**與金鑰本身，
-# 同一個 home 裡重試也不會好（2026-11-13 實測 5 把金鑰 × 長度 43～86）：
-#   長度 43～54：有的金鑰壞（例：某把在 45～50 壞、另一把在 43～44 與 51～54 壞）
-#   長度 55～74：5 把都正常；另外長度 64、72 各連續產生 10 把金鑰也都正常
-#   長度 75 以上：大多數壞
-# 所以每個暫時 home 都補成**剛好 64 個字元**（在正常區間的中間）：上層資料夾短時把隨機資料夾名稱補長，
-# 上層太長時換下一個候選（見 home_bases）。
+# Curve25519 私鑰後第一次使用，會不會「Bad secret key」取決於 home 參數（/c/… 形式）的**長度**、
+# 金鑰本身、同一次匯入了哪幾把；同一個 home 裡重試也不會好，換一個長度的 home 通常就好
+# （2026-11-13 實測 5 把金鑰 × 長度 43～86：43～54 有的壞、55～74 單把都正常、75 以上大多壞；
+#  但「兩把一起匯入」在長度 64 也遇過必壞、在 55 正常）。
+# 所以：home 一律補成指定長度（預設 HOME_LEN），需要用私鑰的操作在轉換失敗時換 HOME_LEN_CHOICES 裡的下一個長度重來
+# （見 ops._session_with_keys）。上層資料夾太長、補不出名稱時換下一個候選（見 home_bases）。
 HOME_LEN = 64
-MAX_HOME_LEN = min(_SOCKET_HOME_LEN, HOME_LEN)
+HOME_LEN_CHOICES = (64, 55, 70, 60, 58, 67)
+MAX_HOME_LEN = min(_SOCKET_HOME_LEN, max(HOME_LEN_CHOICES))
 _MIN_NAME_LEN = 8                                 # 隨機資料夾名稱至少 8 個十六進位字元
 _HOME_MARKER = ".encrypter-gpg-home"   # 只有帶這個記號的資料夾才會被當成殘留清掉
 _STALE_SECONDS = 24 * 3600
@@ -244,12 +244,12 @@ def _sweep_stale(base: Path) -> None:
             pass
 
 
-def make_home(info: GpgInfo) -> tuple[Path, str]:
-    """建一個新的、空的、名字隨機的 home（gpg 看到的路徑剛好 HOME_LEN 個字元）。回傳 (資料夾, 給 gpg 的路徑字串)。"""
+def make_home(info: GpgInfo, length: int = HOME_LEN) -> tuple[Path, str]:
+    """建一個新的、空的、名字隨機的 home（gpg 看到的路徑剛好 ``length`` 個字元）。回傳 (資料夾, 給 gpg 的路徑字串)。"""
     reasons = []
     for base in home_bases():
-        # 資料夾名稱補長，讓整個 home 參數剛好 HOME_LEN 個字元（為什麼見檔案開頭 HOME_LEN 的說明）
-        name_len = HOME_LEN - len(home_argument(info, base)) - 1
+        # 資料夾名稱補長，讓整個 home 參數剛好 length 個字元（為什麼見檔案開頭 HOME_LEN 的說明）
+        name_len = length - len(home_argument(info, base)) - 1
         if name_len < _MIN_NAME_LEN:
             reasons.append(f"{base}: 路徑太長")
             continue
@@ -367,15 +367,16 @@ class GpgResult:
 class GpgSession:
     """一次操作：一個暫時的專用 GNUPGHOME。用 ``with``，離開時一定 kill agent 並刪資料夾。"""
 
-    def __init__(self, info: GpgInfo | None = None):
+    def __init__(self, info: GpgInfo | None = None, *, home_len: int = HOME_LEN):
         self.info = info or find_gpg()
+        self.home_len = home_len
         self.folder: Path | None = None
         self.home = ""
         self.env: dict[str, str] = {}
         self.cleanup_ok = True
 
     def __enter__(self) -> "GpgSession":
-        self.folder, self.home = make_home(self.info)
+        self.folder, self.home = make_home(self.info, self.home_len)
         self.env = _base_env(self.home)
         return self
 

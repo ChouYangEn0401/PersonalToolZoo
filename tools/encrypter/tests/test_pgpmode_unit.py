@@ -122,10 +122,34 @@ class PathTests(Case):
         self.assertFalse(deep.exists())
         self.assertTrue(_gpg.remove_tree(folder))
 
-    def test_home_length_sits_in_the_measured_safe_range(self):
-        # 實測 home 參數 55～74 個字元時，匯入的 Curve25519 私鑰都正常（見 _gpg.py 的說明）
-        self.assertTrue(55 <= _gpg.HOME_LEN <= 74)
-        self.assertLessEqual(_gpg.MAX_HOME_LEN, _gpg.HOME_LEN)
+    def test_home_lengths_sit_in_the_measured_range(self):
+        # 實測 home 參數 55～74 個字元時，單把匯入的 Curve25519 私鑰都正常（見 _gpg.py 的說明）
+        self.assertEqual(_gpg.HOME_LEN_CHOICES[0], _gpg.HOME_LEN)
+        self.assertTrue(all(55 <= n <= 74 for n in _gpg.HOME_LEN_CHOICES))
+        self.assertEqual(len(set(_gpg.HOME_LEN_CHOICES)), len(_gpg.HOME_LEN_CHOICES))
+        self.assertGreaterEqual(_gpg.MAX_HOME_LEN, max(_gpg.HOME_LEN_CHOICES))
+
+    def test_key_conversion_failure_retries_in_a_home_of_another_length(self):
+        lengths = []
+
+        def fake_import(session, keys, *, secret):
+            lengths.append(len(session.home))
+            return ["F" * 40]
+
+        def fake_warm(session, fprs, pw):   # 前兩個長度轉換失敗，第三個成功
+            return {fprs[0]: "failed" if len(lengths) < 3 else "ok"}
+
+        self.patch(ops, "_import_keys", fake_import)
+        self.patch(ops, "_warm_up", fake_warm)
+        self.patch(_gpg.subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(argv, 0, b"", b""))
+        short = Path(tempfile.mkdtemp(prefix="e"))
+        self.addCleanup(shutil.rmtree, short, True)
+        with mock.patch.dict(os.environ, {_gpg.ENV_TMPDIR: str(short)}):
+            session, fprs, states = ops._session_with_keys(_fake_info(msys=False), [Path("k.asc")], "")
+        session.close()
+        self.assertEqual(lengths, list(_gpg.HOME_LEN_CHOICES[:3]))
+        self.assertEqual(states, {"F" * 40: "ok"})
+        self.assertEqual([p for p in short.iterdir()], [])       # 失敗的 home 都刪掉了
 
     def test_no_usable_base(self):
         deep = self.tmp / ("x" * 120)

@@ -16,6 +16,7 @@ import secrets
 from pathlib import Path
 from typing import Iterable
 
+from . import _gpg
 from ._gpg import GpgInfo, GpgResult, GpgSession, check_passphrase, find_gpg, timeout_for
 
 try:
@@ -471,16 +472,40 @@ def _self_check(info: GpgInfo, public: Path, secret: Path, fpr: str, pw: str) ->
         pub_listing = s.run(["--list-packets", str(public)]).output
         if "pref-aead-algos" in pub_listing or re.search(r"features: 0[2-9a-fA-F]", pub_listing):
             raise SealError("io_error", "產生的金鑰宣告了 AEAD，沒有寫出檔案。")
-        if fpr not in _import_keys(s, [secret], secret=True):
-            raise SealError("io_error", "產生的私鑰檔自我檢查失敗（匯入後找不到金鑰）。")
-        state = _warm_up(s, [fpr], pw)[fpr]
-        if state != "ok":
-            raise SealError("io_error", "產生的私鑰檔自我檢查失敗（用匯出的私鑰解不開），沒有寫出檔案。",
-                            action="再試一次；一直失敗請回報 gpg 版本。", detail=state)
+    s, fprs, states = _session_with_keys(info, [secret], pw)
+    s.close()
+    if fpr not in fprs:
+        raise SealError("io_error", "產生的私鑰檔自我檢查失敗（匯入後找不到金鑰）。")
+    if states[fpr] != "ok":
+        raise SealError("io_error", "產生的私鑰檔自我檢查失敗（用匯出的私鑰解不開），沒有寫出檔案。",
+                        action="再試一次；一直失敗請回報 gpg 版本。", detail=states[fpr])
     return protected
 
 
-_WARM_ATTEMPTS = 12        # gpg 偶發的 Bad secret key（見下方說明）最多重試幾次
+def _session_with_keys(info: GpgInfo, keys: list[Path], pw: str) -> tuple[GpgSession, list[str], dict[str, str]]:
+    """開一個暫時 home、匯入私鑰、把每把私鑰實際用一次（_warm_up）。回傳**還開著**的 session，呼叫端負責 close()。
+
+    為什麼要換 home 重來：GnuPG 2.4.9（Git for Windows）把匯入的私鑰轉成 agent 自己的格式時，
+    會不會「Bad secret key」跟 home 路徑的長度、金鑰、同時匯入哪幾把有關，同一個 home 裡重試沒用
+    （見 _gpg.py 開頭 HOME_LEN 的說明）。所以有私鑰轉換失敗時，換 HOME_LEN_CHOICES 裡下一個長度的 home 再試；
+    全部試完還是失敗就回傳最後一次的結果（之後的解密會照實回報 Bad secret key）。
+    """
+    choices = _gpg.HOME_LEN_CHOICES
+    for i, length in enumerate(choices):
+        s = GpgSession(info, home_len=length).__enter__()
+        try:
+            fprs = _import_keys(s, keys, secret=True)
+            states = _warm_up(s, fprs, pw)
+        except BaseException:
+            s.close()
+            raise
+        if "failed" not in states.values() or i == len(choices) - 1:
+            return s, fprs, states
+        s.close()
+    raise AssertionError("unreachable")
+
+
+_WARM_ATTEMPTS = 4         # gpg 偶發的 Bad secret key（見下方說明）在同一個 home 裡最多重試幾次；之後換 home
 _WARM_BAD_PASS = 3         # 連續幾次「密語不對」才相信真的是密語不對
 _GPG_ERR_BAD_SECKEY = 7
 
@@ -717,11 +742,12 @@ def decrypt_file(
     try:
         for mode, pw in attempts:
             _remove(tmp)
-            with GpgSession(info) as s:
-                if mode == "key":
-                    _warm_up(s, _import_keys(s, keys, secret=True), pw)
+            s = _session_with_keys(info, keys, pw)[0] if mode == "key" else GpgSession(info).__enter__()
+            try:
                 res = s.run(["--skip-verify", "-o", str(tmp), "--decrypt", str(src_p)],
                             passphrase=pw, timeout=timeout_for(src_p))
+            finally:
+                s.close()
             try:
                 _check_decrypt(res, mode, hide)
             except _Failure as fail:

@@ -268,8 +268,8 @@ ct --check --json                                     # 離線自我檢查：cry
 - 新視窗：兩種模式、誰可以打開（密語／公鑰／萬用鎖）、一路解到底、金鑰分頁（產生金鑰、設定萬用鎖）。
 - 設定放專案 `.env`（萬用鎖公鑰、預設身分檔路徑）。
 - 開發線上的自有格式改稱「ISD2 預覽格式（已停用）」，只能解密。舊 `.isd` 照舊在舊版工具。
-- PGP 模式：gpg 的暫時金鑰環資料夾路徑固定補成 64 個字元（Git for Windows 的 GnuPG 2.4.9 在某些路徑長度下，
-  沒有密語保護的 Curve25519 私鑰會解不開；細節見 [docs/pgp-mode.md](docs/pgp-mode.md)）。
+- PGP 模式：gpg 的暫時金鑰環資料夾路徑補成固定長度，私鑰轉換失敗時換另一個長度重來（Git for Windows 的 GnuPG 2.4.9
+  在某些路徑長度下，沒有密語保護的 Curve25519 私鑰會解不開；細節見 [docs/pgp-mode.md](docs/pgp-mode.md)）。
 
 ### 0.3.0（tag `Encrypter_v0.3.0`）
 
