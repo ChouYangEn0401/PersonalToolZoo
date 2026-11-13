@@ -1,6 +1,6 @@
 """舊版工具視窗（v0.3.0 的四個分頁：File／Text／Mixture／Large File）。
 
-這裡原本是主視窗（gui/app.py）。新介面改用 ISD2 格式後，舊分頁整組搬到這個獨立視窗，
+這裡原本是主視窗（gui/app.py）。新介面改用公開格式（age／OpenPGP）後，舊分頁整組搬到這個獨立視窗，
 程式一行沒刪：`tab_file.py`、`tab_text.py`、`tab_mixture.py`、`tab_largefile.py`、`widgets.py`、
 `core/` 都留在原位。留著的目的是**解開以前產生的 .isd 檔**；不建議再用它加密新東西。
 
