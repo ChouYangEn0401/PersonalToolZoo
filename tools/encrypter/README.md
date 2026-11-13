@@ -22,13 +22,57 @@
 ## 萬用鎖：同一份檔案，別人用自己的鑰匙開，你用萬用鎖也能開
 
 做法是兩種格式都內建的**多收件人**（信封加密）：內容只加密一次，只有一把很小的檔案金鑰被每把鎖各包一次。
-每多一把鎖，age 檔只多約 100 bytes、OpenPGP 多幾百 bytes——**檔案不會變兩倍大**。
+**檔案不會變兩倍大**（下面有實測數字）。
 
-1. 產生一把萬用鎖：`keygen -o master.key --protect`（印出公鑰 `age1…`）。**私鑰 `master.key` 離線收好**（隨身碟＋紙本），不要放在加密檔旁邊。
-2. 把萬用鎖的**公鑰**寫進專案的 `.env`：`ENCRYPTER_MASTER_RECIPIENT=age1…`（或在視窗的「金鑰」分頁設定）。
-   公鑰不是祕密；`.env` 裡只放公鑰與檔案路徑，**不要放私鑰本身**（程式讀到會拒絕）。
-3. 加密時加 `--with-master`（視窗裡有設定時預設就勾「也讓萬用鎖打得開」）。
-4. 要開的時候：`decrypt 檔.age -i master.key`。
+**誰打得開？** 加密時列進去的**每一把鎖都能單獨打開整個檔案**：別人的鑰匙、你的每一把萬用鎖（PGP 模式還可以加一個密語）。
+不需要湊齊好幾把，也不分主從；少了任何一把，其他把照樣能開。
+
+**怎麼做（簡單模式）**
+
+1. 產生萬用鎖：`keygen -o master.key --protect`（印出公鑰 `age1…`）。要幾把就跑幾次、每次換檔名
+   （例如家裡電腦一把、筆電一把、離線備用一把）；每次都是全新的一把，**同名檔案已存在時不會覆蓋**。
+2. 把萬用鎖的**公鑰**寫進專案的 `.env`，**好幾把用逗號分開**：`ENCRYPTER_MASTER_RECIPIENT=age1aaa…,age1bbb…`
+   （或在視窗的「金鑰」分頁填，按「從身分檔讀…」會接在後面）。公鑰不是祕密；`.env` 裡只放公鑰與檔案路徑，**不要放私鑰本身**（程式讀到會拒絕）。
+3. 加密時加 `--with-master`（設定裡的**每一把**都會加上；視窗裡有設定時預設就勾「也讓萬用鎖打得開」）。
+   不想改設定時，也可以這次直接指定：`--master age1aaa… --master age1bbb…`（可以重複；也接受一行一把公鑰的清單檔）。
+4. 要開的時候：`decrypt 檔.age -i master.key`（哪一把都可以）。
+
+**自訂密碼的萬用鎖**
+
+| 模式 | 能不能「別人的公鑰＋你自己訂的密碼」放在同一個檔案 | 怎麼做 |
+|---|---|---|
+| 簡單模式（age） | **不能直接放密語**：age 規格規定密語必須是檔案唯一的鎖（工具會拒絕並說明） | 用**密語保護的身分檔**當萬用鎖：`keygen -o master.key --protect`。萬用鎖本身是金鑰，但私鑰檔要先輸入你訂的密碼才能用——等於「拿著檔案＋知道密碼」才打得開。age 官方的 `age -d -i master.key` 也認得這種檔 |
+| PGP 模式 | **可以**：同一個檔案同時有收件人公鑰與一個密語，任何一個都能開 | `encrypt 檔 --mode pgp --pgp-recipient 對方.public.asc --passphrase`（也可再加 `--with-master`）。解開：對方用自己的私鑰，你用 `decrypt 檔.gpg --passphrase` |
+
+**大小實測**（1 MiB＝1,048,576 bytes 的隨機資料，2026-11-13）
+
+| 模式 | 鎖 | 加密後 | 比原檔多 |
+|---|---|---|---|
+| 簡單模式 | 1 把收件人 | 1,049,016 | +440（標頭＋每 64 KiB 一個 16 bytes 驗證碼） |
+| 簡單模式 | ＋1 把萬用鎖 | 1,049,114 | +538 |
+| 簡單模式 | ＋2 把萬用鎖 | 1,049,212 | +636 |
+| 簡單模式 | ＋3 把萬用鎖 | 1,049,310 | +734 |
+| PGP 模式 | 1 把收件人 | 1,049,626 | +1,050 |
+| PGP 模式 | ＋1 把萬用鎖 | 1,049,722 | +1,146 |
+| PGP 模式 | ＋2 把萬用鎖 | 1,049,818 | +1,242 |
+| PGP 模式 | ＋1 把萬用鎖＋你自訂的密語 | 1,049,770 | +1,194 |
+
+每多一把鎖固定多約 **98 bytes**（age）／**96 bytes**（OpenPGP，ed25519／cv25519 金鑰；RSA 金鑰會多幾百 bytes），密語約 48 bytes；跟檔案大小無關。
+
+**備份與保管**
+
+- 萬用鎖的**私鑰檔**（`master.key`、PGP 的 `.secret.asc`）每一把都要在這台電腦以外留一份：隨身碟、另一台電腦、或印成紙本鎖起來。
+  建議至少一把**離線**（平常不插著、不放在這台電腦上）。
+- 私鑰檔一律 `--protect` 用密語保護，密語另外記（不要跟私鑰檔放在一起）。
+- 公鑰（`age1…`、`.public.asc`）不是祕密，可以放 `.env`、可以給別人，用來「讓萬用鎖也打得開」。
+
+**外洩的風險（請先想清楚）**
+
+- 萬用鎖是「一把開全部」：任何一把萬用鎖的私鑰外洩（而且沒有密語保護，或密語也被猜到），**所有加了它的檔案**都會被打開。
+  把數量控制在真的需要的幾把，用密語保護，離線保存。
+- 懷疑某一把外洩：從設定拿掉那把公鑰（之後的新檔不再加它），重要的舊檔用 `rekey` 換成新的萬用鎖，並刪掉舊副本。
+  已經被複製走的舊檔無法收回（見下面「誠實的限制」）。
+- 萬用鎖不見（而且也沒有別的鑰匙）＝檔案永遠打不開；所以才建議主＋備兩把以上，分開存放。
 
 **換人、換鎖：`rewrap` 與 `rekey` 的差別**
 
@@ -44,7 +88,10 @@
 要讓舊鑰匙真的沒用：`rekey`，並刪掉所有舊副本。萬用鎖是「一把開全部」，它外洩就全部外洩，所以保管方式才是重點。
 
 另外，**age 規格規定密語（scrypt）必須是唯一的鎖**：簡單模式不能「密語＋萬用鎖」。要這個組合請用 PGP 模式（OpenPGP 可以同一個檔同時有公鑰與密語），
-或全部改用金鑰。工具遇到時會明確拒絕並這樣建議。
+或用上面「自訂密碼的萬用鎖」的做法（密語保護的身分檔）。工具遇到時會明確拒絕並這樣建議。
+
+以上每一點都有測試：`tests/test_master_lock.py`（多把萬用鎖各自打得開、`--master` 重複、`keygen` 每次不同且不覆蓋、
+密語保護的身分檔當萬用鎖、1 MiB 檔案每多一把只多固定大小、PGP「別人的公鑰＋自訂密語＋兩把萬用鎖」實際呼叫 gpg）。
 
 ## 多層（剝洋蔥）
 
@@ -100,6 +147,7 @@ ct keygen --mode pgp -o D:\keys\me --name "我"   # me.public.asc＋me.secret.as
 
 ct encrypt report.pdf -r age1…                        # → report.pdf.age
 ct encrypt photos -r age1… --with-master              # 資料夾 → photos.tar.age
+ct encrypt a.txt -r age1… --master age1<主> --master age1<備>   # 這次直接指定兩把萬用鎖
 ct encrypt a.txt photos -o bundle.age -R people.txt   # 多個輸入一定要 -o；-R 是一行一把公鑰的清單
 ct encrypt notes.txt --passphrase                     # 用密語（互動；被導向時從標準輸入讀）
 ct encrypt notes.txt --mode pgp --pgp-recipient bob.public.asc --with-master --passphrase --armor
@@ -121,7 +169,8 @@ ct --check --json                                     # 離線自我檢查：cry
 | `--mode age\|pgp` | encrypt、keygen | 預設 `age`。解密、inspect、rewrap、rekey 自動辨識 |
 | `-r`, `--recipient age1…` | encrypt、rewrap、rekey | 收件人公鑰，可以給好幾個 |
 | `-R`, `--recipients-file 檔` | 同上 | 一行一把 `age1…`（`#` 開頭是註解）；也接受自己的身分檔（用它的公鑰） |
-| `--with-master` | 同上 | 加上 `.env` 設定的萬用鎖（`ENCRYPTER_MASTER_RECIPIENT`；PGP 模式用 `ENCRYPTER_MASTER_PGP_KEY`） |
+| `--with-master` | 同上 | 加上 `.env` 設定的**全部**萬用鎖（`ENCRYPTER_MASTER_RECIPIENT`；PGP 模式用 `ENCRYPTER_MASTER_PGP_KEY`） |
+| `--master 萬用鎖` | 同上 | 這次直接指定一把萬用鎖，可以重複：簡單模式是 `age1…` 或公鑰清單檔，PGP 模式是公鑰 `.asc` 檔。可以跟 `--with-master` 一起用，重複的只算一次 |
 | `--pgp-recipient 公鑰.asc` | encrypt、rekey | PGP 模式的收件人公鑰檔，可以給好幾個 |
 | `--passphrase`／`--passphrase-stdin` | encrypt、decrypt、rewrap、rekey | 用（舊的）檔案密語。兩個都是開關，**密語本身不能寫在參數裡** |
 | `--new-passphrase` | rewrap、rekey | 新的鎖用密語 |
@@ -142,7 +191,7 @@ ct --check --json                                     # 離線自我檢查：cry
 ### 給程式看的輸出（`--json`）與退出碼
 
 ```json
-{"ok": true, "data": {"action": "encrypt", "mode": "age", "format": "age", "inputs": ["..."], "output": "...", "payload": "file", "armored": false, "recipients": {"keys": 2, "passphrase": false, "master": true}, "bytes_in": 1234, "bytes_out": 1452}}
+{"ok": true, "data": {"action": "encrypt", "mode": "age", "format": "age", "inputs": ["..."], "output": "...", "payload": "file", "armored": false, "recipients": {"keys": 2, "passphrase": false, "master": true, "masters": 1}, "bytes_in": 1234, "bytes_out": 1452}}
 {"ok": true, "data": {"action": "decrypt", "format": "age", "output": "...", "payload": "folder", "all_layers": true, "complete": false, "depth": 2, "layers": [...], "stopped": [{"depth": 2, "path": "L2.tar.age", "reason": "needs_other_key", "code": "wrong_key", "lock": {"format": "age", "recipient_types": {"X25519": 2}}}]}}
 {"ok": false, "error": {"code": "wrong_key", "reason": "提供的私鑰都不是這個檔案的收件人。", "retryable": false, "remedy": {"kind": "needs_config", "action": "..."}, "detail": "no-match"}}
 ```
@@ -181,8 +230,8 @@ ct --check --json                                     # 離線自我檢查：cry
 
 | 鍵 | 內容 |
 |---|---|
-| `ENCRYPTER_MASTER_RECIPIENT` | 萬用鎖的公鑰 `age1…`（公鑰不是祕密） |
-| `ENCRYPTER_MASTER_PGP_KEY` | PGP 模式的萬用鎖：OpenPGP **公鑰檔**的路徑 |
+| `ENCRYPTER_MASTER_RECIPIENT` | 萬用鎖的公鑰 `age1…`（公鑰不是祕密）；**好幾把用逗號分開**（設成環境變數時也可以一行一把） |
+| `ENCRYPTER_MASTER_PGP_KEY` | PGP 模式的萬用鎖：OpenPGP **公鑰檔**的路徑；好幾個用分號 `;` 分開 |
 | `ENCRYPTER_IDENTITY_FILE` | 解密時沒給鑰匙就用這個 age 身分檔（**只放路徑**） |
 | `ENCRYPTER_PGP_SECRET_KEY` | 同上，OpenPGP 私鑰檔的路徑 |
 | `ENCRYPTER_GPG`、`ENCRYPTER_GPG_TMPDIR` | 指定 gpg 執行檔、暫時金鑰環資料夾的上層（平常不用設） |
@@ -213,12 +262,14 @@ ct --check --json                                     # 離線自我檢查：cry
 ### 0.4.0（還沒發版：在 `dev/encrypter`，待合併、打包、驗收）
 
 - **只產生兩種公開標準格式**：簡單模式＝age v1（預設，自寫實作，通過 C2SP CCTV 官方測試向量 128 個）、PGP 模式＝OpenPGP（呼叫系統 gpg）。
-- 萬用鎖（多收件人）、`rewrap`（換鎖不重新加密）、`rekey`（換檔案金鑰整份重新加密）、`decrypt --all-layers`（剝洋蔥一路解到底）。
+- 萬用鎖（多收件人；可以同時綁好幾把：設定用逗號分開、命令列可重複 `--master`）、`rewrap`（換鎖不重新加密）、`rekey`（換檔案金鑰整份重新加密）、`decrypt --all-layers`（剝洋蔥一路解到底）。
 - 命令列：`encrypt`（多個輸入、資料夾）、`decrypt`（自動辨識格式）、`inspect`（舊名 `info`）、`keygen`（age 身分檔／PGP 金鑰對）、
   `rewrap`、`rekey`、`--check`、`--version`；`--json` 合約與退出碼沿用。
 - 新視窗：兩種模式、誰可以打開（密語／公鑰／萬用鎖）、一路解到底、金鑰分頁（產生金鑰、設定萬用鎖）。
 - 設定放專案 `.env`（萬用鎖公鑰、預設身分檔路徑）。
 - 開發線上的自有格式改稱「ISD2 預覽格式（已停用）」，只能解密。舊 `.isd` 照舊在舊版工具。
+- PGP 模式：gpg 的暫時金鑰環資料夾路徑固定補成 64 個字元（Git for Windows 的 GnuPG 2.4.9 在某些路徑長度下，
+  沒有密語保護的 Curve25519 私鑰會解不開；細節見 [docs/pgp-mode.md](docs/pgp-mode.md)）。
 
 ### 0.3.0（tag `Encrypter_v0.3.0`）
 
