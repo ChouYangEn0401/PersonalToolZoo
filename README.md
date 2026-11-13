@@ -14,7 +14,7 @@
 | 工具 | 說明 | 版本 | 指令裡的簡稱 | 原始碼 |
 |---|---|---|---|---|
 | **Git Helper Pro** | Git 指令 GUI 助手：多專案分頁、危險指令攔截、rebase/merge/stash 引導、繁中／簡中／英三語切換 | v1.6.5 | `githelper` | [tools/git-helper-pro/](tools/git-helper-pro/) |
-| **Encrypter** | 把檔案或資料夾加密成公開標準格式：簡單模式＝age（預設）、PGP 模式＝OpenPGP（要有 gpg）；萬用鎖（多收件人）、換鎖、一路解到底；有視窗也有命令列（`--json`，給別的程式呼叫）；舊的 `.isd`／Mixture 收在舊版工具 | v0.3.0（0.4.0 已在 master，待發版） | `enc` | [tools/encrypter/](tools/encrypter/) |
+| **Encrypter** | 把檔案或資料夾加密成公開標準格式：簡單模式＝age（預設）、PGP 模式＝OpenPGP（要有 gpg）；萬用鎖（多收件人）、換鎖、一路解到底；有視窗也有命令列（`--json`，給別的程式呼叫）；舊的 `.isd`／Mixture 收在舊版工具 | v0.4.0（測試版，GitHub Pre-release） | `enc` | [tools/encrypter/](tools/encrypter/) |
 | **Table Format Converter** | 貼上 Tab 分隔或 Markdown 表格即時預覽，一鍵輸出 MD／Tab／CSV／XLSX | v1.0.1 | `table` | [tools/table-format-converter/](tools/table-format-converter/) |
 | **HashMyFile** | 拖放檔案或資料夾計算 MD5／SHA-1／SHA-256／CRC32，內容相同的檔案自動標色；貼上雜湊值即可驗證 | v0.2.0 | `hash` | [tools/hash-my-file/](tools/hash-my-file/) |
 | **Advanced Excel Tool** | 分頁式 Excel 工作台：核心整理（可疊加／undo）、多檔合併、diff 比較＋AB 審核 | v0.1.1 | `excel` | [tools/excel-tool/](tools/excel-tool/) |
@@ -46,7 +46,7 @@ Video Notes 與 Video Downloader 是本機網頁程式：執行後會開瀏覽�
 
 ```
 選擇要「build」的工具：
-  [1] encrypter                v0.3.0     tools\encrypter\.venv
+  [1] encrypter                v0.4.0     tools\encrypter\.venv
   [2] excel-tool               v0.1.1     tools\excel-tool\.venv
   ...
   編號（可多選：1 3 或 1-3）、a = 全部、或打名稱；Enter 取消

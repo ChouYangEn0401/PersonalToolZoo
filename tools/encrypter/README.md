@@ -259,7 +259,7 @@ ct --check --json                                     # 離線自我檢查：cry
 
 這個 repo 沒有工具層的 CHANGELOG，版本紀錄寫在這裡（tag 由 `release.ps1` 打）。
 
-### 0.4.0（還沒發版：已併進 master、已打包驗證，待發版）
+### 0.4.0（已發 GitHub Pre-release `Encrypter_v0.4.0`）
 
 - **只產生兩種公開標準格式**：簡單模式＝age v1（預設，自寫實作，通過 C2SP CCTV 官方測試向量 128 個）、PGP 模式＝OpenPGP（呼叫系統 gpg）。
 - 萬用鎖（多收件人；可以同時綁好幾把：設定用逗號分開、命令列可重複 `--master`）、`rewrap`（換鎖不重新加密）、`rekey`（換檔案金鑰整份重新加密）、`decrypt --all-layers`（剝洋蔥一路解到底）。
@@ -295,10 +295,10 @@ ct --check --json                                     # 離線自我檢查：cry
 
 ```powershell
 .\scripts\build.ps1 enc                 # build + 冒煙測試（會在桌面跳出視窗 10 秒）
-.\scripts\release.ps1 enc keep -Yes     # 版本已經是 0.4.0：只 build＋打 tag，不再改版號
+.\scripts\release.ps1 enc patch -Yes    # 發下一版（0.4.0 的 tag 與 GitHub Pre-release 已經有了）
 ```
 
-### 現況（2026-11-13，已併進 master、還沒發版；已打包驗證）
+### 現況（2026-11-13，已併進 master、已發 Pre-release；已打包驗證）
 
 - 整合完成：合併了 `dev/encrypter-age`（age 核心）、`dev/encrypter-pgp`（PGP 模式）、`research/master-lock`（研究與原型）；
   命令列、視窗、設定、ISD2 預覽格式改成唯讀都做完，版本 0.4.0。之後加上：多把萬用鎖、PGP 暫時金鑰環的路徑長度修正、PGP 相對路徑修正。

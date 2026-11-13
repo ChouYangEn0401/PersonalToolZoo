@@ -69,9 +69,6 @@
   | 多片合併 | 筆記庫勾兩支 → 合併成一份 |
   | 網頁介面與 4 個範本的畫面 | 上面兩步順便看；範例也可以直接開：用 `templates/samples/` 填進範本（做法見 `templates/README.md`） |
   | `.xmind` 能不能用 XMind 打開 | 有 XMind 的電腦開一次；打不開就改用 OPML（`tree-opml`） |
-- **Encrypter 還沒放上 GitHub Release**：現在 master 上是 0.3.0，但 `Encrypter_v0.3.0` 這個 tag 指的是搬進 hub 之前的舊 commit
-  （那個 release 的 exe 也是舊的）。`dev/encrypter` 的 0.4.0 已經併進 master，版本號已經是 0.4.0，
-  所以發版用 `release.ps1 enc keep -Yes`（不再改版號），再照 README 的 `gh release create` 放 exe（0.x 加 `--prerelease`）。
 - **GitHub 上有 4 個舊 release 是搬進 hub 之前的 exe**：`Table_Format_Converter_v1.0.0`（重複 tag）、`GitHelperPro_v1.5.0`、`HashMyFile_v0.1.0`、`Encrypter_v0.3.0`。
   新的 release 都是 `<工具>_v<版本>` 這種 tag；舊的想清掉可以在 GitHub 上刪（我沒動）。
 
@@ -87,11 +84,11 @@
 
 - **Video Downloader 的 web API 測試**需要 `httpx2`，它不在工具自己的環境裡，所以在自己的 `.venv` 跑時那 2 個測試會略過
   （用 Video Notes 的環境跑就 10/10）。要的話把測試依賴寫成獨立的 requirements。
-- **Encrypter 0.4.0 已併進 master（2026-11-13，打包驗證過），還沒發版**：
+- **Encrypter 0.4.0 已併進 master、已發 GitHub Pre-release（`Encrypter_v0.4.0`，2026-11-13；11/14 重新 clean build 仍 OK）**：
   格式已決定（只產生公開的 age 與 OpenPGP；萬用鎖＝多收件人，可以同時綁好幾把；剝洋蔥 `--all-layers`；`rewrap`／`rekey`），版本 0.4.0。
   用工具自己的 `.venv` 跑全部測試、`build.ps1 enc -Clean`（冒煙 OK）、打包後的 exe 跑過 age 與 PGP 往返（數字見工具 README「現況」）。
   還沒做：① 照 `tools/encrypter/docs/ui-spec.md` 最後的清單把畫面逐項看一遍；
-  ② **在有 age／rage 的電腦做互通交叉測試**（age 部分是自寫實作，通過官方向量但沒有人審過）；③ 發版（見上面「Encrypter 還沒放上 GitHub Release」）；④ push。
+  ② **在有 age／rage 的電腦做互通交叉測試**（age 部分是自寫實作，通過官方向量但沒有人審過）；做完這些就可以把 Pre-release 轉成正式版。
   要你決定的事（都有預設，不回答就照預設）列在 `tools/encrypter/docs/handoffs/20261113-013906-format-decision-age-openpgp.md`：要不要找人審閱 age 實作、要不要做簽章、萬用鎖私鑰怎麼保管、`--key-env` 要不要在下一版拿掉。
 - **萬用鎖與身分檔要另外備份**：Encrypter 的私鑰（身分檔）或密語不見就打不開。萬用鎖的私鑰要離線收好（隨身碟＋紙本），不要放在這台電腦上。
 - **Claude 訂閱**：「檢查 Claude Code」只確認找得到執行檔，登入過期要到第一次真的呼叫才知道；每次呼叫都用訂閱額度。
@@ -114,6 +111,6 @@
 | 2026-10-27 | push 前要確認沒有機密 | 掃完所有分支與 tag 的歷史：沒有金鑰、`.env` 與 `data\` 沒被追蹤；之後 push 到 GitHub |
 | 2026-11-12 | Video Notes：內建語音辨識不夠好、只能一片一片整理、輸出只有文字筆記 | v2：可換的語音辨識（本機／OpenAI／Gemini）、分析存成 `analysis.json` 重複利用、10 種輸出、多片合併、錯誤合約與自我檢查。規劃與驗收在 `tools/video-notes/docs/handoffs/` |
 | 2026-11-12 | Q6 Video Notes v2 要不要發版 | 你選「直接發、標 alpha」：發 `2.2.0-alpha`（`release.ps1` 改成接受預覽版號、加 `-NoSmoke`）。實測後轉正式版列在「之後可以做」 |
-| 2026-11-13 | 工具沒有放上 GitHub Release、Video Downloader 403 修正沒發版 | 14 個工具重新 build（OK）並各建一個 Release 附 exe；Excel Tool 0.1.1、Table Format Converter 1.0.1、Video Downloader 2.1.1 是這次升的版。Encrypter 留到它的開發線收完（見上） |
+| 2026-11-13 | 工具沒有放上 GitHub Release、Video Downloader 403 修正沒發版 | 14 個工具重新 build（OK）並各建一個 Release 附 exe；Excel Tool 0.1.1、Table Format Converter 1.0.1、Video Downloader 2.1.1 是這次升的版。Encrypter 0.4.0 等它的開發線收完後也發了（Pre-release） |
 | 2026-11-12 | `dev/video-downloader` 上另一個 session 留下的修正沒收 | 測試 11 個全過、打包 OK 後 `--no-ff` 收進 master |
 | 2026-11-13 | Encrypter 加密檔格式要用自有的 ISD2 還是公開的 age（兩批設計文件不一致） | 決定只產生公開格式：簡單模式＝age v1（自寫實作，通過 C2SP 官方向量）、PGP 模式＝OpenPGP（呼叫 gpg）；開發線上的自有格式改稱「ISD2 預覽格式（已停用）」只能解密，設計稿的「金鑰槽版 ISD2」標示未採用。紀錄在 `tools/encrypter/docs/handoffs/20261113-013906-format-decision-age-openpgp.md`（在 `dev/encrypter`，隨 0.4.0 一起合併） |
