@@ -150,6 +150,11 @@ class PathTests(Case):
         self.assertEqual(lengths, list(_gpg.HOME_LEN_CHOICES[:3]))
         self.assertEqual(states, {"F" * 40: "ok"})
         self.assertEqual([p for p in short.iterdir()], [])       # 失敗的 home 都刪掉了
+        # 解密重來時從不同的長度開始
+        lengths.clear()
+        with mock.patch.dict(os.environ, {_gpg.ENV_TMPDIR: str(short)}):
+            ops._session_with_keys(_fake_info(msys=False), [Path("k.asc")], "", start=1)[0].close()
+        self.assertEqual(lengths[0], _gpg.HOME_LEN_CHOICES[1])
 
     def test_no_usable_base(self):
         deep = self.tmp / ("x" * 120)

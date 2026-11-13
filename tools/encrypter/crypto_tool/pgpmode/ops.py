@@ -483,15 +483,25 @@ def _self_check(info: GpgInfo, public: Path, secret: Path, fpr: str, pw: str) ->
     return protected
 
 
-def _session_with_keys(info: GpgInfo, keys: list[Path], pw: str) -> tuple[GpgSession, list[str], dict[str, str]]:
+_KEY_DECRYPT_TRIES = 3                                    # decrypt_file 用私鑰時，整個換 home 重解最多幾次
+_GPG_GLITCH_MARKS = ("Bad secret key", "Bad session key")  # gpg 私鑰轉換問題在 stderr 的樣子
+
+
+def _session_with_keys(info: GpgInfo, keys: list[Path], pw: str, *,
+                       start: int = 0) -> tuple[GpgSession, list[str], dict[str, str]]:
     """開一個暫時 home、匯入私鑰、把每把私鑰實際用一次（_warm_up）。回傳**還開著**的 session，呼叫端負責 close()。
 
     為什麼要換 home 重來：GnuPG 2.4.9（Git for Windows）把匯入的私鑰轉成 agent 自己的格式時，
     會不會「Bad secret key」跟 home 路徑的長度、金鑰、同時匯入哪幾把有關，同一個 home 裡重試沒用
     （見 _gpg.py 開頭 HOME_LEN 的說明）。所以有私鑰轉換失敗時，換 HOME_LEN_CHOICES 裡下一個長度的 home 再試；
     全部試完還是失敗就回傳最後一次的結果（之後的解密會照實回報 Bad secret key）。
+
+    有密語的私鑰，同一個 bug 有時報成「Bad passphrase」（實測：產生金鑰後用剛設的密語自我檢查也會遇到），
+    所以 ``bad_passphrase`` 也換 home 重試。密語真的打錯時會多試幾個 home（多幾秒）才回報，換來的是不誤判。
     """
-    choices = _gpg.HOME_LEN_CHOICES
+    base = _gpg.HOME_LEN_CHOICES
+    start %= len(base)
+    choices = base[start:] + base[:start]          # start：從第幾個長度開始（重解時換不同的起點）
     for i, length in enumerate(choices):
         s = GpgSession(info, home_len=length).__enter__()
         try:
@@ -500,7 +510,7 @@ def _session_with_keys(info: GpgInfo, keys: list[Path], pw: str) -> tuple[GpgSes
         except BaseException:
             s.close()
             raise
-        if "failed" not in states.values() or i == len(choices) - 1:
+        if not {"failed", "bad_passphrase"} & set(states.values()) or i == len(choices) - 1:
             return s, fprs, states
         s.close()
     raise AssertionError("unreachable")
@@ -742,21 +752,37 @@ def decrypt_file(
     tmp = _temp_beside(dst_p)
     try:
         for mode, pw in attempts:
-            _remove(tmp)
-            s = _session_with_keys(info, keys, pw)[0] if mode == "key" else GpgSession(info).__enter__()
-            try:
-                res = s.run(["--skip-verify", "-o", str(tmp), "--decrypt", str(src_p)],
-                            passphrase=pw, timeout=timeout_for(src_p))
-            finally:
-                s.close()
-            try:
-                _check_decrypt(res, mode, hide)
-            except _Failure as fail:
+            # 用私鑰時，gpg 2.4.9 的私鑰轉換問題（見 _session_with_keys）偶爾在暖身通過之後、真的解密時才出現
+            # （Bad secret key／Bad session key）。這種情況整個換一個長度不同的 home 再解，最多 _KEY_DECRYPT_TRIES 次。
+            tries = _KEY_DECRYPT_TRIES if mode == "key" else 1
+            ok = False
+            for t in range(tries):
                 _remove(tmp)
-                if fail.code != "wrong_key":
-                    raise SealError(fail.code, fail.reason, action=fail.action,
-                                    detail=fail.detail) from None
-                failures.append(fail)
+                if mode == "key" and key_passphrase is None and t:
+                    # 假密語也換一個：錯的密語解密語封包時，有大約 1% 的機會得到「看起來合法」的工作階段金鑰
+                    # （演算法代號剛好合法），gpg 就拿它解內容 → Bad session key，而且同一個假密語每次都一樣
+                    pw = secrets.token_hex(16)
+                s = (_session_with_keys(info, keys, pw, start=t)[0] if mode == "key"
+                     else GpgSession(info).__enter__())
+                try:
+                    res = s.run(["--skip-verify", "-o", str(tmp), "--decrypt", str(src_p)],
+                                passphrase=pw, timeout=timeout_for(src_p))
+                finally:
+                    s.close()
+                try:
+                    _check_decrypt(res, mode, hide)
+                except _Failure as fail:
+                    _remove(tmp)
+                    if fail.code != "wrong_key":
+                        raise SealError(fail.code, fail.reason, action=fail.action,
+                                        detail=fail.detail) from None
+                    if t < tries - 1 and any(m in res.stderr for m in _GPG_GLITCH_MARKS):
+                        continue                      # 看起來是 gpg 的轉換問題：換 home 再解
+                    failures.append(fail)
+                    break
+                ok = True
+                break
+            if not ok:
                 continue
             if not tmp.is_file():
                 raise SealError("io_error", "gpg 回報成功，但沒有寫出檔案。", detail=res.summary(hide))
