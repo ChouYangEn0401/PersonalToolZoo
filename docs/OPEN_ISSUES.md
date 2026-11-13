@@ -82,14 +82,13 @@
 
 - **Video Downloader 的 web API 測試**需要 `httpx2`，它不在工具自己的環境裡，所以在自己的 `.venv` 跑時那 2 個測試會略過
   （用 Video Notes 的環境跑就 10/10）。要的話把測試依賴寫成獨立的 requirements。
-- **Encrypter 0.4.0 在 `dev/encrypter` 整合完成（2026-11-13），還沒合併、還沒打包、還沒發版**：
-  格式已決定（只產生公開的 age 與 OpenPGP；萬用鎖＝多收件人；剝洋蔥 `--all-layers`；`rewrap`／`rekey`），版本已改 0.4.0。
-  測試 225 個：221 過、2 個舊測試缺 pycryptodome（原本就如此）、2 個略過。這台電腦不能從網路裝套件，所以下面幾步要在有網路的電腦做，
-  **確切指令與順序**在 `tools/encrypter/docs/handoffs/20261113-013906-format-decision-age-openpgp.md`「擁有者的步驟」：
-  ① 合併回 master（預期衝突：`README.md`、`docs/HANDOFF.html`、`docs/OPEN_ISSUES.md`，都是兩邊都改了這三份總覽；master 上目前有別人沒 commit 的修改，要先處理）；
-  ② `build.ps1 enc` 打包＋冒煙測試；③ 用工具自己的環境跑全部測試；④ 照 `tools/encrypter/docs/ui-spec.md` 最後的清單把畫面看一遍；
-  ⑤ **在有 age／rage 的電腦做互通交叉測試**（age 部分是自寫實作，通過官方向量但沒有人審過）；⑥ `release.ps1 enc keep -Yes` 打 tag；⑦ push。
-  要你決定的事（都有預設，不回答就照預設）列在同一張交接單：要不要找人審閱 age 實作、要不要做簽章、萬用鎖私鑰怎麼保管、`--key-env` 要不要在下一版拿掉。
+- **Encrypter 0.4.0 在 `dev/encrypter` 整合完成並打包驗證（2026-11-13），還沒合併、還沒發版**：
+  格式已決定（只產生公開的 age 與 OpenPGP；萬用鎖＝多收件人，可以同時綁好幾把；剝洋蔥 `--all-layers`；`rewrap`／`rekey`），版本 0.4.0。
+  用工具自己的 `.venv` 跑全部測試、`build.ps1 enc -Clean`（冒煙 OK）、打包後的 exe 跑過 age 與 PGP 往返（數字見工具 README「現況」）。
+  另有一條本機分支 `rehearsal/encrypter-merge`＝最新 master 試合併 `dev/encrypter` 的結果（沒 push），可以拿來比對。
+  還沒做：① 合併回 master；② 照 `tools/encrypter/docs/ui-spec.md` 最後的清單把畫面逐項看一遍；
+  ③ **在有 age／rage 的電腦做互通交叉測試**（age 部分是自寫實作，通過官方向量但沒有人審過）；④ `release.ps1 enc keep -Yes` 打 tag、放 GitHub Release；⑤ push。
+  要你決定的事（都有預設，不回答就照預設）列在 `tools/encrypter/docs/handoffs/20261113-013906-format-decision-age-openpgp.md`：要不要找人審閱 age 實作、要不要做簽章、萬用鎖私鑰怎麼保管、`--key-env` 要不要在下一版拿掉。
 - **萬用鎖與身分檔要另外備份**：Encrypter 的私鑰（身分檔）或密語不見就打不開。萬用鎖的私鑰要離線收好（隨身碟＋紙本），不要放在這台電腦上。
 - **Claude 訂閱**：「檢查 Claude Code」只確認找得到執行檔，登入過期要到第一次真的呼叫才知道；每次呼叫都用訂閱額度。
 - **HANDOFF.html 在 GitHub 上看不到排版**（GitHub 只顯示 HTML 原始碼）：在本機用瀏覽器打開，或看 claude.ai 上的同名 artifact。

@@ -298,15 +298,17 @@ ct --check --json                                     # 離線自我檢查：cry
 .\scripts\release.ps1 enc keep -Yes     # 版本已經是 0.4.0：只 build＋打 tag，不再改版號
 ```
 
-### 現況（2026-11-13，`dev/encrypter`，還沒合併回 master、還沒打包、還沒發版）
+### 現況（2026-11-13，`dev/encrypter`，還沒合併回 master、還沒發版；已打包驗證）
 
 - 整合完成：合併了 `dev/encrypter-age`（age 核心）、`dev/encrypter-pgp`（PGP 模式）、`research/master-lock`（研究與原型）；
-  命令列、視窗、設定、ISD2 預覽格式改成唯讀都做完，版本 0.4.0。
-- 測試（2026-11-13，Python 3.11.9＋cryptography 50.0.2＋GnuPG 2.4.9，這台電腦沒有 pycryptodome 與 ttkbootstrap）：**225 個，221 過**、2 個錯誤、2 個略過（細節見交接單 `20261113-013906-…` 的「驗證」）。
-  `test_mixture_modes`、`test_xorfold` 兩個舊測試因為缺 pycryptodome 匯入失敗（一直如此，不是這次造成的）。
-- **還沒做的驗證**：① 畫面沒有人實際看過（`docs/ui-spec.md` 最後的清單）；② 這個工具自己的 `.venv` 還沒建、`build.ps1 enc` 還沒跑
-  （這台電腦不能從網路安裝套件）；③ **沒有用真的 age／rage 交叉測試**（這台不執行網路上抓來的程式）；④ Gpg4win（原生版 gpg）沒有實測。
-  擁有者在有網路的電腦上要跑的確切指令在交接單 `20261113-013906-…` 的「擁有者的步驟」。
+  命令列、視窗、設定、ISD2 預覽格式改成唯讀都做完，版本 0.4.0。之後加上：多把萬用鎖、PGP 暫時金鑰環的路徑長度修正、PGP 相對路徑修正。
+- 測試（2026-11-13，用工具自己的 `.venv`：Python 3.11.9、cryptography 50.0.2、pycryptodome 3.24.1、ttkbootstrap 1.20.4、tkinterdnd2 0.7.0；GnuPG 2.4.9）：
+  **241 個，240 過、0 失敗、1 略過**（略過的是「外部 CCTV 資料夾」，內附的 128 個官方向量有跑）。之前缺 pycryptodome 的 2 個舊測試在 `.venv` 裡都過了。
+- 打包：`build.ps1 enc -Clean` OK（含 10 秒冒煙測試），`dist\encrypter\GUI__Encrypter(v0.4.0).exe`。打包後的 exe 用命令列驗證過
+  `--version`、`--check --json`、age 往返（兩把萬用鎖＋密語保護的身分檔）、PGP 往返（別人的公鑰＋萬用鎖＋自訂密語）。
+  exe 是視窗程式，在主控台直接打看不到輸出；把輸出導到檔案或管線（`> out.txt`、給別的程式呼叫）就有。
+- **還沒做的驗證**：① 畫面只做了開起來的冒煙測試與截圖，`docs/ui-spec.md` 最後的清單沒有人逐項點過；
+  ② **沒有用真的 age／rage 交叉測試**（這台不執行網路上抓來的程式）；③ Gpg4win（原生版 gpg）沒有實測。
 - 合併分支裡有幾個 `test(encrypter): …` 標題的 commit，AGENTS.md 的 commit 類型沒有 `test`；沒有改寫歷史，記在這裡。
 
 ### 注意事項
