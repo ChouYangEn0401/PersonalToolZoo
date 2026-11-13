@@ -208,7 +208,7 @@ def _list_packets(session: GpgSession, path: Path) -> dict:
 
 def inspect(path: PathLike) -> dict:
     """不需要金鑰就能看的資訊：armor、收件人 key ID、有沒有密語封包、資料封包種類。"""
-    src = Path(path)
+    src = Path(os.path.abspath(path))   # 理由同 _as_paths
     if not src.is_file():
         raise SealError("input_missing", "找不到檔案。")
     head = _read_head(src)
@@ -297,7 +297,8 @@ def _as_paths(value, what: str) -> list[Path]:
         return []
     if isinstance(value, (str, os.PathLike)):
         value = [value]
-    paths = [Path(v) for v in value]
+    # gpg 在暫時 home 裡執行（cwd 是那個資料夾），相對路徑會被當成相對於它，所以一律轉成絕對路徑
+    paths = [Path(os.path.abspath(v)) for v in value]
     for p in paths:
         if not p.is_file():
             raise SealError("key_missing", f"找不到{what}檔：{p.name}",
@@ -306,7 +307,7 @@ def _as_paths(value, what: str) -> list[Path]:
 
 
 def _check_src_dst(src: PathLike, dst: PathLike, overwrite: bool) -> tuple[Path, Path]:
-    src_p, dst_p = Path(src), Path(dst)
+    src_p, dst_p = Path(os.path.abspath(src)), Path(os.path.abspath(dst))   # 理由同 _as_paths
     if not src_p.exists():
         raise SealError("input_missing", "找不到輸入檔。")
     if not src_p.is_file():

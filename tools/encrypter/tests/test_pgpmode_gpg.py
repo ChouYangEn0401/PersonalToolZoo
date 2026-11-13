@@ -203,6 +203,19 @@ class RoundTripTests(GpgCase):
         self.assertEqual(self.decrypt_ok(dst, secret_key_files=[self.sec("A")])["used"], "key")
         self.assert_no_partials()
 
+    def test_relative_paths_work_although_gpg_runs_in_its_own_folder(self):
+        # gpg 的工作目錄是暫時 home；使用者打的相對路徑要先轉成絕對路徑（打包後的冒煙測試抓到的）
+        old = os.getcwd()
+        os.chdir(self.tmp)
+        self.addCleanup(os.chdir, old)
+        shutil.copy(self.pub("A"), "a.pub.asc")
+        shutil.copy(self.sec("A"), "a.sec.asc")
+        shutil.copy(self.plain, "rel.bin")
+        pgpmode.encrypt_file("rel.bin", "rel.gpg", recipient_key_files=["a.pub.asc"])
+        self.assertEqual(pgpmode.inspect("rel.gpg")["recipient_count"], 1)
+        pgpmode.decrypt_file("rel.gpg", "back.bin", secret_key_files=["a.sec.asc"])
+        self.assertEqual(Path("back.bin").read_bytes(), self.plain.read_bytes())
+
     def test_multiple_recipients_any_key_opens(self):
         dst = self.tmp / "multi.gpg"
         pgpmode.encrypt_file(self.plain, dst, recipient_key_files=[self.pub("A"), self.pub("B")])
