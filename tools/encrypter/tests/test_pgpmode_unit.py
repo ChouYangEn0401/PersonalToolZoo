@@ -4,7 +4,9 @@
 """
 
 import os
+import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -110,12 +112,20 @@ class PathTests(Case):
 
     def test_long_base_is_skipped(self):
         deep = self.tmp / ("x" * 120)
-        with mock.patch.object(_gpg, "home_bases", lambda: [deep, self.tmp / "ok"]):
+        short = Path(tempfile.mkdtemp(prefix="e"))        # 系統暫存底下：夠短
+        self.addCleanup(shutil.rmtree, short, True)
+        with mock.patch.object(_gpg, "home_bases", lambda: [deep, short]):
             folder, arg = _gpg.make_home(_fake_info(msys=False))
-        self.assertEqual(folder.parent, self.tmp / "ok")
+        self.assertEqual(folder.parent, short)
+        self.assertEqual(len(arg), _gpg.HOME_LEN)              # 名稱補長到固定長度
         self.assertLessEqual(len(arg), _gpg.MAX_HOME_LEN)
         self.assertFalse(deep.exists())
         self.assertTrue(_gpg.remove_tree(folder))
+
+    def test_home_length_sits_in_the_measured_safe_range(self):
+        # 實測 home 參數 55～74 個字元時，匯入的 Curve25519 私鑰都正常（見 _gpg.py 的說明）
+        self.assertTrue(55 <= _gpg.HOME_LEN <= 74)
+        self.assertLessEqual(_gpg.MAX_HOME_LEN, _gpg.HOME_LEN)
 
     def test_no_usable_base(self):
         deep = self.tmp / ("x" * 120)

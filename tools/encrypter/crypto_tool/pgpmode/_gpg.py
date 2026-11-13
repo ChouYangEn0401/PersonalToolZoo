@@ -36,7 +36,18 @@ _BYTES_PER_SECOND = 4 * 1024 * 1024    # 估逾時用的保守速度
 # gpg-agent 在 home 裡開的 socket 最長的是 S.gpg-agent.browser；Unix socket（含 MSYS 的模擬）
 # 路徑上限 108 位元組（含結尾 0），超過 agent 就起不來（實測：「socket name ... is too long」）。
 _LONGEST_SOCKET = "/S.gpg-agent.browser"
-MAX_HOME_LEN = 107 - len(_LONGEST_SOCKET)
+_SOCKET_HOME_LEN = 107 - len(_LONGEST_SOCKET)   # 87：再長 agent 根本起不來
+# 但 home 的長度還會影響另一件事：實測 Git for Windows 的 GnuPG 2.4.9，匯入「沒有密語保護」的
+# Curve25519 私鑰後第一次使用，會不會「Bad secret key」取決於 home 參數（/c/… 形式）的**長度**與金鑰本身，
+# 同一個 home 裡重試也不會好（2026-11-13 實測 5 把金鑰 × 長度 43～86）：
+#   長度 43～54：有的金鑰壞（例：某把在 45～50 壞、另一把在 43～44 與 51～54 壞）
+#   長度 55～74：5 把都正常；另外長度 64、72 各連續產生 10 把金鑰也都正常
+#   長度 75 以上：大多數壞
+# 所以每個暫時 home 都補成**剛好 64 個字元**（在正常區間的中間）：上層資料夾短時把隨機資料夾名稱補長，
+# 上層太長時換下一個候選（見 home_bases）。
+HOME_LEN = 64
+MAX_HOME_LEN = min(_SOCKET_HOME_LEN, HOME_LEN)
+_MIN_NAME_LEN = 8                                 # 隨機資料夾名稱至少 8 個十六進位字元
 _HOME_MARKER = ".encrypter-gpg-home"   # 只有帶這個記號的資料夾才會被當成殘留清掉
 _STALE_SECONDS = 24 * 3600
 _PROBE_HOME = "/nonexistent/encrypter-gpg-probe"   # 只給 --version 用，gpg 不會建立它
@@ -206,7 +217,7 @@ def home_bases() -> list[Path]:
 
     1. ENCRYPTER_GPG_TMPDIR（有設時）
     2. 工具的 data 資料夾底下的 ``g/``（repo 規則：執行時資料放 data/）
-    3. 系統暫存資料夾底下的 ``egpg/``——只在前兩個路徑太長（agent socket 有長度上限）或不能寫時才用
+    3. 系統暫存資料夾底下的 ``egpg/``——只在前兩個路徑太長（超過 MAX_HOME_LEN，見上方說明）或不能寫時才用
     """
     bases = []
     explicit = os.environ.get(ENV_TMPDIR, "").strip()
@@ -234,10 +245,15 @@ def _sweep_stale(base: Path) -> None:
 
 
 def make_home(info: GpgInfo) -> tuple[Path, str]:
-    """建一個新的、空的、名字隨機的 home。回傳 (資料夾, 給 gpg 的路徑字串)。"""
+    """建一個新的、空的、名字隨機的 home（gpg 看到的路徑剛好 HOME_LEN 個字元）。回傳 (資料夾, 給 gpg 的路徑字串)。"""
     reasons = []
     for base in home_bases():
-        folder = base / secrets.token_hex(4)
+        # 資料夾名稱補長，讓整個 home 參數剛好 HOME_LEN 個字元（為什麼見檔案開頭 HOME_LEN 的說明）
+        name_len = HOME_LEN - len(home_argument(info, base)) - 1
+        if name_len < _MIN_NAME_LEN:
+            reasons.append(f"{base}: 路徑太長")
+            continue
+        folder = base / secrets.token_hex((name_len + 1) // 2)[:name_len]
         arg = home_argument(info, folder)
         if len(arg) > MAX_HOME_LEN:
             reasons.append(f"{base}: 路徑太長")
