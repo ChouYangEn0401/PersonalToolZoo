@@ -22,13 +22,23 @@ class SettingsTests(Case):
 
     def test_env_file_location_and_placeholders(self):
         self.assertEqual(settings.env_files(), [self.env])
-        self.assertIsNone(settings.master_recipient())
+        self.assertEqual(settings.master_recipients(), [])
         self.env.write_text(f"OTHER_TOOL_KEY=sk-123\n{settings.MASTER_RECIPIENT}=age1......\n", encoding="utf-8")
-        self.assertIsNone(settings.master_recipient())          # 範本佔位不算
+        self.assertEqual(settings.master_recipients(), [])          # 範本佔位不算
         self.env.write_text(f'export {settings.MASTER_RECIPIENT}="{AGE_PUB}"\n', encoding="utf-8")
-        self.assertEqual(settings.master_recipient(), AGE_PUB)
+        self.assertEqual(settings.master_recipients(), [AGE_PUB])
         with mock.patch.dict(os.environ, {settings.MASTER_RECIPIENT: "age1fromenv"}):
-            self.assertEqual(settings.master_recipient(), "age1fromenv")   # 環境變數優先
+            self.assertEqual(settings.master_recipients(), ["age1fromenv"])   # 環境變數優先
+
+    def test_several_master_locks_in_one_setting(self):
+        other = "age1zvkyg2lqzraa2lnjvqej32nkuu0ues2s82hzrye869xeexvn73equnujwj"   # 另一個格式正確的公鑰字串
+        self.env.write_text(f"{settings.MASTER_RECIPIENT}={AGE_PUB}, {other} ,{AGE_PUB}\n", encoding="utf-8")
+        self.assertEqual(settings.master_recipients(), [AGE_PUB, other])        # 逗號分開、重複只算一次
+        with mock.patch.dict(os.environ, {settings.MASTER_RECIPIENT: f"{other}\n{AGE_PUB}"}):
+            self.assertEqual(settings.master_recipients(), [other, AGE_PUB])    # 環境變數可以用換行
+        self.env.write_text(f"{settings.MASTER_PGP_KEY}=keys/a b.asc; {self.tmp / 'c,d.asc'}\n", encoding="utf-8")
+        self.assertEqual(settings.master_pgp_keys(), [self.tmp / "keys" / "a b.asc", self.tmp / "c,d.asc"])
+        self.assertEqual(settings.describe()[settings.MASTER_PGP_KEY]["count"], 2)
 
     def test_relative_paths_resolve_next_to_the_env_file(self):
         self.env.write_text(f"{settings.IDENTITY_FILE}=keys/me.key\n", encoding="utf-8")
@@ -58,7 +68,7 @@ class SettingsTests(Case):
         self.assertEqual(self.code_of(settings.set_value, settings.IDENTITY_FILE, "a\nb"), "bad_input")
         self.env.write_text(f"{settings.MASTER_RECIPIENT}={secret}\n", encoding="utf-8")
         with self.assertRaises(settings.SealError) as caught:
-            settings.master_recipient()
+            settings.master_recipients()
         self.assertNotIn(secret, str(caught.exception.to_dict()))
         self.assertEqual(settings.describe()[settings.MASTER_RECIPIENT], {"set": True, "valid": False})
 

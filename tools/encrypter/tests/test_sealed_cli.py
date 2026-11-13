@@ -104,7 +104,7 @@ class EncryptDecryptTests(CliCase):
         data = self.ok("encrypt", self.plain, "-r", self.pub("alice"))
         sealed = self.tmp / "notes.txt.age"
         self.assertEqual((data["output"], data["format"], data["payload"]), (str(sealed), "age", "file"))
-        self.assertEqual(data["recipients"], {"keys": 1, "passphrase": False, "master": False})
+        self.assertEqual(data["recipients"], {"keys": 1, "passphrase": False, "master": False, "masters": 0})
         self.assertTrue(sealed.read_bytes().startswith(b"age-encryption.org/v1\n"))
         self.plain.rename(self.tmp / "original.txt")
         back = self.ok("decrypt", sealed, "-i", alice)
@@ -161,7 +161,7 @@ class EncryptDecryptTests(CliCase):
 
     def test_passphrase_from_stdin_short_warning_and_wrong_passphrase(self):
         data = self.ok("encrypt", self.plain, "--passphrase-stdin", stdin_text="短密語\n")
-        self.assertEqual(data["recipients"], {"keys": 0, "passphrase": True, "master": False})
+        self.assertEqual(data["recipients"], {"keys": 0, "passphrase": True, "master": False, "masters": 0})
         self.assertEqual(data["warnings"], ["passphrase_short"])
         sealed = self.tmp / "notes.txt.age"
         self.assertEqual(self.ok("inspect", sealed)["stanza_counts"], {"scrypt": 1})
@@ -244,7 +244,7 @@ class MasterLockTests(CliCase):
                           2, "key_missing")
         self.set_master(self.pub("master"))
         data = self.ok("encrypt", self.plain, "-r", self.pub("alice"), "--with-master")
-        self.assertEqual(data["recipients"], {"keys": 2, "passphrase": False, "master": True})
+        self.assertEqual(data["recipients"], {"keys": 2, "passphrase": False, "master": True, "masters": 1})
         back = self.ok("decrypt", self.tmp / "notes.txt.age", "-o", self.tmp / "m.txt", "-i", master)
         self.assertTrue(back["used_master"])
         # 萬用鎖＋密語在簡單模式不行，訊息建議 PGP 模式
@@ -644,7 +644,7 @@ class PgpModeCliTests(CliCase):
                        "--with-master", "--passphrase-stdin", stdin_text="shared file pass\n")
         sealed = tmp / "notes.txt.gpg"
         self.assertEqual((data["format"], data["output"]), ("openpgp", str(sealed)))
-        self.assertEqual(data["recipients"], {"keys": 2, "passphrase": True, "master": True})
+        self.assertEqual(data["recipients"], {"keys": 2, "passphrase": True, "master": True, "masters": 1})
         info = self.ok("inspect", sealed)
         self.assertEqual((info["format"], info["recipient_count"], info["has_passphrase"]), ("openpgp", 2, True))
 

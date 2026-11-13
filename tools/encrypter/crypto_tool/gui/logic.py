@@ -128,15 +128,45 @@ def default_key_files() -> list[str]:
     return [str(p) for p in age + pgp]
 
 
-def master_for(mode: str) -> str | None:
-    """設定好的萬用鎖（給畫面顯示）；沒設定或設定有誤時 None。"""
+AGE_LIST_SEP, PGP_LIST_SEP = ", ", "; "
+
+
+def masters_for(mode: str) -> list[str]:
+    """設定好的萬用鎖（可以好幾把）；沒設定或設定有誤時空清單。"""
     try:
         if mode == MODE_AGE:
-            return settings.master_recipient()
-        path = settings.master_pgp_key()
-        return str(path) if path else None
+            return settings.master_recipients()
+        return [str(p) for p in settings.master_pgp_keys()]
     except SealError:
+        return []
+
+
+def master_for(mode: str) -> str | None:
+    """設定好的萬用鎖，寫成一個可以放進輸入欄的字串（多把用分隔符號連起來）；沒設定時 None。"""
+    values = masters_for(mode)
+    if not values:
         return None
+    return (AGE_LIST_SEP if mode == MODE_AGE else PGP_LIST_SEP).join(values)
+
+
+def master_summary(mode: str) -> str | None:
+    """加密分頁上那一小行：一把就顯示（縮短的）公鑰／路徑，好幾把就顯示「N 把」。"""
+    values = masters_for(mode)
+    if not values:
+        return None
+    first = values[0] if len(values[0]) <= 24 else values[0][:12] + "…" + values[0][-6:]
+    return first if len(values) == 1 else T.MASTER_MANY.format(n=len(values), first=first)
+
+
+def split_master_input(mode: str, text: str) -> list[str]:
+    """金鑰分頁輸入欄 -> 一把一把的萬用鎖（簡單模式：逗號／分號／空白／換行；PGP：分號／換行）。"""
+    pattern = r"[\s,;，；]+" if mode == MODE_AGE else r"[;；\r\n]+"
+    out: list[str] = []
+    for part in re.split(pattern, text or ""):
+        part = part.strip().strip('"').strip("'")
+        if part and part not in out:
+            out.append(part)
+    return out
 
 
 def _lock_text(lock: dict) -> str:
@@ -462,19 +492,32 @@ def public_key_from_identity(path: str, passphrase: str = "") -> str:
 
 @_guard
 def save_master(age_value: str, pgp_path: str) -> Message:
-    """「金鑰」分頁：把萬用鎖公鑰（與 PGP 萬用鎖公鑰檔路徑）寫進 .env。空白＝清除。"""
-    age_value = age_value.strip()
-    if age_value:
-        agefmt.parse_recipient(age_value)        # 格式不對就在寫入前擋下
-    pgp_path = pgp_path.strip()
-    if pgp_path:
-        if workflow.classify_key_file(pgp_path) != "pgp-public":
+    """「金鑰」分頁：把萬用鎖公鑰（與 PGP 萬用鎖公鑰檔路徑）寫進 .env。空白＝清除。
+
+    兩欄都可以放好幾把：簡單模式用逗號分開，PGP 模式的檔案路徑用分號分開。一把不對就整個不寫。
+    """
+    ages = split_master_input(MODE_AGE, age_value)
+    for value in ages:
+        agefmt.parse_recipient(value)            # 格式不對就在寫入前擋下
+    pgps = split_master_input(MODE_PGP, pgp_path)
+    for path in pgps:
+        if workflow.classify_key_file(path) != "pgp-public":
             raise SealError("bad_key_format", "PGP 萬用鎖要選 OpenPGP「公鑰」檔（.public.asc）。")
-    saved = settings.set_value(settings.MASTER_RECIPIENT, age_value)
-    settings.set_value(settings.MASTER_PGP_KEY, pgp_path)
-    if not age_value and not pgp_path:
+    saved = settings.set_value(settings.MASTER_RECIPIENT, AGE_LIST_SEP.join(ages))
+    settings.set_value(settings.MASTER_PGP_KEY, PGP_LIST_SEP.join(pgps))
+    if not ages and not pgps:
         return Message("info", T.KEYS_MASTER_TITLE, [T.KEYS_MASTER_CLEARED])
-    return Message("success", T.KEYS_MASTER_TITLE, [T.KEYS_MASTER_SAVED.format(path=saved)])
+    return Message("success", T.KEYS_MASTER_TITLE,
+                   [T.KEYS_MASTER_COUNT.format(age=len(ages), pgp=len(pgps)),
+                    T.KEYS_MASTER_SAVED.format(path=saved)])
+
+
+def add_master_value(current: str, new_value: str, mode: str = MODE_AGE) -> str:
+    """「從身分檔讀…」「選檔案…」：把新的一把接在已經填的後面（不是取代），重複的不再加。"""
+    values = split_master_input(mode, current)
+    if new_value and new_value not in values:
+        values.append(new_value)
+    return (AGE_LIST_SEP if mode == MODE_AGE else PGP_LIST_SEP).join(values)
 
 
 @_guard

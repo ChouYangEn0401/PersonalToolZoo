@@ -24,13 +24,13 @@ from pathlib import Path
 
 from .errors import SealError
 
-MASTER_RECIPIENT = "ENCRYPTER_MASTER_RECIPIENT"        # 萬用鎖公鑰 age1…（簡單模式）
-MASTER_PGP_KEY = "ENCRYPTER_MASTER_PGP_KEY"            # 萬用鎖的 OpenPGP 公鑰檔路徑（PGP 模式）
+MASTER_RECIPIENT = "ENCRYPTER_MASTER_RECIPIENT"        # 萬用鎖公鑰 age1…（簡單模式；多把用逗號分開）
+MASTER_PGP_KEY = "ENCRYPTER_MASTER_PGP_KEY"            # 萬用鎖的 OpenPGP 公鑰檔路徑（PGP 模式；多個用 ; 分開）
 IDENTITY_FILE = "ENCRYPTER_IDENTITY_FILE"              # 預設 age 身分檔路徑（解密時沒給 -i 就用它）
 PGP_SECRET_KEY = "ENCRYPTER_PGP_SECRET_KEY"            # 預設 OpenPGP 私鑰檔路徑（解密時沒給 --pgp-secret 就用它）
 
 KEYS = (MASTER_RECIPIENT, MASTER_PGP_KEY, IDENTITY_FILE, PGP_SECRET_KEY)
-_PATH_KEYS = (MASTER_PGP_KEY, IDENTITY_FILE, PGP_SECRET_KEY)
+_PATH_KEYS = (IDENTITY_FILE, PGP_SECRET_KEY)
 _REPO_MARKER = Path("scripts") / "tool.spec"
 _NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
@@ -136,14 +136,34 @@ def _as_path(name: str) -> Path | None:
     return path
 
 
-def master_recipient() -> str | None:
-    """設定好的萬用鎖公鑰（age1…）；沒設定時是 None。格式由 agefmt 檢查。"""
+_AGE_LIST_SPLIT = re.compile(r"[\s,;，；]+")
+
+
+def master_recipients() -> list[str]:
+    """設定好的萬用鎖公鑰（age1…），可以好幾把；沒設定時是空清單。格式由 agefmt 檢查。
+
+    一個值裡放多把：用逗號、分號、空白或換行分開（.env 一行寫不下換行，用逗號）。
+    重複的只算一次，順序照寫的順序。
+    """
     value, _origin = _checked(MASTER_RECIPIENT)
-    return value or None
+    parts = [p for p in _AGE_LIST_SPLIT.split(value) if p]
+    return list(dict.fromkeys(parts))
 
 
-def master_pgp_key() -> Path | None:
-    return _as_path(MASTER_PGP_KEY)
+def master_pgp_keys() -> list[Path]:
+    """PGP 模式的萬用鎖公鑰檔，可以好幾個：路徑之間用分號 ``;`` 或換行分開（路徑本身可能有逗號與空白）。"""
+    value, origin = _checked(MASTER_PGP_KEY)
+    out: list[Path] = []
+    for raw in re.split(r"[;；\r\n]+", value):
+        raw = raw.strip().strip('"').strip("'")
+        if not raw:
+            continue
+        path = Path(os.path.expandvars(raw))
+        if not path.is_absolute() and origin is not None:
+            path = origin.parent / path   # 相對路徑以那個 .env 所在的資料夾為準
+        if path not in out:
+            out.append(path)
+    return out
 
 
 def identity_file() -> Path | None:
@@ -165,6 +185,9 @@ def describe() -> dict:
             continue
         out[name] = {"set": bool(value), "value": value or None,
                      "from": "environment" if value and origin is None else (str(origin) if origin else None)}
+    for name, func in ((MASTER_RECIPIENT, master_recipients), (MASTER_PGP_KEY, master_pgp_keys)):
+        if "valid" not in out[name]:        # 萬用鎖可以好幾把：多給一個數量
+            out[name]["count"] = len(func())
     return out
 
 

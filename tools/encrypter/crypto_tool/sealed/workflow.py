@@ -170,37 +170,72 @@ class Recipients:
     age: list = field(default_factory=list)            # X25519Recipient
     pgp_keys: list = field(default_factory=list)       # OpenPGP 公鑰檔
     master_included: bool = False
+    master_count: int = 0                              # 加了幾把萬用鎖（設定的＋--master 給的）
     use_passphrase: bool = False
 
     def summary(self) -> dict:
-        if self.mode == MODE_AGE:
-            return {"keys": len(self.age), "passphrase": self.use_passphrase,
-                    "master": self.master_included}
-        return {"keys": len(self.pgp_keys), "passphrase": self.use_passphrase,
-                "master": self.master_included}
+        keys = len(self.age) if self.mode == MODE_AGE else len(self.pgp_keys)
+        return {"keys": keys, "passphrase": self.use_passphrase,
+                "master": self.master_included, "masters": self.master_count}
 
 
-def _master_age():
-    value = settings.master_recipient()
-    if not value:
+def _master_ages() -> list:
+    """設定好的萬用鎖（簡單模式），可以好幾把。一把都沒有或有一把格式不對就停。"""
+    values = settings.master_recipients()
+    if not values:
         raise SealError("key_missing", "還沒設定萬用鎖的公鑰。",
-                        action=f"在 .env 設定 {settings.MASTER_RECIPIENT}=age1…（或在視窗的「金鑰」分頁設定）。")
-    try:
-        return agefmt.parse_recipient(value)
-    except SealError:
-        raise SealError("bad_key_format", "設定裡的萬用鎖公鑰格式不對（應該是 age1 開頭）。",
-                        action=f"檢查 .env 的 {settings.MASTER_RECIPIENT}。") from None
+                        action=f"在 .env 設定 {settings.MASTER_RECIPIENT}=age1…（多把用逗號分開；"
+                               "或在視窗的「金鑰」分頁設定）。")
+    out = []
+    for value in values:
+        try:
+            out.append(agefmt.parse_recipient(value))
+        except SealError:
+            raise SealError("bad_key_format", "設定裡的萬用鎖公鑰格式不對（每一把都應該是 age1 開頭）。",
+                            action=f"檢查 .env 的 {settings.MASTER_RECIPIENT}。") from None
+    return out
 
 
-def _master_pgp() -> Path:
-    path = settings.master_pgp_key()
-    if path is None:
+def _master_pgps() -> list[Path]:
+    paths = settings.master_pgp_keys()
+    if not paths:
         raise SealError("key_missing", "還沒設定 PGP 模式的萬用鎖公鑰檔。",
-                        action=f"在 .env 設定 {settings.MASTER_PGP_KEY}=<公鑰 .asc 檔的路徑>。")
-    if not path.is_file():
-        raise SealError("key_missing", "設定裡的 PGP 萬用鎖公鑰檔不存在。",
-                        action=f"檢查 .env 的 {settings.MASTER_PGP_KEY}。")
-    return path
+                        action=f"在 .env 設定 {settings.MASTER_PGP_KEY}=<公鑰 .asc 檔的路徑>（多個用 ; 分開）。")
+    for path in paths:
+        if not path.is_file():
+            raise SealError("key_missing", "設定裡的 PGP 萬用鎖公鑰檔不存在。",
+                            action=f"檢查 .env 的 {settings.MASTER_PGP_KEY}。")
+    return paths
+
+
+def _explicit_master_ages(values) -> list:
+    """``--master`` 給的萬用鎖（簡單模式）：age1 公鑰，或一個收件人清單檔／身分檔（用它的公鑰）。"""
+    out = []
+    for value in values:
+        text = str(value).strip()
+        if text.lower().startswith("age1"):
+            out.append(agefmt.parse_recipient(text))
+        else:
+            out.extend(_read_recipients_file(text))
+    return out
+
+
+def _explicit_master_pgps(values) -> list[Path]:
+    out = []
+    for value in values:
+        p = Path(value)
+        if not p.is_file():
+            raise SealError("key_missing", "找不到 --master 指定的 OpenPGP 公鑰檔。", action="確認 --master 的路徑。")
+        out.append(p)
+    return out
+
+
+def configured_master_publics() -> set[str]:
+    """設定裡的萬用鎖公鑰（只用來判斷「解密時用的是不是萬用鎖」；設定壞掉時當成沒有）。"""
+    try:
+        return set(settings.master_recipients())
+    except SealError:
+        return set()
 
 
 def _read_recipients_file(path) -> list:
@@ -230,8 +265,12 @@ def _read_recipients_file(path) -> list:
 
 def resolve_recipients(mode: str = MODE_AGE, *, recipients=(), recipient_files=(),
                        with_master: bool = False, pgp_recipient_files=(),
-                       use_passphrase: bool = False) -> Recipients:
-    """檢查「誰可以打開」的組合並讀進公鑰。命令列在問密語之前就呼叫它，組合不對時不必白打密語。"""
+                       use_passphrase: bool = False, masters=()) -> Recipients:
+    """檢查「誰可以打開」的組合並讀進公鑰。命令列在問密語之前就呼叫它，組合不對時不必白打密語。
+
+    萬用鎖有兩個來源，可以同時用、都可以好幾把：``with_master``＝設定（.env）裡的全部萬用鎖；
+    ``masters``＝這次直接指定的（命令列 ``--master``；簡單模式是 age1 公鑰或公鑰清單檔，PGP 模式是公鑰檔）。
+    """
     if mode not in MODES:
         raise SealError("bad_input", "模式只能是 age（簡單模式）或 pgp。")
     result = Recipients(mode, use_passphrase=use_passphrase)
@@ -248,11 +287,15 @@ def resolve_recipients(mode: str = MODE_AGE, *, recipients=(), recipient_files=(
             for r in _read_recipients_file(path):
                 if r not in found:
                     found.append(r)
-        if with_master:
-            master = _master_age()
+        chosen = (_master_ages() if with_master else []) + _explicit_master_ages(masters)
+        unique_masters = []
+        for master in chosen:
+            if master not in unique_masters:
+                unique_masters.append(master)
             if master not in found:
                 found.append(master)
-            result.master_included = True
+        result.master_included = bool(unique_masters)
+        result.master_count = len(unique_masters)
         if use_passphrase and found:
             raise SealError(
                 "bad_input",
@@ -264,9 +307,9 @@ def resolve_recipients(mode: str = MODE_AGE, *, recipients=(), recipient_files=(
             raise SealError("key_missing", "沒有指定誰可以打開：至少要一把公鑰（-r／-R）、萬用鎖或密語。")
         result.age = found
         return result
-    if recipients or recipient_files:
+    if recipients or recipient_files or any(str(m).strip().lower().startswith("age1") for m in masters):
         raise SealError("bad_input", "age1 公鑰只能用在簡單模式（age）。",
-                        action="PGP 模式請用 --pgp-recipient <公鑰 .asc 檔>。")
+                        action="PGP 模式請用 --pgp-recipient／--master <公鑰 .asc 檔>。")
     keys: list[Path] = []
     for path in pgp_recipient_files:
         p = Path(path)
@@ -274,11 +317,15 @@ def resolve_recipients(mode: str = MODE_AGE, *, recipients=(), recipient_files=(
             raise SealError("key_missing", "找不到 OpenPGP 公鑰檔。", action="確認 --pgp-recipient 的路徑。")
         if p.resolve() not in [k.resolve() for k in keys]:
             keys.append(p)
-    if with_master:
-        master = _master_pgp()
+    chosen = (_master_pgps() if with_master else []) + _explicit_master_pgps(masters)
+    unique_masters: list[Path] = []
+    for master in chosen:
+        if master.resolve() not in [k.resolve() for k in unique_masters]:
+            unique_masters.append(master)
         if master.resolve() not in [k.resolve() for k in keys]:
             keys.append(master)
-        result.master_included = True
+    result.master_included = bool(unique_masters)
+    result.master_count = len(unique_masters)
     if not keys and not use_passphrase:
         raise SealError("key_missing", "沒有指定誰可以打開：至少要一把 OpenPGP 公鑰、萬用鎖或密語。")
     result.pgp_keys = keys
@@ -502,8 +549,7 @@ def decrypt(src, output=None, keyring: Keyring | None = None, *, force: bool = F
         if fmt == FMT_AGE:
             res = agefmt.decrypt_file(src_p, tmp, keyring.age_ids(), progress=progress)
             result["matched"] = res.matched
-            master = settings.master_recipient()
-            result["used_master"] = bool(master) and res.matched == "X25519 " + master
+            result["used_master"] = any(res.matched == "X25519 " + m for m in configured_master_publics())
         else:
             res = pgpmode.decrypt_file(src_p, tmp, secret_key_files=keyring.pgp_secret_keys,
                                        key_passphrase=keyring.pgp_key_passphrase,

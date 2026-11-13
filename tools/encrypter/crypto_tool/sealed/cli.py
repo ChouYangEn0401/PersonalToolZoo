@@ -63,7 +63,10 @@ def _recipient_flags(p, *, pgp: bool = True) -> None:
     p.add_argument("-R", "--recipients-file", action="append", default=[], metavar="檔案",
                    help="收件人清單檔：一行一把 age1 公鑰（# 開頭是註解）；也接受自己的身分檔（用它的公鑰）")
     p.add_argument("--with-master", action="store_true",
-                   help="也讓設定好的萬用鎖打得開（.env 的 ENCRYPTER_MASTER_RECIPIENT／ENCRYPTER_MASTER_PGP_KEY）")
+                   help="也讓設定好的萬用鎖（全部）打得開（.env 的 ENCRYPTER_MASTER_RECIPIENT／ENCRYPTER_MASTER_PGP_KEY）")
+    p.add_argument("--master", action="append", default=[], metavar="萬用鎖",
+                   help="這次直接指定一把萬用鎖，可以重複給好幾把：簡單模式是 age1 公鑰或公鑰清單檔，"
+                        "PGP 模式是公鑰 .asc 檔")
     if pgp:
         p.add_argument("--pgp-recipient", action="append", default=[], metavar="公鑰.asc",
                        help="PGP 模式的收件人公鑰檔（可給多個）")
@@ -202,7 +205,7 @@ def _recipients(args, *, mode: str, use_passphrase: bool) -> workflow.Recipients
     return workflow.resolve_recipients(
         mode, recipients=args.recipient, recipient_files=args.recipients_file,
         with_master=args.with_master, pgp_recipient_files=getattr(args, "pgp_recipient", []),
-        use_passphrase=use_passphrase)
+        use_passphrase=use_passphrase, masters=args.master)
 
 
 def _dispatch(args, secrets: Secrets) -> dict:
@@ -270,7 +273,8 @@ def _human(data: dict) -> list[str]:
             who.append(f"{r['keys']} 把金鑰")
         if r["passphrase"]:
             who.append("密語")
-        lines.append("可以打開的鑰匙：" + "、".join(who) + ("（含萬用鎖）" if r["master"] else ""))
+        masters = r.get("masters", 1 if r["master"] else 0)
+        lines.append("可以打開的鑰匙：" + "、".join(who) + (f"（含萬用鎖 {masters} 把）" if r["master"] else ""))
         if data.get("skipped_links"):
             lines.append(f"注意：略過了 {data['skipped_links']} 個連結／特殊檔案，它們沒有被加密。")
         if "passphrase_short" in data.get("warnings", []):
@@ -326,7 +330,8 @@ def _human(data: dict) -> list[str]:
                  "簡單模式（age）：" + ("可以用" if data["ok"] else "不能用"),
                  "PGP 模式：" + (f"可以用（gpg {gpg['version']}）" if gpg["available"] else f"不能用：{gpg['reason']}")]
         master = data["settings"].get(settings.MASTER_RECIPIENT, {})
-        lines.append("萬用鎖：" + ("已設定" if master.get("set") else "沒有設定"))
+        count = master.get("count", 1 if master.get("set") else 0)
+        lines.append("萬用鎖：" + (f"已設定 {count} 把" if master.get("set") else "沒有設定"))
         return lines
     # inspect
     fmt = data.get("format")

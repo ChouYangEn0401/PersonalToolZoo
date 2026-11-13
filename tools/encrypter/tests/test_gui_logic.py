@@ -274,12 +274,12 @@ class KeyTabTests(LogicCase):
         self.assertEqual(logic.public_key_from_identity(str(ident_path)), pub)
         saved = logic.save_master(pub, "")
         self.assertEqual(saved.kind, "success")
-        self.assertEqual(settings.master_recipient(), pub)
+        self.assertEqual(settings.master_recipients(), [pub])
         self.assertEqual(logic.save_master("age1notvalid", "").code, "bad_key_format")
-        self.assertEqual(settings.master_recipient(), pub)                 # 壞的值沒有寫進去
+        self.assertEqual(settings.master_recipients(), [pub])                 # 壞的值沒有寫進去
         self.assertEqual(logic.save_master(pub, str(ident_path)).code, "bad_key_format")   # 不是 PGP 公鑰
         self.assertEqual(logic.save_master("", "").kind, "info")
-        self.assertIsNone(settings.master_recipient())
+        self.assertEqual(settings.master_recipients(), [])
 
         checked = logic.check_key_file(str(ident_path))
         self.assertIn(pub, checked.lines[0])

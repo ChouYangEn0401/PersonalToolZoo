@@ -437,10 +437,9 @@ class EncryptTab(JobTab):
 
     def _refresh_master(self, reset: bool = False) -> None:
         """萬用鎖的說明與預設勾選：有設定就預設勾。"""
-        value = logic.master_for(self.mode_var.get())
+        value = logic.master_summary(self.mode_var.get())
         if value:
-            shown = value if len(value) <= 24 else value[:12] + "…" + value[-6:]
-            self.master_info_var.set(T.MASTER_IS.format(value=shown))
+            self.master_info_var.set(T.MASTER_IS.format(value=value))
         else:
             self.master_info_var.set(T.MASTER_NOT_SET)
         self.master_check.configure(state="normal" if value else "disabled")
@@ -712,6 +711,8 @@ class KeysTab:
         box.pack(fill="x", pady=(0, GAP))
         ttk.Label(box, text=T.KEYS_MASTER_INTRO, font=FONT_UI_SMALL, bootstyle="secondary",
                   wraplength=WRAP, justify="left").pack(anchor="w", pady=(0, 6))
+        ttk.Label(box, text=T.KEYS_MASTER_MANY_HINT, font=FONT_UI_SMALL, bootstyle="secondary",
+                  wraplength=WRAP, justify="left").pack(anchor="w", pady=(0, 6))
         row = ttk.Frame(box)
         row.pack(fill="x")
         ttk.Label(row, text=T.KEYS_MASTER_AGE, font=FONT_UI).pack(side="left", padx=(0, GAP))
@@ -723,7 +724,7 @@ class KeysTab:
         ttk.Label(row, text=T.KEYS_MASTER_PGP, font=FONT_UI).pack(side="left", padx=(0, GAP))
         ttk.Entry(row, textvariable=self.master_pgp_var, font=FONT_UI).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text=T.RECIPIENT_ADD_FILE, bootstyle="secondary-outline",
-                   command=lambda: self._browse_into(self.master_pgp_var)).pack(side="left", padx=(6, 0))
+                   command=self._master_pgp_file).pack(side="left", padx=(6, 0))
         ttk.Button(box, text=T.KEYS_MASTER_SAVE, bootstyle="secondary",
                    command=self._save_master).pack(anchor="w", pady=(GAP, 0))
         self.master_result = ResultBox(box)
@@ -809,9 +810,16 @@ class KeysTab:
         if not path:
             return
         try:
-            self.master_age_var.set(logic.public_key_from_identity(path))
+            public = logic.public_key_from_identity(path)
         except logic.SealError as err:
             self.master_result.show(logic.error_message(err))
+            return
+        self.master_age_var.set(logic.add_master_value(self.master_age_var.get(), public, logic.MODE_AGE))
+
+    def _master_pgp_file(self) -> None:
+        path = filedialog.askopenfilename(parent=self.app.root)
+        if path:
+            self.master_pgp_var.set(logic.add_master_value(self.master_pgp_var.get(), path, logic.MODE_PGP))
 
     def _save_master(self) -> None:
         self.master_result.show(logic.save_master(self.master_age_var.get(), self.master_pgp_var.get()))

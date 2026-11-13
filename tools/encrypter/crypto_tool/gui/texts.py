@@ -55,6 +55,7 @@ RECIPIENTS_LIST = "已加入 {n} 把：{items}"
 WITH_MASTER = "也讓萬用鎖打得開"
 MASTER_NOT_SET = "（還沒設定萬用鎖：到「金鑰」分頁設定）"
 MASTER_IS = "（萬用鎖：{value}）"
+MASTER_MANY = "{n} 把（{first} 等）"
 
 KEYFILES_LABEL = "鑰匙檔"
 KEYFILES_HINT = "age 身分檔（例如 .decryption_code.env）或 OpenPGP 私鑰（.asc）；可以加好幾個。"
@@ -177,11 +178,16 @@ KEYS_MASTER_INTRO = (
     "萬用鎖＝你自己留的一把備用鑰匙。加密時勾「也讓萬用鎖打得開」，同一個檔案別人用自己的鑰匙開、"
     "你用萬用鎖也能開，檔案只多約 100 bytes。這裡只存公鑰；萬用鎖的私鑰請另外收好。"
 )
+KEYS_MASTER_MANY_HINT = (
+    "可以設好幾把（例如兩台電腦各一把、或主＋備）：簡單模式的公鑰用逗號分開，PGP 模式的公鑰檔路徑用分號分開；"
+    "按「從身分檔讀…」「選檔案…」會接在後面。每一把都能單獨打開。"
+)
 KEYS_MASTER_AGE = "簡單模式的萬用鎖公鑰"
 KEYS_MASTER_PGP = "PGP 模式的萬用鎖公鑰檔"
 KEYS_MASTER_FROM_FILE = "從身分檔讀…"
 KEYS_MASTER_SAVE = "儲存"
 KEYS_MASTER_SAVED = "已儲存到：{path}"
+KEYS_MASTER_COUNT = "萬用鎖：簡單模式 {age} 把、PGP 模式 {pgp} 把。"
 KEYS_MASTER_CLEARED = "已清除萬用鎖設定。"
 KEYS_CHECK_TITLE = "檢查一個鑰匙檔"
 KEYS_CHECK_BUTTON = "檢查"
