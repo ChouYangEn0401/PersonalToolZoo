@@ -1,4 +1,12 @@
 # Encrypter 執行時依賴
+#
+# cryptography：現行的兩種模式都靠它。
+#   簡單模式＝age v1（crypto_tool/agefmt，自寫實作，X25519／ChaCha20-Poly1305／HKDF／HMAC／scrypt 都用它的標準原語）；
+#   另外「ISD2 預覽格式（已停用）」的舊檔也用它解密（crypto_tool/sealed/container.py，只解不產生）。
+#   PGP 模式不需要 Python 套件，呼叫系統上的 gpg 執行檔。
+cryptography>=42.0,<51
+# pycryptodome：只給舊版 .isd（0.3.x）用——「關於 → 開啟舊版工具」那個視窗（crypto_tool/core/、gui/tab_*.py）。
+#   新介面與命令列不 import 它。留著是為了還能解開以前的 .isd 檔；拿掉的話舊版工具會顯示「缺少套件」，其他功能不受影響。
 pycryptodome>=3.20.0,<4
 # 釘在 1.x：Encrypter 最後開發於 2026-04，早於 ttkbootstrap 2.0（2026-07-19）。
 # 2.x 改從檔案載入 assets/icons/bootstrap.ttf 等資源，PyInstaller 沒有 hook 收它，

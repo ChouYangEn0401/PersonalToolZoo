@@ -1,0 +1,97 @@
+# 舊版功能（.isd 格式與 Mixture）：原本做什麼、為什麼下架、怎麼救回
+
+v0.3.0 的功能從主視窗下架了，但**程式一行沒刪**，仍然可以用。這份文件記下三件事，之後誰想把它找回來都有依據。
+完整的分析與選項在 `handoffs/20261112-223325-encrypter-intent-and-redesign.md`。
+
+## 在哪裡
+
+| 東西 | 位置 | 現況 |
+|---|---|---|
+| 舊的四個分頁（File／Text／Mixture／Large File） | `crypto_tool/gui/tab_*.py`、`gui/widgets.py` | 沒動。從主視窗「關於 → 開啟舊版工具」打開 |
+| 舊主視窗的外框 | `crypto_tool/gui/legacy_app.py`（原 `gui/app.py`） | 改成獨立視窗，最上面加警告 |
+| 舊格式與演算法 | `crypto_tool/core/`（engine、pipeline、bytefile、pgp、utils） | 沒動 |
+| PGP 示範視窗 | `crypto_tool/gui/pgp_demo.py` | 沒動（本來就不在主視窗裡） |
+| 舊測試 | `tests/test_mixture_modes.py`、`tests/test_xorfold.py` | 沒動（需要 pycryptodome） |
+| 舊文件 | `crypto_tool/README.md`、`crypto_tool/dev_plan.md`、`del_dev_plan.md`、`docs/experiment.md` | 沒動，檔頭加了一行指到這裡 |
+
+## 原本做什麼
+
+- **`.isd` 格式**：一個文字檔，`CONTENT="""<base64 的密文>"""` 加 `NOTE="""<JSON 說明>"""`。
+- **十一種「演算法」**：AES-256-CBC（預設）、AES-256-GCM、ChaCha20-Poly1305、Blowfish-CBC、3DES-CBC、XOR、XOR-FOLD、
+  Base64、PGP、PGP-Multi、PGP-Escrow。密碼用 PBKDF2-SHA256（十萬次）轉成金鑰；也可以拿任何檔案的雜湊當金鑰。
+- **Mixture · All-In-One**（更早叫 Simple，再更早叫 Layered）：同一份資料連續加密好幾次，每次可以用不同的演算法與密碼，
+  最後包成**一個** `.isd`。要全部的密碼、照同樣的順序才解得開。
+- **Mixture · Layered**（更早叫 Node、Nested）：每加密一次就包成一個完整的 `.isd`，再把這個 `.isd` 當成下一次的輸入，
+  像俄羅斯娃娃。解一次得到裡面那一層的 `.isd`，可以一層一層交給不同的人解。
+- **PGP 系列**：隨機產生一把 AES 金鑰加密內容，再用每位收件人的 RSA 公鑰把這把金鑰包起來。
+  名字叫 PGP，但不是 OpenPGP，跟 gpg 不相容。Escrow 就是多加一位「第三方」收件人。
+- **Large File**：把大檔切成很多塊，每塊各自加密成一個 `.isd`，另外寫一份 `manifest.json`。介面上自己標了 UNTESTED。
+
+## 為什麼下架
+
+一句話：**兩種 Mixture 模式在加密上是同一件事，而且都不會比「用一個好的演算法加密一次」更安全；
+同時舊格式缺了現代加密該有的「防竄改」。** 細節：
+
+1. All-In-One 與 Layered 的差別只有「中間有沒有多包一層 base64 與 JSON」。兩者都是「加密再加密」。
+   花了很多版在調的「解一次會看到什麼」，是包裝的差別，不是安全性的差別。
+2. 疊很多層不會更安全。AES-256 一層就足夠；真正的弱點是密碼好不好猜，疊十層也補不了一個好猜的密碼。
+   「同一個密碼加密 N 次」（File 分頁的 Iterations）完全沒有增加強度。
+3. 預設的 AES-256-CBC 沒有完整性驗證：密文被改過，解密不一定會發現。「密碼打錯」是靠解出來的結尾格式不對才知道的，
+   所以偶爾會把錯的密碼當成對的、吐出一堆亂碼。
+4. `NOTE` 整段是明文而且沒有受保護：檔名、大小、作者、密碼提示、用了哪些演算法都看得到，也都可以被改。
+5. 選單裡有幾個其實沒有保護力的選項跟 AES 排在一起：Base64 不是加密；XOR 是 32 bytes 的金鑰重複使用，
+   知道一小段原文就能解；**XOR-FOLD 只會改到資料的前 32 個 bytes，後面全部是原文**。
+6. 模式的名字換過三輪，而且互相撞名：「Layered」在舊版指「全部融合成一個」，在新版指「一層一層包」。
+   文件各說各話，舊檔的 `mode` 欄位也因此可能被讀成相反的意思。
+7. 整個檔案讀進記憶體、每一層再膨脹三分之一（base64），大檔與多層都很吃力；Large File 是另外寫的一套，沒有共用邏輯，
+   `manifest.json` 也沒有保護（塊被調換、被抽掉不會發現）。
+
+## 現在用什麼取代
+
+0.4.0 起只產生**公開標準格式**：簡單模式＝**age v1**（預設）、PGP 模式＝**OpenPGP**（呼叫系統 gpg）。
+都有驗證（被改過、截斷都會明確失敗）、都支援多收件人（萬用鎖）、資料夾、大檔、命令列。見 `tools/encrypter/README.md`。
+舊 PGP 系列（RSA＋AES 的自排信封）的真正需求「多人各自能開」「有第三方也能開」，現在就是 age／OpenPGP 的多收件人。
+
+## ISD2 預覽格式（已停用，只能解密）
+
+| | |
+|---|---|
+| 是什麼 | 2026-11-12 在 `dev/encrypter` 上做過的自有格式：64 bytes 固定檔頭（魔術字 `ISD2`、格式版本 1）、AES-256-GCM 或 ChaCha20-Poly1305、密語走 scrypt、1 MiB 分塊、整個檔頭參與每一塊的驗證。副檔名 `.isd2`。**從沒發版** |
+| 為什麼停用 | 0.4.0 決定只產生公開格式：自己排的格式沒有人審過，災難時還得靠這個工具才解得開；也只能有一把鑰匙 |
+| 現在能做什麼 | **只能解密與看資訊**。命令列 `decrypt` 自動辨識，用 `--key-file`／`--key-env`（舊金鑰檔，已停用的選項）或 `--passphrase`；視窗的解密頁也認得。`rewrap`／`rekey` 不支援，請先解開再用新模式加密 |
+| 程式 | `crypto_tool/sealed/container.py`（格式）、`ops.py`（解密、資訊）、`keys.py`（讀舊金鑰檔）。產生樣本的函式只剩給測試用的 `ops._encrypt_preview_for_tests`、`keys._generate_preview_key_for_tests` |
+| 名字的混淆 | 設計稿 `handoffs/20261112-221100-design-new-crypto-core.md` 裡另有一個也叫 ISD2 的「金鑰槽版」規格（8 bytes 魔術字、JSON 檔頭），**從來沒有實作，未採用**。之後提到 ISD2 一律指這裡的「預覽格式（已停用）」 |
+
+手上有 `.isd2` 的話（只可能是開發期間的測試檔）：解開後用簡單模式重新加密一次。
+
+## 怎麼救回
+
+- **只是要解舊檔**：主視窗「關於 → 開啟舊版工具」，照以前的方式解。
+- **想把舊視窗變回主視窗**：在 `crypto_tool/GUI__Encrypter.py` 的 `main()` 裡不要建立 `CryptoToolApp`，
+  改成建一個 `TkinterDnD.Tk()`、`ttk.Style(theme="darkly")`、呼叫 `legacy_app.apply_gold_overrides(style)`，
+  再把 `legacy_app.open_legacy_window(root)` 裡的分頁放進去（或直接把 `gui/legacy_app.py` 還原成原本的 `gui/app.py`）。
+- **要一模一樣的 v0.3.0**：`git checkout Encrypter_v0.3.0 -- tools/encrypter`（或只取 `crypto_tool/gui/app.py`）。
+- **想把某個想法做成正式功能**：「多人各自能解」＝多收件人（已做，萬用鎖）；「分段授權、一關一關解」＝剝洋蔥
+  （每層一個完整的 age／OpenPGP 檔，`decrypt --all-layers`，已做）；「多把鑰匙缺一不可」還沒做，要做也不要從舊程式改，
+  用標準做法（例如把幾個鑰匙來源合成一把再加密一次），不要疊加密。
+
+## 建議
+
+手上還有重要的舊 `.isd` 檔的話：用舊版工具解開，再用簡單模式（age）重新加密一次，之後就不必再依賴舊版工具。
+
+## 附：舊版 README 裡的 Mixture 手動驗證步驟（原文保留）
+
+下面是改版前 `tools/encrypter/README.md` 的內容。注意它用的是**更早的名字**：這裡的 Layered＝現在程式裡的 All-In-One，
+這裡的 Nested＝現在程式裡的 Layered（名字撞名的問題見上面第 6 點）。
+
+> 此專案提供多種加密工具與 GUI，重點功能包含 `Layered` 與 `Nested` 兩種 Mixture 加密模式：
+>
+> - Layered：多階段加密結果融合成單一 `.isd`（fused）。單次用 File Tab 解密通常無法還原原始資料；必須以完整的 stage chain 在 Mixture Tab 中執行還原。
+> - Nested：每次加密會產生一個完整的 `.isd`（outer→inner→...）。用 File Tab 可逐層解鎖（每次解密會得到下一層 `.isd`），最終還原原始檔案。
+>
+> 關於 Mixture 模式的驗證
+>
+> 1. 測試 Nested：使用 Mixture Tab 建立兩層（例如 AES with keyA, then AES with keyB）並輸出 `outer.isd`；在 File Tab 用外層密碼解出 `inner.isd`，再用內層密碼還原原始檔案。
+> 2. 測試 Layered：使用相同兩個 stage 選 Layered 模式，產生 `fused.isd`；用 File Tab 解密一次通常會得到不可識別的亂碼，完整還原需在 Mixture Tab 以相同 chain 做 Decrypt。
+>
+> 更多細節請見 `del_dev_plan.md`。

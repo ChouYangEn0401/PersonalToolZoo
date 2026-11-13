@@ -1,3 +1,6 @@
+> **2026-11 註記**：這份文件描述的是舊版功能（`.isd` 格式、Mixture 等），現在收在「關於 → 開啟舊版工具」，只建議用來解開舊檔。
+> 現行的用法看 `tools/encrypter/README.md`；舊功能為什麼下架、怎麼救回看 `tools/encrypter/docs/legacy-modes.md`。內容保留原樣，沒有修改。
+
 目標
 
 我需要兩種清晰可測試的混合加密（Mixture）模式：
